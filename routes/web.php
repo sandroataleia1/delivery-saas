@@ -16,6 +16,7 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StockController;
@@ -80,6 +81,21 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::put('mesas/{table}', [DiningTableController::class, 'update'])->whereNumber('table')->name('tables.update');
             Route::patch('mesas/{table}/status', [DiningTableController::class, 'toggleStatus'])->whereNumber('table')->name('tables.status');
         });
+
+        Route::get('relatorios', [ReportController::class, 'index'])->name('reports.index');
+        Route::middleware('can:reports.view')->group(function () {
+            Route::get('relatorios/vendas', [ReportController::class, 'sales'])->name('reports.sales');
+            Route::get('relatorios/produtos', [ReportController::class, 'products'])->name('reports.products');
+            Route::get('relatorios/estoque', [ReportController::class, 'stock'])->name('reports.stock');
+            Route::get('relatorios/entregas', [ReportController::class, 'deliveries'])->name('reports.deliveries');
+        });
+        Route::middleware('can:reports.finance')->group(function () {
+            Route::get('relatorios/financeiro', [ReportController::class, 'finance'])->name('reports.finance');
+            Route::get('relatorios/caixa', [ReportController::class, 'cash'])->name('reports.cash');
+        });
+        Route::get('relatorios/{report}/exportar', [ReportController::class, 'export'])
+            ->whereIn('report', ['vendas', 'produtos', 'financeiro', 'estoque', 'caixa', 'entregas'])
+            ->name('reports.export');
 
         Route::middleware('can:customers.view')->group(function () {
             Route::get('clientes', [CustomerController::class, 'index'])->name('customers.index');

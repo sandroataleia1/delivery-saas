@@ -33,6 +33,14 @@ Criados pelo seeder, todos com a senha `password`. Nunca rode o seeder em produ�
 
 Em desenvolvimento os e-mails de redefinição de senha vão para `storage/logs/laravel.log`.
 
+## Histórico de demonstração
+
+Para ver os relatórios com dados, gere 45 dias de operação fictícia (só em desenvolvimento):
+
+```sh
+php artisan db:seed --class=DemoHistorySeeder
+```
+
 ## Testes
 
 ```sh

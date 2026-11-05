@@ -13,6 +13,7 @@ return [
         'password_changed' => 'Senha alterada',
         'password_reset' => 'Senha redefinida por e-mail',
         'qr_regenerated' => 'QR Code trocado',
+        'report_exported' => 'Relatório exportado',
         'sale' => 'Venda',
         'sale_cancelled' => 'Venda cancelada',
         'stock_negative' => 'Estoque negativo',

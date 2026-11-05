@@ -7,6 +7,8 @@ import {
     Bike as Motorcycle,
     Building2,
     CalendarDays,
+    ChartColumn,
+    ChevronDown,
     CircleArrowDown,
     CircleArrowUp,
     Contact,
@@ -18,7 +20,6 @@ import {
     Armchair,
     Package,
     PackagePlus,
-    QrCode,
     Receipt,
     ShieldCheck,
     ShoppingCart,
@@ -42,43 +43,92 @@ const menuOpen = ref(false);
 const user = computed(() => page.props.auth.user);
 const company = computed(() => page.props.auth.company);
 
-const sectionOf = {
-    PDV: 'Operação', Vendas: 'Operação', Mesas: 'Operação', Entregas: 'Operação', 'Minhas entregas': 'Operação', Caixa: 'Operação',
-    'Fluxo de caixa': 'Financeiro', 'Contas a pagar': 'Financeiro', 'Contas a receber': 'Financeiro',
-    Clientes: 'Cadastros', Produtos: 'Cadastros', Estoque: 'Cadastros', Entradas: 'Cadastros', Fornecedores: 'Cadastros',
-    Usuários: 'Administração', 'Perfis de acesso': 'Administração', Auditoria: 'Administração', Empresa: 'Administração',
-};
+// Cada item fica onde quem trabalha procuraria: o dia a dia primeiro, a gestão por último.
+const groups = computed(() => (user.value.is_super_admin ? [] : [
+    {
+        name: 'Vendas',
+        items: [
+            can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
+            can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', icon: Armchair },
+            can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', icon: Motorcycle },
+            can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
+            can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
+            can('customers.view') && { label: 'Clientes', href: route('customers.index'), match: '/clientes', icon: Contact },
+        ],
+    },
+    {
+        name: 'Financeiro',
+        items: [
+            can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
+            can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
+            can('finance.view') && { label: 'Contas a pagar', href: route('bills.index', 'pagar'), match: '/financeiro/pagar', icon: CircleArrowUp },
+            can('finance.view') && { label: 'Contas a receber', href: route('bills.index', 'receber'), match: '/financeiro/receber', icon: CircleArrowDown },
+        ],
+    },
+    {
+        name: 'Estoque',
+        items: [
+            can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
+            can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
+            can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
+            can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
+        ],
+    },
+    {
+        name: 'Gestão',
+        items: [
+            (can('reports.view') || can('reports.finance')) && { label: 'Relatórios', href: route('reports.index'), match: '/relatorios', icon: ChartColumn },
+            can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
+            can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
+            can('audit.view') && { label: 'Auditoria', href: route('audit.index'), match: '/auditoria', icon: History },
+            can('company.manage') && { label: 'Empresa', href: route('company.edit'), match: '/empresa', icon: Store },
+        ],
+    },
+].map((group) => ({ ...group, items: group.items.filter(Boolean) })).filter((group) => group.items.length > 0)));
 
-const nav = computed(() => {
-    if (user.value.is_super_admin) {
-        return [
-            { label: 'Empresas', href: route('admin.companies.index'), match: '/admin/empresas', icon: Building2 },
-            { label: 'Auditoria', href: route('admin.audit.index'), match: '/admin/auditoria', icon: History },
-        ];
+const topItems = computed(() => (user.value.is_super_admin
+    ? [
+        { label: 'Empresas', href: route('admin.companies.index'), match: '/admin/empresas', icon: Building2 },
+        { label: 'Auditoria', href: route('admin.audit.index'), match: '/admin/auditoria', icon: History },
+    ]
+    : [{ label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House }]));
+
+// Quem tem poucos itens, como garçom e entregador, vê tudo aberto.
+const isCollapsible = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, 0) > 10);
+
+const STORAGE_KEY = 'menu-sections';
+
+function loadOpenSections() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? ['Vendas']);
+    } catch {
+        return new Set(['Vendas']);
+    }
+}
+
+const openSections = ref(loadOpenSections());
+
+function isOpen(group) {
+    return !isCollapsible.value || openSections.value.has(group.name) || group.items.some(isActive);
+}
+
+function toggle(group) {
+    const next = new Set(openSections.value);
+
+    if (next.has(group.name)) {
+        next.delete(group.name);
+    } else {
+        next.add(group.name);
     }
 
-    return [
-        { label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House },
-        can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
-        can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
-        can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', icon: Armchair },
-        can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', icon: Motorcycle },
-        can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
-        can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
-        can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
-        can('finance.view') && { label: 'Contas a pagar', href: route('bills.index', 'pagar'), match: '/financeiro/pagar', icon: CircleArrowUp },
-        can('finance.view') && { label: 'Contas a receber', href: route('bills.index', 'receber'), match: '/financeiro/receber', icon: CircleArrowDown },
-        can('customers.view') && { label: 'Clientes', href: route('customers.index'), match: '/clientes', icon: Contact },
-        can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
-        can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
-        can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
-        can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
-        can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
-        can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
-        can('audit.view') && { label: 'Auditoria', href: route('audit.index'), match: '/auditoria', icon: History },
-        can('company.manage') && { label: 'Empresa', href: route('company.edit'), match: '/empresa', icon: Store },
-    ].filter(Boolean).map((item) => ({ ...item, section: sectionOf[item.label] }));
-});
+    openSections.value = next;
+
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+    } catch {
+        // Sem armazenamento, o menu só não lembra das seções abertas.
+    }
+}
 
 function isActive(item) {
     const path = page.url.split('?')[0];
@@ -116,10 +166,10 @@ watch(() => page.url, () => (menuOpen.value = false));
                 </button>
             </div>
 
-            <nav class="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Menu principal">
-                <template v-for="(item, index) in nav" :key="item.href">
-                    <p v-if="item.section && item.section !== nav[index - 1]?.section" class="px-3 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-white/40 uppercase">{{ item.section }}</p>
-                    <Link
+            <nav class="flex-1 overflow-y-auto px-3 py-2" aria-label="Menu principal">
+                <Link
+                    v-for="item in topItems"
+                    :key="item.href"
                     :href="item.href"
                     class="hover:bg-sidebar-hover flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:text-white"
                     :class="{ 'bg-sidebar-hover text-white': isActive(item) }"
@@ -127,8 +177,35 @@ watch(() => page.url, () => (menuOpen.value = false));
                 >
                     <component :is="item.icon" :size="18" />
                     {{ item.label }}
-                    </Link>
-                </template>
+                </Link>
+
+                <section v-for="group in groups" :key="group.name" class="mt-2">
+                    <button
+                        v-if="isCollapsible"
+                        type="button"
+                        class="flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-1.5 text-xs font-semibold tracking-wide text-white/50 uppercase hover:text-white"
+                        :aria-expanded="isOpen(group)"
+                        @click="toggle(group)"
+                    >
+                        {{ group.name }}
+                        <ChevronDown :size="14" class="transition-transform" :class="{ '-rotate-90': !isOpen(group) }" />
+                    </button>
+                    <p v-else class="px-3 py-1.5 text-xs font-semibold tracking-wide text-white/50 uppercase">{{ group.name }}</p>
+
+                    <div v-if="isOpen(group)" class="space-y-0.5">
+                        <Link
+                            v-for="item in group.items"
+                            :key="item.href"
+                            :href="item.href"
+                            class="hover:bg-sidebar-hover flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:text-white"
+                            :class="{ 'bg-sidebar-hover text-white': isActive(item) }"
+                            :aria-current="isActive(item) ? 'page' : undefined"
+                        >
+                            <component :is="item.icon" :size="18" />
+                            {{ item.label }}
+                        </Link>
+                    </div>
+                </section>
             </nav>
 
             <div class="border-t border-white/10 p-3">
