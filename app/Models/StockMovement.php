@@ -34,6 +34,8 @@ class StockMovement extends Model
 
     public const SALE_INGREDIENT = 'sale_ingredient';
 
+    public const SALE_REVERSAL = 'sale_reversal';
+
     protected function casts(): array
     {
         return [
@@ -55,6 +57,11 @@ class StockMovement extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function sale(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class);
+    }
+
     public function auditLabel(): string
     {
         $product = Product::withoutGlobalScopes()->find($this->product_id);
@@ -66,7 +73,7 @@ class StockMovement extends Model
 
     protected function auditExclude(): array
     {
-        return ['user_id', 'user_name', 'product_id', 'stock_entry_id'];
+        return ['user_id', 'user_name', 'product_id', 'stock_entry_id', 'sale_id'];
     }
 
     protected function auditDisplayValue(string $field, mixed $value): mixed

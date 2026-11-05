@@ -96,9 +96,10 @@ function toggleStatus() {
                             <p class="font-semibold">{{ product.name }}</p>
                             <p class="text-muted text-xs">{{ product.barcode ?? product.sku ?? product.unit }}</p>
                             <span v-if="product.has_recipe" class="badge bg-brand-soft text-brand-strong mt-0.5">Ficha técnica</span>
+                            <span v-if="!product.sellable" class="badge bg-canvas text-muted mt-0.5">Insumo</span>
                         </td>
                         <td class="whitespace-nowrap max-md:hidden">{{ product.category ?? '—' }}</td>
-                        <td class="text-right whitespace-nowrap tabular-nums">{{ formatMoney(product.sale_price) }}</td>
+                        <td class="text-right whitespace-nowrap tabular-nums">{{ product.sellable ? formatMoney(product.sale_price) : '—' }}</td>
                         <td v-if="canSeeCost" class="text-right whitespace-nowrap tabular-nums max-lg:hidden">{{ formatMoney(product.cost_price) }}</td>
                         <td v-if="canSeeCost" class="text-right whitespace-nowrap tabular-nums max-sm:hidden">
                             {{ product.track_stock ? formatQuantity(product.stock_quantity, product.unit) : product.has_recipe ? 'Pelos insumos' : 'Não controla' }}

@@ -11,6 +11,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\SupplierController;
@@ -43,6 +44,17 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+
+        Route::middleware('can:sales.create')->group(function () {
+            Route::get('pdv', [SaleController::class, 'pos'])->name('pos');
+            Route::post('vendas', [SaleController::class, 'store'])->name('sales.store');
+        });
+        Route::middleware('can:sales.view')->group(function () {
+            Route::get('vendas', [SaleController::class, 'index'])->name('sales.index');
+            Route::get('vendas/{sale}', [SaleController::class, 'show'])->name('sales.show');
+            Route::get('vendas/{sale}/cupom', [SaleController::class, 'receipt'])->name('sales.receipt');
+        });
+        Route::middleware('can:sales.cancel')->post('vendas/{sale}/cancelar', [SaleController::class, 'cancel'])->name('sales.cancel');
 
         Route::middleware('can:products.view')->group(function () {
             Route::get('produtos', [ProductController::class, 'index'])->name('products.index');

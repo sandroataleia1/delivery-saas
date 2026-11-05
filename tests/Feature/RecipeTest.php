@@ -10,7 +10,6 @@ use App\Models\RecipeItem;
 use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -180,19 +179,14 @@ class RecipeTest extends TestCase
         $this->assertSame('Pizza', $movements->first()->notes);
     }
 
-    public function test_falta_de_um_insumo_nao_baixa_nenhum(): void
+    public function test_falta_de_insumo_nao_impede_a_baixa_e_deixa_negativo(): void
     {
         $pizza = $this->pizza();
 
-        try {
-            app(ConsumeProduct::class)->handle($pizza, '4');
-            $this->fail('Deveria faltar farinha.');
-        } catch (ValidationException) {
-        }
+        app(ConsumeProduct::class)->handle($pizza, '4');
 
-        $this->assertSame('10.000', $this->cheese->fresh()->stock_quantity);
-        $this->assertSame('1.000', $this->flour->fresh()->stock_quantity);
-        $this->assertSame(0, StockMovement::count());
+        $this->assertSame('9.000', $this->cheese->fresh()->stock_quantity);
+        $this->assertSame('-0.200', $this->flour->fresh()->stock_quantity);
     }
 
     public function test_venda_de_produto_com_estoque_proprio_baixa_o_proprio_saldo(): void

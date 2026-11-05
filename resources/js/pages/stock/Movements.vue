@@ -77,6 +77,9 @@ const signed = (movement) => `${Number(movement.quantity) > 0 ? '+' : ''}${forma
                             <p class="font-semibold">{{ movement.product }}</p>
                             <p class="text-muted text-xs md:hidden">{{ movement.type }}</p>
                             <p v-if="movement.notes" class="text-muted text-xs">{{ movement.notes }}</p>
+                            <Link v-if="movement.sale_number" :href="route('sales.show', movement.sale_id)" class="text-brand text-xs font-semibold hover:underline">
+                                Venda #{{ movement.sale_number }}
+                            </Link>
                             <Link v-if="movement.stock_entry_id" :href="route('entries.show', movement.stock_entry_id)" class="text-brand text-xs font-semibold hover:underline">
                                 Entrada #{{ movement.stock_entry_id }}
                             </Link>

@@ -14,5 +14,6 @@ return [
         'loss' => 'Perda',
         'sale' => 'Venda',
         'sale_ingredient' => 'Consumo em venda',
+        'sale_reversal' => 'Cancelamento de venda',
     ],
 ];

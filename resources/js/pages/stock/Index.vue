@@ -114,9 +114,10 @@ function adjust() {
                     <tr v-for="product in products.data" :key="product.id">
                         <td>
                             <p class="font-semibold">{{ product.name }}</p>
-                            <span v-if="product.is_low" class="badge bg-danger-soft text-danger mt-0.5">Estoque baixo</span>
+                            <span v-if="product.is_negative" class="badge bg-danger text-white mt-0.5">Estoque negativo</span>
+                            <span v-else-if="product.is_low" class="badge bg-danger-soft text-danger mt-0.5">Estoque baixo</span>
                         </td>
-                        <td class="text-right font-semibold whitespace-nowrap tabular-nums">{{ formatQuantity(product.stock_quantity, product.unit) }}</td>
+                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="{ 'text-danger': product.is_negative }">{{ formatQuantity(product.stock_quantity, product.unit) }}</td>
                         <td class="text-muted text-right whitespace-nowrap tabular-nums max-sm:hidden">{{ formatQuantity(product.min_stock, product.unit) }}</td>
                         <td class="text-muted text-right whitespace-nowrap tabular-nums max-md:hidden">{{ formatMoney(product.cost_price) }}</td>
                         <td class="text-right whitespace-nowrap">

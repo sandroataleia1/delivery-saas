@@ -25,6 +25,7 @@ const form = useForm({
     sale_price: props.product?.sale_price ?? '',
     cost_price: props.product?.cost_price ?? '',
     track_stock: props.product?.track_stock ?? true,
+    sellable: props.product?.sellable ?? true,
     min_stock: props.product?.min_stock ?? '',
     initial_stock: '',
     recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
@@ -87,8 +88,16 @@ function submit() {
             <div class="card space-y-4 p-5">
                 <h2 class="font-bold">Preços</h2>
 
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.sellable" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">Disponível para venda</span>
+                        <span class="text-muted">Desmarque para insumos, como farinha e queijo: eles ficam fora do PDV.</span>
+                    </span>
+                </label>
+
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <Field v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
+                    <Field v-if="form.sellable" v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
                         <DecimalInput :id="id" v-model="form.sale_price" pad required />
                     </Field>
 

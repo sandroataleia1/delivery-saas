@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
-#[Fillable(['category_id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock'])]
+#[Fillable(['category_id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -28,6 +28,7 @@ class Product extends Model
             'stock_quantity' => 'decimal:3',
             'min_stock' => 'decimal:3',
             'track_stock' => 'boolean',
+            'sellable' => 'boolean',
             'active' => 'boolean',
         ];
     }
@@ -74,15 +75,23 @@ class Product extends Model
     {
         $query->where('track_stock', true)
             ->where('active', true)
-            ->where('min_stock', '>', 0)
-            ->whereColumn('stock_quantity', '<=', 'min_stock');
+            ->where(fn (Builder $query) => $query
+                ->where('stock_quantity', '<', 0)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('min_stock', '>', 0)
+                    ->whereColumn('stock_quantity', '<=', 'min_stock')));
     }
 
     public function isLowStock(): bool
     {
         return $this->track_stock
-            && bccomp($this->min_stock, '0', 3) > 0
-            && bccomp($this->stock_quantity, $this->min_stock, 3) <= 0;
+            && ($this->isNegative()
+                || (bccomp($this->min_stock, '0', 3) > 0 && bccomp($this->stock_quantity, $this->min_stock, 3) <= 0));
+    }
+
+    public function isNegative(): bool
+    {
+        return bccomp($this->stock_quantity, '0', 3) < 0;
     }
 
     // O saldo é auditado linha a linha pelas movimentações.

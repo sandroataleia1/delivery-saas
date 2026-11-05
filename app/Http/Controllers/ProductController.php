@@ -46,6 +46,7 @@ class ProductController extends Controller
                 'cost_price' => $canSeeCost ? $product->effectiveCost() : null,
                 'has_recipe' => $product->recipeItems->isNotEmpty(),
                 'track_stock' => $product->track_stock,
+                'sellable' => $product->sellable,
                 'stock_quantity' => $canSeeCost ? $product->stock_quantity : null,
                 'active' => $product->active,
             ]);
@@ -122,7 +123,7 @@ class ProductController extends Controller
             ...$this->formProps(),
             'product' => $product->only(
                 'id', 'name', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
-                'cost_price', 'track_stock', 'min_stock', 'stock_quantity',
+                'cost_price', 'track_stock', 'sellable', 'min_stock', 'stock_quantity',
             ) + [
                 'recipe' => $product->recipeItems
                     ->sortBy('ingredient.name')

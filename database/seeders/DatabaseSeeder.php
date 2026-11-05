@@ -88,6 +88,7 @@ class DatabaseSeeder extends Seeder
             $product->company_id = $companyId;
             $product->cost_price = $cost;
             $product->active = true;
+            $product->sellable = $category !== 'Insumos';
             $product->save();
 
             if ($track) {

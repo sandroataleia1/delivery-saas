@@ -38,12 +38,13 @@ class StockController extends Controller
                     'min_stock' => $product->min_stock,
                     'cost_price' => $product->cost_price,
                     'is_low' => $product->isLowStock(),
+                    'is_negative' => $product->isNegative(),
                 ]),
             'filters' => $filters,
             'summary' => [
                 'products' => (clone $tracked)->count(),
                 'low' => Product::query()->lowStock()->count(),
-                'value' => (clone $tracked)->selectRaw('COALESCE(SUM(stock_quantity * cost_price), 0) as value')->value('value'),
+                'value' => (clone $tracked)->selectRaw('COALESCE(SUM(CASE WHEN stock_quantity > 0 THEN stock_quantity * cost_price ELSE 0 END), 0) as value')->value('value'),
             ],
         ]);
     }
@@ -59,7 +60,7 @@ class StockController extends Controller
 
         return Inertia::render('stock/Movements', [
             'movements' => StockMovement::query()
-                ->with('product:id,name,unit')
+                ->with(['product:id,name,unit', 'sale:id,number'])
                 ->when($filters['product'] ?? null, fn ($query, $product) => $query->where('product_id', $product))
                 ->when($filters['type'] ?? null, fn ($query, $type) => $query->where('type', $type))
                 ->when($filters['from'] ?? null, fn ($query, $from) => $query->where('created_at', '>=', Carbon::parse($from)->startOfDay()))
@@ -78,6 +79,8 @@ class StockController extends Controller
                     'user' => $movement->user_name,
                     'notes' => $movement->notes,
                     'stock_entry_id' => $movement->stock_entry_id,
+                    'sale_id' => $movement->sale_id,
+                    'sale_number' => $movement->sale?->number,
                 ]),
             'filters' => $filters,
             'types' => __('stock.movements'),

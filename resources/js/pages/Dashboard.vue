@@ -4,6 +4,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { usePermissions } from '@/lib/can';
+import { formatMoney } from '@/lib/format';
 
 const props = defineProps({
     stats: { type: Object, required: true },
@@ -14,7 +15,9 @@ const page = usePage();
 const { can } = usePermissions();
 
 const cards = computed(() => [
-    { label: 'Usuários ativos', value: props.stats.active_users },
+    props.stats.sales_total === null
+        ? { label: 'Usuários ativos', value: props.stats.active_users }
+        : { label: `Vendas hoje (${props.stats.sales_count})`, value: formatMoney(props.stats.sales_total), href: route('sales.index') },
     props.stats.low_stock === null
         ? { label: 'Perfis de acesso', value: props.stats.roles }
         : { label: 'Produtos com estoque baixo', value: props.stats.low_stock, href: route('stock.index', { low: 1 }) },

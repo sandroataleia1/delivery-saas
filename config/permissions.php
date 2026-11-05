@@ -7,6 +7,15 @@
 return [
 
     'groups' => [
+        'sales' => [
+            'label' => 'Vendas',
+            'permissions' => [
+                'sales.create' => 'Vender no PDV',
+                'sales.view' => 'Ver vendas e imprimir cupons',
+                'sales.discount' => 'Dar desconto',
+                'sales.cancel' => 'Cancelar vendas',
+            ],
+        ],
         'products' => [
             'label' => 'Produtos',
             'permissions' => [
@@ -54,8 +63,8 @@ return [
     // Perfis criados em toda empresa nova.
     'default_roles' => [
         ['name' => 'Administrador', 'description' => 'Acesso total ao sistema da empresa.', 'is_admin' => true, 'permissions' => []],
-        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
-        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['products.view']],
+        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'sales.discount', 'sales.cancel', 'products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
+        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'products.view']],
         ['name' => 'Garçom', 'description' => 'Atende as mesas.', 'is_admin' => false, 'permissions' => ['products.view']],
         ['name' => 'Entregador', 'description' => 'Realiza as entregas.', 'is_admin' => false, 'permissions' => []],
     ],

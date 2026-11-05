@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\Role;
+use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,12 +17,16 @@ class DashboardController extends Controller
     {
         $canSeeAudit = $request->user()->hasPermission('audit.view');
 
+        $salesToday = Sale::query()->where('status', Sale::COMPLETED)->whereDate('created_at', today());
+
         return Inertia::render('Dashboard', [
             'stats' => [
                 'active_users' => User::where('active', true)->count(),
                 'roles' => Role::count(),
                 'logins_today' => AuditLog::where('event', 'login')->whereDate('created_at', today())->count(),
                 'events_today' => AuditLog::whereDate('created_at', today())->count(),
+                'sales_total' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->sum('total') : null,
+                'sales_count' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->count() : null,
                 'low_stock' => $request->user()->hasPermission('stock.view') ? Product::query()->lowStock()->count() : null,
             ],
             'recent' => $canSeeAudit

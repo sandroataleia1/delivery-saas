@@ -8,6 +8,8 @@ const props = defineProps({
     confirmLabel: { type: String, default: 'Confirmar' },
     danger: { type: Boolean, default: false },
     processing: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    cancelLabel: { type: String, default: 'Cancelar' },
 });
 
 const emit = defineEmits(['confirm', 'cancel']);
@@ -29,12 +31,12 @@ watch(
         <p v-if="message" class="text-muted mt-2 text-sm">{{ message }}</p>
         <slot />
         <div class="mt-6 flex justify-end gap-2">
-            <button type="button" class="btn btn-secondary" @click="emit('cancel')">Cancelar</button>
+            <button type="button" class="btn btn-secondary" @click="emit('cancel')">{{ cancelLabel }}</button>
             <button
                 type="button"
                 class="btn"
                 :class="danger ? 'btn-danger' : 'btn-primary'"
-                :disabled="processing"
+                :disabled="processing || disabled"
                 @click="emit('confirm')"
             >
                 {{ confirmLabel }}

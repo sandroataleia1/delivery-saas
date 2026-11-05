@@ -11,7 +11,9 @@ import {
     Menu,
     Package,
     PackagePlus,
+    Receipt,
     ShieldCheck,
+    ShoppingCart,
     Store,
     Truck,
     UserCog,
@@ -42,6 +44,8 @@ const nav = computed(() => {
 
     return [
         { label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House },
+        can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
+        can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
         can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
         can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
         can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
