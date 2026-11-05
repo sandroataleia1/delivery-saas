@@ -30,6 +30,10 @@ class StockMovement extends Model
 
     public const LOSS = 'loss';
 
+    public const SALE = 'sale';
+
+    public const SALE_INGREDIENT = 'sale_ingredient';
+
     protected function casts(): array
     {
         return [

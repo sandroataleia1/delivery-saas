@@ -21,6 +21,7 @@ class ProductTest extends TestCase
             'unit' => 'UN',
             'sale_price' => '12.50',
             'track_stock' => true,
+            'recipe' => [],
             ...$overrides,
         ];
     }

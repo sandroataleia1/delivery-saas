@@ -3,6 +3,11 @@ import { ref } from 'vue';
 import { Search } from '@lucide/vue';
 import { formatQuantity } from '@/lib/format';
 
+defineProps({
+    placeholder: { type: String, default: 'Buscar produto por nome ou código de barras' },
+    label: { type: String, default: 'Buscar produto' },
+});
+
 const emit = defineEmits(['select']);
 
 const term = ref('');
@@ -57,8 +62,8 @@ async function onEnter() {
             v-model="term"
             class="input pl-9"
             type="search"
-            placeholder="Buscar produto por nome ou código de barras"
-            aria-label="Buscar produto"
+            :placeholder="placeholder"
+            :aria-label="label"
             autocomplete="off"
             @input="onInput"
             @keydown.enter.prevent="onEnter"

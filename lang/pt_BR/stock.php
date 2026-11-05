@@ -12,5 +12,7 @@ return [
         'adjustment_in' => 'Ajuste de entrada',
         'adjustment_out' => 'Ajuste de saída',
         'loss' => 'Perda',
+        'sale' => 'Venda',
+        'sale_ingredient' => 'Consumo em venda',
     ],
 ];

@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
+import RecipeEditor from '@/components/RecipeEditor.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney, formatQuantity } from '@/lib/format';
@@ -26,12 +27,21 @@ const form = useForm({
     track_stock: props.product?.track_stock ?? true,
     min_stock: props.product?.min_stock ?? '',
     initial_stock: '',
+    recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
 });
 
 // Com estoque controlado, depois de criado o custo só muda pelas entradas.
 const costIsCalculated = computed(() => editing.value && form.track_stock && props.product.track_stock);
+const hasRecipe = computed(() => !form.track_stock && form.recipe.length > 0);
 
 function submit() {
+    form.transform((data) => ({
+        ...data,
+        recipe: data.track_stock
+            ? []
+            : data.recipe.map(({ ingredient_id, quantity }) => ({ ingredient_id, quantity })),
+    }));
+
     if (editing.value) {
         form.put(route('products.update', props.product.id));
     } else {
@@ -82,7 +92,12 @@ function submit() {
                         <DecimalInput :id="id" v-model="form.sale_price" pad required />
                     </Field>
 
-                    <Field v-if="!costIsCalculated" v-slot="{ id }" label="Custo (R$)" :error="form.errors.cost_price">
+                    <div v-if="hasRecipe">
+                        <p class="mb-1.5 text-sm font-semibold">Custo</p>
+                        <p class="text-muted min-h-10 py-2 text-sm">Calculado pela ficha técnica.</p>
+                    </div>
+
+                    <Field v-else-if="!costIsCalculated" v-slot="{ id }" label="Custo (R$)" :error="form.errors.cost_price">
                         <DecimalInput :id="id" v-model="form.cost_price" :decimals="4" />
                     </Field>
 
@@ -101,7 +116,7 @@ function submit() {
                     <input v-model="form.track_stock" type="checkbox" class="accent-brand mt-0.5 size-4" />
                     <span>
                         <span class="block font-semibold">Controlar estoque deste produto</span>
-                        <span class="text-muted">Desmarque para itens feitos na hora, como uma pizza.</span>
+                        <span class="text-muted">Desmarque para itens feitos na hora, como uma pizza, e monte a ficha técnica.</span>
                     </span>
                 </label>
                 <p v-if="form.errors.track_stock" class="text-danger text-sm" role="alert">{{ form.errors.track_stock }}</p>
@@ -121,6 +136,8 @@ function submit() {
                     </Field>
                 </div>
             </div>
+
+            <RecipeEditor v-if="!form.track_stock" :form="form" />
 
             <div class="flex gap-2">
                 <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>

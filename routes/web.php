@@ -48,7 +48,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('produtos', [ProductController::class, 'index'])->name('products.index');
             Route::get('categorias', [CategoryController::class, 'index'])->name('categories.index');
         });
-        Route::middleware('can:entries.manage')->get('produtos/buscar', [ProductController::class, 'search'])->name('products.search');
+        Route::get('produtos/buscar', [ProductController::class, 'search'])->name('products.search');
         Route::middleware('can:products.manage')->group(function () {
             Route::get('produtos/novo', [ProductController::class, 'create'])->name('products.create');
             Route::post('produtos', [ProductController::class, 'store'])->name('products.store');

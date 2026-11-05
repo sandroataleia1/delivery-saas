@@ -42,6 +42,34 @@ class Product extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    public function recipeItems(): HasMany
+    {
+        return $this->hasMany(RecipeItem::class);
+    }
+
+    /** Custo atual dos insumos. Exige recipeItems.ingredient carregado. */
+    public function recipeCost(): string
+    {
+        return $this->recipeItems->reduce(
+            fn (string $sum, RecipeItem $item) => bcadd($sum, bcmul($item->quantity, $item->ingredient->cost_price, 4), 4),
+            '0.0000',
+        );
+    }
+
+    /** Custo que vale para o produto: da ficha técnica, quando houver. */
+    public function effectiveCost(): string
+    {
+        return $this->recipeItems->isNotEmpty() ? $this->recipeCost() : $this->cost_price;
+    }
+
+    /** Quantas unidades o estoque atual permite fazer, ou null sem ficha técnica. */
+    public function availablePortions(): ?int
+    {
+        return $this->recipeItems->isEmpty()
+            ? null
+            : $this->recipeItems->map(fn (RecipeItem $item) => (int) bcdiv($item->ingredient->stock_quantity, $item->quantity, 0))->min();
+    }
+
     public function scopeLowStock(Builder $query): void
     {
         $query->where('track_stock', true)

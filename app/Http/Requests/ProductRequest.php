@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\RecipeItem;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -25,6 +26,13 @@ class ProductRequest extends FormRequest
             'track_stock' => ['required', 'boolean'],
             'min_stock' => ['nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
             'initial_stock' => [Rule::excludeIf($product !== null), 'nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
+            'recipe' => ['present', 'array', 'max:50'],
+            'recipe.*.ingredient_id' => [
+                'required',
+                'distinct',
+                Rule::exists('products', 'id')->where('company_id', $companyId)->where('track_stock', true),
+            ],
+            'recipe.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
         ];
     }
 
@@ -41,6 +49,9 @@ class ProductRequest extends FormRequest
             'track_stock' => 'controlar estoque',
             'min_stock' => 'estoque mínimo',
             'initial_stock' => 'estoque inicial',
+            'recipe' => 'ficha técnica',
+            'recipe.*.ingredient_id' => 'insumo',
+            'recipe.*.quantity' => 'quantidade',
         ];
     }
 
@@ -49,8 +60,19 @@ class ProductRequest extends FormRequest
         return [function (Validator $validator) {
             $product = $this->route('product');
 
-            if ($product?->track_stock && ! $this->boolean('track_stock') && bccomp($product->stock_quantity, '0', 3) > 0) {
+            $stopsTracking = $product?->track_stock && ! $this->boolean('track_stock');
+
+            if ($stopsTracking && bccomp($product->stock_quantity, '0', 3) > 0) {
                 $validator->errors()->add('track_stock', 'Zere o saldo do produto antes de parar de controlar o estoque.');
+            }
+
+            if ($stopsTracking && RecipeItem::where('ingredient_id', $product->id)->exists()) {
+                $validator->errors()->add('track_stock', 'Este produto é insumo de uma ficha técnica e precisa controlar estoque.');
+            }
+
+            // Evita baixa em dobro: ou o produto tem saldo próprio, ou baixa os insumos.
+            if ($this->boolean('track_stock') && ! empty($this->input('recipe'))) {
+                $validator->errors()->add('recipe', 'Produto com ficha técnica não pode controlar estoque próprio.');
             }
         }];
     }

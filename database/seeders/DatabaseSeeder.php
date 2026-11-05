@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Actions\CreateCompany;
 use App\Actions\MoveStock;
+use App\Actions\SyncRecipe;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Role;
@@ -66,6 +67,8 @@ class DatabaseSeeder extends Seeder
             $categories[$name] = $category->id;
         }
 
+        $products = [];
+
         foreach ([
             ['Coca-Cola 2L', 'Bebidas', 'UN', '12.00', '7.5000', true, '24', '6', '7894900011517'],
             ['Guaraná 2L', 'Bebidas', 'UN', '10.00', '6.0000', true, '4', '6', '7891991000833'],
@@ -90,6 +93,13 @@ class DatabaseSeeder extends Seeder
             if ($track) {
                 app(MoveStock::class)->handle($product, StockMovement::INITIAL, $stock);
             }
+
+            $products[$name] = $product;
         }
+
+        app(SyncRecipe::class)->handle($products['Pizza Margherita'], [
+            ['ingredient_id' => $products['Mussarela']->id, 'quantity' => '0.250'],
+            ['ingredient_id' => $products['Farinha de trigo']->id, 'quantity' => '0.300'],
+        ]);
     }
 }

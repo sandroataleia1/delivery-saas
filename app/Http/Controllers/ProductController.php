@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\MoveStock;
+use App\Actions\SyncRecipe;
 use App\Http\Requests\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\RecipeItem;
 use App\Models\StockMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +24,7 @@ class ProductController extends Controller
         $canSeeCost = $request->user()->hasPermission('stock.view');
 
         $products = Product::query()
-            ->with('category:id,name')
+            ->with(['category:id,name', 'recipeItems.ingredient:id,cost_price'])
             ->when($filters['search'] ?? null, fn ($query, $search) => $query->where(
                 fn ($query) => $query->where('name', 'like', "%$search%")
                     ->orWhere('sku', 'like', "%$search%")
@@ -41,7 +43,8 @@ class ProductController extends Controller
                 'category' => $product->category?->name,
                 'unit' => $product->unit,
                 'sale_price' => $product->sale_price,
-                'cost_price' => $canSeeCost ? $product->cost_price : null,
+                'cost_price' => $canSeeCost ? $product->effectiveCost() : null,
+                'has_recipe' => $product->recipeItems->isNotEmpty(),
                 'track_stock' => $product->track_stock,
                 'stock_quantity' => $canSeeCost ? $product->stock_quantity : null,
                 'active' => $product->active,
@@ -55,9 +58,14 @@ class ProductController extends Controller
         ]);
     }
 
-    /** Busca para o lançamento de entradas. Aceita leitor de código de barras. */
+    /** Busca para entradas e fichas técnicas. Aceita leitor de código de barras. */
     public function search(Request $request): JsonResponse
     {
+        abort_unless(
+            $request->user()->hasPermission('entries.manage') || $request->user()->hasPermission('products.manage'),
+            403,
+        );
+
         $term = trim((string) $request->query('q'));
 
         if ($term === '') {
@@ -83,11 +91,11 @@ class ProductController extends Controller
         return Inertia::render('products/Form', $this->formProps());
     }
 
-    public function store(ProductRequest $request, MoveStock $moveStock): RedirectResponse
+    public function store(ProductRequest $request, MoveStock $moveStock, SyncRecipe $syncRecipe): RedirectResponse
     {
         $data = $request->validated();
 
-        DB::transaction(function () use ($data, $moveStock) {
+        DB::transaction(function () use ($data, $moveStock, $syncRecipe) {
             $product = new Product($data);
             $product->min_stock = $data['min_stock'] ?? 0;
             $product->cost_price = $data['cost_price'] ?? 0;
@@ -99,6 +107,8 @@ class ProductController extends Controller
             if ($product->track_stock && bccomp($initialStock, '0', 3) > 0) {
                 $moveStock->handle($product, StockMovement::INITIAL, $initialStock);
             }
+
+            $syncRecipe->handle($product, $data['recipe']);
         });
 
         return redirect()->route('products.index')->with('success', 'Produto criado.');
@@ -106,16 +116,30 @@ class ProductController extends Controller
 
     public function edit(Product $product): Response
     {
+        $product->load('recipeItems.ingredient:id,name,unit,cost_price,stock_quantity');
+
         return Inertia::render('products/Form', [
             ...$this->formProps(),
             'product' => $product->only(
                 'id', 'name', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
                 'cost_price', 'track_stock', 'min_stock', 'stock_quantity',
-            ),
+            ) + [
+                'recipe' => $product->recipeItems
+                    ->sortBy('ingredient.name')
+                    ->values()
+                    ->map(fn (RecipeItem $item) => [
+                        'ingredient_id' => $item->ingredient_id,
+                        'name' => $item->ingredient->name,
+                        'unit' => $item->ingredient->unit,
+                        'cost_price' => $item->ingredient->cost_price,
+                        'stock_quantity' => $item->ingredient->stock_quantity,
+                        'quantity' => $item->quantity,
+                    ]),
+            ],
         ]);
     }
 
-    public function update(ProductRequest $request, Product $product): RedirectResponse
+    public function update(ProductRequest $request, Product $product, SyncRecipe $syncRecipe): RedirectResponse
     {
         $data = $request->validated();
 
@@ -127,7 +151,10 @@ class ProductController extends Controller
             $product->cost_price = $data['cost_price'] ?? 0;
         }
 
-        $product->save();
+        DB::transaction(function () use ($product, $data, $syncRecipe) {
+            $product->save();
+            $syncRecipe->handle($product, $data['recipe']);
+        });
 
         return redirect()->route('products.index')->with('success', 'Produto atualizado.');
     }

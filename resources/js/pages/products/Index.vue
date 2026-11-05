@@ -95,12 +95,13 @@ function toggleStatus() {
                         <td>
                             <p class="font-semibold">{{ product.name }}</p>
                             <p class="text-muted text-xs">{{ product.barcode ?? product.sku ?? product.unit }}</p>
+                            <span v-if="product.has_recipe" class="badge bg-brand-soft text-brand-strong mt-0.5">Ficha técnica</span>
                         </td>
                         <td class="whitespace-nowrap max-md:hidden">{{ product.category ?? '—' }}</td>
                         <td class="text-right whitespace-nowrap tabular-nums">{{ formatMoney(product.sale_price) }}</td>
                         <td v-if="canSeeCost" class="text-right whitespace-nowrap tabular-nums max-lg:hidden">{{ formatMoney(product.cost_price) }}</td>
                         <td v-if="canSeeCost" class="text-right whitespace-nowrap tabular-nums max-sm:hidden">
-                            {{ product.track_stock ? formatQuantity(product.stock_quantity, product.unit) : 'Não controla' }}
+                            {{ product.track_stock ? formatQuantity(product.stock_quantity, product.unit) : product.has_recipe ? 'Pelos insumos' : 'Não controla' }}
                         </td>
                         <td class="max-sm:hidden"><StatusBadge :active="product.active" /></td>
                         <td v-if="can('products.manage')" class="text-right whitespace-nowrap">

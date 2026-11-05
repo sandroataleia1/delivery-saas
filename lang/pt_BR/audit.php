@@ -36,6 +36,7 @@ return [
         'min_stock' => 'Estoque mínimo',
         'notes' => 'Observações',
         'quantity' => 'Quantidade',
+        'recipe' => 'Ficha técnica',
         'sale_price' => 'Preço de venda',
         'sku' => 'Código interno',
         'status' => 'Situação',
