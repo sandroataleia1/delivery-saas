@@ -1,0 +1,74 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToCompany;
+use App\Support\Decimal;
+use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+// stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
+#[Fillable(['category_id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock'])]
+class Product extends Model
+{
+    /** @use HasFactory<ProductFactory> */
+    use Auditable, BelongsToCompany, HasFactory;
+
+    protected function casts(): array
+    {
+        return [
+            'sale_price' => 'decimal:2',
+            'cost_price' => 'decimal:4',
+            'stock_quantity' => 'decimal:3',
+            'min_stock' => 'decimal:3',
+            'track_stock' => 'boolean',
+            'active' => 'boolean',
+        ];
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function scopeLowStock(Builder $query): void
+    {
+        $query->where('track_stock', true)
+            ->where('active', true)
+            ->where('min_stock', '>', 0)
+            ->whereColumn('stock_quantity', '<=', 'min_stock');
+    }
+
+    public function isLowStock(): bool
+    {
+        return $this->track_stock
+            && bccomp($this->min_stock, '0', 3) > 0
+            && bccomp($this->stock_quantity, $this->min_stock, 3) <= 0;
+    }
+
+    // O saldo é auditado linha a linha pelas movimentações.
+    protected function auditExclude(): array
+    {
+        return ['stock_quantity'];
+    }
+
+    protected function auditDisplayValue(string $field, mixed $value): mixed
+    {
+        return match ($field) {
+            'category_id' => $value ? Category::withoutGlobalScopes()->find($value)?->name ?? $value : $value,
+            'sale_price', 'cost_price', 'min_stock' => Decimal::br($value),
+            default => $value,
+        };
+    }
+}
