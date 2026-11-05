@@ -8,6 +8,8 @@ use App\Actions\MoveStock;
 use App\Actions\SyncRecipe;
 use App\Models\Bill;
 use App\Models\Category;
+use App\Models\Customer;
+use App\Models\DeliveryZone;
 use App\Models\DiningTable;
 use App\Models\Product;
 use App\Models\Role;
@@ -45,6 +47,7 @@ class DatabaseSeeder extends Seeder
             'Gerente' => ['Gabriel Gerente', 'gerente@delivery.test'],
             'Caixa' => ['Carla Caixa', 'caixa@delivery.test'],
             'Garçom' => ['Gustavo Garçom', 'garcom@delivery.test'],
+            'Entregador' => ['Elias Entregador', 'entregador@delivery.test'],
         ] as $roleName => [$name, $email]) {
             $user = new User(['name' => $name, 'email' => $email, 'password' => 'password']);
             $user->company_id = $company->id;
@@ -55,6 +58,31 @@ class DatabaseSeeder extends Seeder
         $this->seedStock($company->id);
         $this->seedBills($company->id);
         $this->seedTables($company->id);
+        $this->seedDelivery($company->id);
+    }
+
+    private function seedDelivery(int $companyId): void
+    {
+        foreach (['Centro' => '5.00', 'Jardim América' => '8.00', 'Vila Nova' => '10.00'] as $name => $fee) {
+            $zone = new DeliveryZone(['name' => $name, 'fee' => $fee]);
+            $zone->company_id = $companyId;
+            $zone->save();
+        }
+
+        $customer = new Customer([
+            'name' => 'Marcos Almeida',
+            'phone' => '(11) 97777-6666',
+            'allow_credit' => true,
+            'credit_limit' => '300.00',
+            'credit_days' => 30,
+        ]);
+        $customer->company_id = $companyId;
+        $customer->active = true;
+        $customer->save();
+
+        $address = $customer->addresses()->make(['street' => 'Rua das Flores', 'number' => '120', 'district' => 'Centro', 'reference' => 'Casa de portão verde']);
+        $address->company_id = $companyId;
+        $address->save();
     }
 
     private function seedTables(int $companyId): void

@@ -18,6 +18,7 @@ const editing = computed(() => props.product !== null);
 
 const form = useForm({
     name: props.product?.name ?? '',
+    description: props.product?.description ?? '',
     category_id: props.product?.category_id ?? '',
     sku: props.product?.sku ?? '',
     barcode: props.product?.barcode ?? '',
@@ -59,6 +60,10 @@ function submit() {
             <div class="card space-y-4 p-5">
                 <Field v-slot="{ id }" label="Nome" required :error="form.errors.name">
                     <input :id="id" v-model="form.name" class="input" maxlength="120" required autofocus />
+                </Field>
+
+                <Field v-slot="{ id }" label="Descrição" :error="form.errors.description" hint="Aparece no cardápio do QR Code.">
+                    <input :id="id" v-model="form.description" class="input" maxlength="255" />
                 </Field>
 
                 <div class="grid gap-4 sm:grid-cols-2">

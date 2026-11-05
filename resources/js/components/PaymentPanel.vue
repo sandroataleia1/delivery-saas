@@ -1,6 +1,6 @@
 <script setup>
 import { computed, watch } from 'vue';
-import { Banknote, CreditCard, QrCode, Ticket, Trash2 } from '@lucide/vue';
+import { Banknote, CreditCard, NotebookPen, QrCode, Ticket, Trash2 } from '@lucide/vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { formatMoney } from '@/lib/format';
 import { fromCents, toCents } from '@/lib/money';
@@ -8,12 +8,15 @@ import { fromCents, toCents } from '@/lib/money';
 const props = defineProps({
     methods: { type: Object, required: true },
     totalCents: { type: Number, required: true },
+    allowCredit: { type: Boolean, default: false },
 });
 
 const payments = defineModel('payments', { type: Array, required: true });
 const valid = defineModel('valid', { type: Boolean, default: false });
 
-const icons = { cash: Banknote, pix: QrCode, credit: CreditCard, debit: CreditCard, voucher: Ticket };
+const icons = { cash: Banknote, pix: QrCode, credit: CreditCard, debit: CreditCard, voucher: Ticket, fiado: NotebookPen };
+
+const available = computed(() => Object.fromEntries(Object.entries(props.methods).filter(([method]) => method !== 'fiado' || props.allowCredit)));
 
 const paidCents = computed(() => payments.value.reduce((sum, payment) => sum + toCents(payment.amount), 0));
 const cashCents = computed(() => payments.value.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + toCents(payment.amount), 0));
@@ -41,7 +44,7 @@ function add(method) {
 <template>
     <div>
         <div class="mt-4 grid grid-cols-2 gap-2">
-            <button v-for="(label, method) in methods" :key="method" type="button" class="btn btn-secondary justify-start" @click="add(method)">
+            <button v-for="(label, method) in available" :key="method" type="button" class="btn btn-secondary justify-start" @click="add(method)">
                 <component :is="icons[method]" :size="16" />
                 {{ label }}
             </button>
@@ -72,6 +75,6 @@ function add(method) {
             </div>
         </dl>
 
-        <p v-if="overpaidWithoutCash" class="text-danger mt-2 text-sm" role="alert">Pix, cartão e vale não podem passar do total: só dinheiro tem troco.</p>
+        <p v-if="overpaidWithoutCash" class="text-danger mt-2 text-sm" role="alert">Só dinheiro tem troco: as outras formas não podem passar do total.</p>
     </div>
 </template>

@@ -29,6 +29,7 @@ Criados pelo seeder, todos com a senha `password`. Nunca rode o seeder em produ�
 | Gerente | gerente@delivery.test |
 | Caixa | caixa@delivery.test |
 | Garçom | garcom@delivery.test |
+| Entregador | entregador@delivery.test |
 
 Em desenvolvimento os e-mails de redefinição de senha vão para `storage/logs/laravel.log`.
 
@@ -49,4 +50,6 @@ Os testes usam SQLite em memória, então os triggers de auditoria, que existem 
 - **Caixa:** vender exige caixa aberto. Totais de caixa fechado ficam congelados em `summary`; correções posteriores entram como lançamento no caixa aberto.
 - **Financeiro:** só `SettleBill` e `ReopenBill` mudam a situação de pagamento de uma conta. Baixa em dinheiro vira lançamento no caixa aberto de quem fez a operação.
 - **Mesas:** o estoque só baixa ao fechar a conta, que vira uma venda comum por `RegisterSale`, com os preços de quando cada item foi lançado.
+- **Fiado:** a forma de pagamento `fiado` gera conta a receber em `RegisterSale` e fica fora do saldo do fluxo até ser recebida.
+- **Páginas públicas:** usam o middleware `public.page` e filtram a empresa de forma explícita. Nunca dependem do usuário da sessão.
 - **Campos sensíveis:** ficam fora do `Fillable` e são atribuídos um a um no controller.

@@ -34,6 +34,8 @@ class CreateBills
                 $bill->company_id = $companyId ?? $user?->company_id;
                 $bill->type = $data['type'];
                 $bill->stock_entry_id = $data['stock_entry_id'] ?? null;
+                $bill->customer_id = $data['customer_id'] ?? null;
+                $bill->sale_id = $data['sale_id'] ?? null;
                 $bill->status = Bill::OPEN;
                 $bill->installment_group = $group;
                 $bill->installment_number = $index + 1;

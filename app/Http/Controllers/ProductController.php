@@ -122,7 +122,7 @@ class ProductController extends Controller
         return Inertia::render('products/Form', [
             ...$this->formProps(),
             'product' => $product->only(
-                'id', 'name', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
+                'id', 'name', 'description', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
                 'cost_price', 'track_stock', 'sellable', 'min_stock', 'stock_quantity',
             ) + [
                 'recipe' => $product->recipeItems

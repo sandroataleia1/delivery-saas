@@ -3,7 +3,8 @@ import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { ZiggyVue } from 'ziggy-js';
 
-const pages = import.meta.glob('./pages/**/*.vue', { eager: true });
+// Cada tela vira um arquivo: o cardápio do QR Code não baixa o sistema inteiro no celular do cliente.
+const pages = import.meta.glob('./pages/**/*.vue');
 
 createInertiaApp({
     title: (title) => (title ? `${title} · Delivery SaaS` : 'Delivery SaaS'),
@@ -14,7 +15,7 @@ createInertiaApp({
             throw new Error(`Página não encontrada: ${name}`);
         }
 
-        return page;
+        return page();
     },
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })

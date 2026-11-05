@@ -17,6 +17,7 @@ class ProductRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', Rule::exists('categories', 'id')->where('company_id', $companyId)],
             'sku' => ['nullable', 'string', 'max:40', $unique('sku')],
             'barcode' => ['nullable', 'string', 'max:20', $unique('barcode')],
@@ -41,6 +42,7 @@ class ProductRequest extends FormRequest
     {
         return [
             'name' => 'nome',
+            'description' => 'descrição',
             'category_id' => 'categoria',
             'sku' => 'código interno',
             'barcode' => 'código de barras',

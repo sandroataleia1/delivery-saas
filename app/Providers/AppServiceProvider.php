@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\DeliveryOrder;
+use App\Models\DeliveryZone;
 use App\Models\DiningTable;
 use App\Models\StockEntry;
 use App\Models\TableOrder;
@@ -30,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
         Route::model('table', DiningTable::class);
         Route::model('order', TableOrder::class);
         Route::model('item', TableOrderItem::class);
+        Route::model('delivery', DeliveryOrder::class);
+        Route::model('zone', DeliveryZone::class);
 
         // As permissões do catálogo viram abilities: Gate e middleware can:.
         Gate::before(fn (User $user, string $ability) => $user->hasPermission($ability) ? true : null);
@@ -38,6 +42,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('signup', fn (Request $request) => $request->isAttemptingPrecognition()
             ? Limit::perMinute(60)->by('precognition|'.$request->ip())
             : Limit::perHour(5)->by('signup|'.$request->ip()));
+
+        // Rota pública: quem abusa do QR Code é barrado sem atrapalhar o salão cheio.
+        RateLimiter::for('menu', fn (Request $request) => Limit::perMinute(20)->by('menu|'.$request->ip()));
 
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
     }

@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 #[Fillable([
     'legal_name', 'trade_name', 'document', 'segment', 'email', 'phone',
-    'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'service_fee_percent',
+    'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'service_fee_percent', 'qr_menu_enabled',
 ])]
 class Company extends Model
 {
@@ -24,6 +24,7 @@ class Company extends Model
         return [
             'active' => 'boolean',
             'service_fee_percent' => 'decimal:2',
+            'qr_menu_enabled' => 'boolean',
         ];
     }
 

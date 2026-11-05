@@ -2,17 +2,21 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ChecksCreditSale;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class CloseTableOrderRequest extends FormRequest
 {
+    use ChecksCreditSale;
+
     public function rules(): array
     {
         return [
             'client_uuid' => ['required', 'uuid'],
             'expected_subtotal' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $this->user()->company_id)],
             'discount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
             'charge_service' => ['required', 'boolean'],
             'payments' => ['present', 'array', 'max:10'],
@@ -37,6 +41,8 @@ class CloseTableOrderRequest extends FormRequest
             if ((float) $this->input('discount') > 0 && ! $this->user()->hasPermission('sales.discount')) {
                 $validator->errors()->add('discount', 'Você não tem permissão para dar desconto.');
             }
+
+            $this->checkCredit($validator, $this->input('customer_id'));
         }];
     }
 }

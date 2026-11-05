@@ -9,12 +9,20 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 #[Fillable(['number', 'area', 'seats'])]
 class DiningTable extends Model
 {
     /** @use HasFactory<DiningTableFactory> */
     use Auditable, BelongsToCompany, HasFactory;
+
+    protected static function booted(): void
+    {
+        static::creating(function (DiningTable $table) {
+            $table->qr_token ??= Str::random(32);
+        });
+    }
 
     protected function casts(): array
     {
@@ -24,6 +32,11 @@ class DiningTable extends Model
     public function openOrder(): HasOne
     {
         return $this->hasOne(TableOrder::class)->where('status', TableOrder::OPEN);
+    }
+
+    protected function auditExclude(): array
+    {
+        return ['qr_token'];
     }
 
     public function auditLabel(): string

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
 import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, Minus, Plus, Receipt, Trash2, X } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
@@ -129,6 +130,7 @@ function transfer() {
 
 const closing = ref(false);
 const chargeService = ref(true);
+const customer = ref(null);
 const discount = ref('');
 const payments = ref([]);
 const paymentValid = ref(false);
@@ -153,6 +155,7 @@ function close() {
             client_uuid: closeUuid.value,
             expected_subtotal: props.order.subtotal,
             discount: discount.value || null,
+            customer_id: customer.value?.id ?? null,
             charge_service: chargeService.value,
             payments: payments.value
                 .filter((payment) => toCents(payment.amount) > 0)
@@ -369,7 +372,11 @@ function close() {
                 </div>
             </dl>
 
-            <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" />
+            <div v-if="can('customers.view')" class="mt-3">
+                <CustomerPicker v-model="customer" placeholder="Cliente (opcional, para fiado)" />
+            </div>
+
+            <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" :allow-credit="Boolean(customer?.allow_credit) && can('sales.credit')" />
 
             <p v-for="message in [closeForm.errors.order, closeForm.errors.cash, closeForm.errors.payments, closeForm.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
             <Link v-if="closeForm.errors.cash" :href="route('cash.index')" class="text-brand mt-1 block text-sm font-semibold hover:underline">Abrir meu caixa</Link>

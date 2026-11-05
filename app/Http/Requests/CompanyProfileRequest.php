@@ -21,6 +21,7 @@ class CompanyProfileRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:20'],
             'service_fee_percent' => ['sometimes', 'numeric', 'decimal:0,2', 'min:0', 'max:30'],
+            'qr_menu_enabled' => ['sometimes', 'boolean'],
             ...Company::profileRules('nullable'),
         ];
     }

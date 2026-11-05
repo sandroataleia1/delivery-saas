@@ -97,6 +97,7 @@ class SaleController extends Controller
                     'total' => $sale->total,
                     'cancelled' => $sale->isCancelled(),
                     'table_number' => $sale->table_number,
+                    'origin' => $sale->origin,
                     'payments' => $sale->payments->map(fn (SalePayment $payment) => $methods[$payment->method])->implode(', '),
                 ]),
             'filters' => $filters,
@@ -140,7 +141,7 @@ class SaleController extends Controller
 
     private function present(Sale $sale, bool $withCost): array
     {
-        $sale->load(['items', 'payments']);
+        $sale->load(['items', 'payments', 'customer:id,name']);
         $methods = config('sales.payment_methods');
 
         $cost = $sale->items->reduce(
@@ -156,6 +157,8 @@ class SaleController extends Controller
             'subtotal' => $sale->subtotal,
             'discount' => $sale->discount,
             'service_fee' => $sale->service_fee,
+            'delivery_fee' => $sale->delivery_fee,
+            'customer' => $sale->customer?->name,
             'table_number' => $sale->table_number,
             'total' => $sale->total,
             'change' => $sale->change,

@@ -14,6 +14,7 @@ return [
                 'sales.view' => 'Ver vendas e imprimir cupons',
                 'sales.discount' => 'Dar desconto',
                 'sales.cancel' => 'Cancelar vendas',
+                'sales.credit' => 'Vender fiado e definir limite dos clientes',
             ],
         ],
         'cash' => [
@@ -37,6 +38,23 @@ return [
                 'tables.close' => 'Fechar a conta da mesa',
                 'tables.cancel' => 'Cancelar itens e comandas',
                 'tables.manage' => 'Cadastrar mesas',
+            ],
+        ],
+        'deliveries' => [
+            'label' => 'Entregas',
+            'permissions' => [
+                'deliveries.operate' => 'Criar pedidos e mudar etapas',
+                'deliveries.settle' => 'Fazer o acerto das entregas',
+                'deliveries.cancel' => 'Cancelar pedidos',
+                'deliveries.manage' => 'Definir bairros e taxas',
+                'deliveries.courier' => 'Atuar como entregador',
+            ],
+        ],
+        'customers' => [
+            'label' => 'Clientes',
+            'permissions' => [
+                'customers.view' => 'Ver clientes',
+                'customers.manage' => 'Cadastrar e editar clientes',
             ],
         ],
         'products' => [
@@ -86,10 +104,10 @@ return [
     // Perfis criados em toda empresa nova.
     'default_roles' => [
         ['name' => 'Administrador', 'description' => 'Acesso total ao sistema da empresa.', 'is_admin' => true, 'permissions' => []],
-        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'sales.discount', 'sales.cancel', 'cash.operate', 'cash.manage', 'finance.view', 'finance.manage', 'tables.operate', 'tables.close', 'tables.cancel', 'tables.manage', 'products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
-        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'cash.operate', 'tables.operate', 'tables.close', 'products.view']],
+        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'sales.discount', 'sales.cancel', 'sales.credit', 'customers.view', 'customers.manage', 'deliveries.operate', 'deliveries.settle', 'deliveries.cancel', 'deliveries.manage', 'cash.operate', 'cash.manage', 'finance.view', 'finance.manage', 'tables.operate', 'tables.close', 'tables.cancel', 'tables.manage', 'products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
+        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'cash.operate', 'tables.operate', 'tables.close', 'customers.view', 'customers.manage', 'deliveries.operate', 'deliveries.settle', 'products.view']],
         ['name' => 'Garçom', 'description' => 'Atende as mesas.', 'is_admin' => false, 'permissions' => ['tables.operate', 'products.view']],
-        ['name' => 'Entregador', 'description' => 'Realiza as entregas.', 'is_admin' => false, 'permissions' => []],
+        ['name' => 'Entregador', 'description' => 'Realiza as entregas.', 'is_admin' => false, 'permissions' => ['deliveries.courier']],
     ],
 
 ];

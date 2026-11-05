@@ -58,6 +58,7 @@ class CloseTableOrder
                     ->all(),
                 'payments' => $data['payments'],
                 'discount' => $data['discount'] ?? null,
+                'customer_id' => $data['customer_id'] ?? null,
                 'service_percent' => $data['charge_service'] ? Auth::user()->company->service_fee_percent : null,
                 'origin' => 'table',
                 'table_number' => $locked->diningTable->number,

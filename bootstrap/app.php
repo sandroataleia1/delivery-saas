@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAccountCanAccess;
 use App\Http\Middleware\EnsureCompanyUser;
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\ForgetSessionUser;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'password.changed' => EnsurePasswordIsChanged::class,
             'company' => EnsureCompanyUser::class,
             'super' => EnsureSuperAdmin::class,
+            'public.page' => ForgetSessionUser::class,
         ]);
 
         $middleware->redirectGuestsTo(fn () => route('login'));

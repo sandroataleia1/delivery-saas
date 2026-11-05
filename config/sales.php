@@ -8,6 +8,7 @@ return [
         'credit' => 'Cartão de crédito',
         'debit' => 'Cartão de débito',
         'voucher' => 'Vale-refeição',
+        'fiado' => 'Fiado',
     ],
 
 ];

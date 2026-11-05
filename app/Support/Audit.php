@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Str;
 
@@ -25,7 +26,9 @@ class Audit
         ?int $companyId = null,
         ?string $actorName = null,
     ): AuditLog {
-        $actor ??= Auth::user();
+        // Em páginas públicas quem age é o visitante, mesmo que a sessão tenha um funcionário.
+        $guest = Context::getHidden('audit_actor');
+        $actor ??= $guest ? null : Auth::user();
         $request = Request::instance();
         $isHttp = ! app()->runningInConsole() || app()->runningUnitTests();
 
@@ -34,7 +37,7 @@ class Audit
         $log->forceFill([
             'company_id' => $companyId ?? self::companyIdFor($subject, $actor),
             'user_id' => $actor?->getKey(),
-            'user_name' => $actorName ?? $actor?->name ?? 'Sistema',
+            'user_name' => $actorName ?? $guest ?? $actor?->name ?? 'Sistema',
             'event' => $event,
             'auditable_type' => $subject ? class_basename($subject) : null,
             'auditable_id' => $subject?->getKey(),

@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
-#[Fillable(['category_id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable'])]
+#[Fillable(['category_id', 'name', 'description', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */

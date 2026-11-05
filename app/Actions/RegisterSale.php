@@ -2,8 +2,10 @@
 
 namespace App\Actions;
 
+use App\Models\Bill;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\RecipeItem;
 use App\Models\Sale;
@@ -22,7 +24,10 @@ use Illuminate\Validation\ValidationException;
  */
 class RegisterSale
 {
-    public function __construct(private ConsumeProduct $consumeProduct) {}
+    public function __construct(
+        private ConsumeProduct $consumeProduct,
+        private CreateBills $createBills,
+    ) {}
 
     /**
      * @param  array{client_uuid: string, items: array, payments: array, discount?: ?string, notes?: ?string}  $data
@@ -81,8 +86,16 @@ class RegisterSale
             $serviceFee = isset($data['service_percent'])
                 ? Decimal::money(bcdiv(bcmul($afterDiscount, (string) $data['service_percent'], 6), '100', 6))
                 : '0.00';
-            $total = bcadd($afterDiscount, $serviceFee, 2);
+            $deliveryFee = bcadd((string) ($data['delivery_fee'] ?? '0'), '0', 2);
+            $total = bcadd(bcadd($afterDiscount, $serviceFee, 2), $deliveryFee, 2);
             [$payments, $change] = $this->settle($data['payments'], $total);
+
+            $customer = isset($data['customer_id']) ? Customer::whereKey($data['customer_id'])->lockForUpdate()->first() : null;
+            $credit = $payments->firstWhere('method', 'fiado')['amount'] ?? null;
+
+            if ($credit) {
+                $this->ensureCreditIsAllowed($customer, $credit);
+            }
 
             $sale = new Sale;
             $sale->forceFill([
@@ -92,9 +105,11 @@ class RegisterSale
                 'cash_session_id' => $session->id,
                 'origin' => $data['origin'] ?? 'counter',
                 'table_number' => $data['table_number'] ?? null,
+                'customer_id' => $customer?->id,
                 'subtotal' => $subtotal,
                 'discount' => $discount,
                 'service_fee' => $serviceFee,
+                'delivery_fee' => $deliveryFee,
                 'total' => $total,
                 'change' => $change,
                 'status' => Sale::COMPLETED,
@@ -112,12 +127,42 @@ class RegisterSale
                 $this->consumeProduct->handle($products[$line['product_id']], $line['quantity'], sale: $sale);
             }
 
+            if ($credit) {
+                $this->createBills->handle([
+                    'type' => Bill::RECEIVABLE,
+                    'description' => "Venda #{$sale->number}",
+                    'category' => 'Vendas a prazo',
+                    'counterparty' => $customer->name,
+                    'customer_id' => $customer->id,
+                    'sale_id' => $sale->id,
+                    'amount' => $credit,
+                    'due_date' => today()->addDays($customer->credit_days)->format('Y-m-d'),
+                ]);
+            }
+
             $negative = $this->negativeBalances($sale);
 
-            $this->audit($sale, $lines, $payments, $negative);
+            $this->audit($sale, $lines, $payments, $negative, $customer);
 
             return [$sale, $negative];
         });
+    }
+
+    private function ensureCreditIsAllowed(?Customer $customer, string $amount): void
+    {
+        if (! $customer?->allow_credit) {
+            throw ValidationException::withMessages(['payments' => 'Este cliente não tem fiado liberado.']);
+        }
+
+        if ($customer->credit_limit === null) {
+            return;
+        }
+
+        $available = bcsub($customer->credit_limit, $customer->openCredit(), 2);
+
+        if (bccomp($amount, $available, 2) > 0) {
+            throw ValidationException::withMessages(['payments' => 'O fiado passa do limite do cliente: disponível R$ '.Decimal::currency($available).'.']);
+        }
     }
 
     /** Trava produtos e insumos de uma vez, em ordem, para vendas simultâneas não se bloquearem. */
@@ -167,7 +212,7 @@ class RegisterSale
         }
 
         if (bccomp($withoutCash, $total, 2) > 0) {
-            throw ValidationException::withMessages(['payments' => 'Pix, cartão e vale não podem passar do total: só dinheiro tem troco.']);
+            throw ValidationException::withMessages(['payments' => 'Só dinheiro tem troco: as outras formas não podem passar do total.']);
         }
 
         $change = bcsub($paid, $total, 2);
@@ -193,7 +238,7 @@ class RegisterSale
             ->all();
     }
 
-    private function audit(Sale $sale, Collection $lines, Collection $payments, array $negative): void
+    private function audit(Sale $sale, Collection $lines, Collection $payments, array $negative, ?Customer $customer): void
     {
         $methods = config('sales.payment_methods');
 
@@ -206,6 +251,8 @@ class RegisterSale
                 'subtotal' => Decimal::currency($sale->subtotal),
                 'discount' => Decimal::currency($sale->discount),
                 'service_fee' => Decimal::currency($sale->service_fee),
+                'delivery_fee' => Decimal::currency($sale->delivery_fee),
+                'customer' => $customer?->name,
                 'total' => Decimal::currency($sale->total),
                 'payments' => $payments->map(fn (array $payment) => "{$methods[$payment['method']]}: R$ ".Decimal::currency($payment['amount']))->all(),
                 'change' => Decimal::currency($sale->change),

@@ -10,8 +10,11 @@ use App\Http\Controllers\BillController;
 use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
+use App\Http\Controllers\MenuController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
@@ -21,6 +24,12 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
+
+// Cardápio da mesa: público, acessado pelo QR Code.
+Route::middleware('public.page')->group(function () {
+    Route::get('m/{token}', [MenuController::class, 'show'])->name('menu.show');
+    Route::post('m/{token}', [MenuController::class, 'store'])->middleware('throttle:menu')->name('menu.store');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'create'])->name('login');
@@ -65,10 +74,43 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         });
         Route::middleware('can:tables.manage')->group(function () {
             Route::get('mesas/gerenciar', [DiningTableController::class, 'manage'])->name('tables.manage');
+            Route::get('mesas/qrcodes', [DiningTableController::class, 'qrCodes'])->name('tables.qr');
+            Route::post('mesas/{table}/novo-qrcode', [DiningTableController::class, 'regenerateQr'])->whereNumber('table')->name('tables.qr.regenerate');
             Route::post('mesas', [DiningTableController::class, 'store'])->name('tables.store');
             Route::put('mesas/{table}', [DiningTableController::class, 'update'])->whereNumber('table')->name('tables.update');
             Route::patch('mesas/{table}/status', [DiningTableController::class, 'toggleStatus'])->whereNumber('table')->name('tables.status');
         });
+
+        Route::middleware('can:customers.view')->group(function () {
+            Route::get('clientes', [CustomerController::class, 'index'])->name('customers.index');
+            Route::get('clientes/buscar', [CustomerController::class, 'search'])->name('customers.search');
+            Route::get('clientes/{customer}', [CustomerController::class, 'show'])->whereNumber('customer')->name('customers.show');
+        });
+        Route::middleware('can:customers.manage')->group(function () {
+            Route::get('clientes/novo', [CustomerController::class, 'create'])->name('customers.create');
+            Route::post('clientes', [CustomerController::class, 'store'])->name('customers.store');
+            Route::get('clientes/{customer}/editar', [CustomerController::class, 'edit'])->name('customers.edit');
+            Route::put('clientes/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+        });
+
+        Route::middleware('can:deliveries.manage')->group(function () {
+            Route::get('entregas/bairros', [DeliveryController::class, 'zones'])->name('deliveries.zones');
+            Route::post('entregas/bairros', [DeliveryController::class, 'storeZone'])->name('deliveries.zones.store');
+            Route::put('entregas/bairros/{zone}', [DeliveryController::class, 'updateZone'])->name('deliveries.zones.update');
+            Route::delete('entregas/bairros/{zone}', [DeliveryController::class, 'destroyZone'])->name('deliveries.zones.destroy');
+        });
+        Route::middleware('can:deliveries.courier')->get('entregas/minhas', [DeliveryController::class, 'mine'])->name('deliveries.mine');
+        Route::middleware('can:deliveries.operate')->group(function () {
+            Route::get('entregas', [DeliveryController::class, 'board'])->name('deliveries.board');
+            Route::get('entregas/historico', [DeliveryController::class, 'history'])->name('deliveries.history');
+            Route::get('entregas/novo', [DeliveryController::class, 'create'])->name('deliveries.create');
+            Route::post('entregas', [DeliveryController::class, 'store'])->name('deliveries.store');
+            Route::get('entregas/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
+            Route::get('entregas/{delivery}/imprimir', [DeliveryController::class, 'ticket'])->name('deliveries.ticket');
+        });
+        Route::post('entregas/{delivery}/avancar', [DeliveryController::class, 'advance'])->name('deliveries.advance');
+        Route::middleware('can:deliveries.settle')->post('entregas/{delivery}/acertar', [DeliveryController::class, 'settle'])->name('deliveries.settle');
+        Route::middleware('can:deliveries.cancel')->post('entregas/{delivery}/cancelar', [DeliveryController::class, 'cancel'])->name('deliveries.cancel');
 
         Route::middleware('can:finance.view')->group(function () {
             Route::get('financeiro/{type}', [BillController::class, 'index'])->whereIn('type', ['pagar', 'receber'])->name('bills.index');

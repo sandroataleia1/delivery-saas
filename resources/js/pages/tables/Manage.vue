@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, Pencil, Power } from '@lucide/vue';
+import { ArrowLeft, Pencil, Power, QrCode } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import Field from '@/components/Field.vue';
@@ -52,6 +52,10 @@ function toggle(table) {
             <Link :href="route('tables.index')" class="btn btn-secondary">
                 <ArrowLeft :size="16" />
                 Voltar ao mapa
+            </Link>
+            <Link :href="route('tables.qr')" class="btn btn-primary">
+                <QrCode :size="16" />
+                QR Codes
             </Link>
         </PageHeader>
 

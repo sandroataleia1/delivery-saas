@@ -33,7 +33,7 @@ class TableOrder extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(TableOrderItem::class);
+        return $this->hasMany(TableOrderItem::class)->orderBy('id');
     }
 
     public function activeItems(): HasMany

@@ -16,9 +16,9 @@ class AddOrderItems
     /**
      * @param  array<int, array{product_id: int, quantity: string, notes?: ?string}>  $items
      */
-    public function handle(TableOrder $order, array $items, string $clientUuid): void
+    public function handle(TableOrder $order, array $items, string $clientUuid, ?string $guestName = null): void
     {
-        DB::transaction(function () use ($order, $items, $clientUuid) {
+        DB::transaction(function () use ($order, $items, $clientUuid, $guestName) {
             /** @var TableOrder $locked */
             $locked = TableOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
 
@@ -31,7 +31,7 @@ class AddOrderItems
             }
 
             $products = Product::findMany(collect($items)->pluck('product_id'))->keyBy('id');
-            $user = Auth::user();
+            $user = $guestName ? null : Auth::user();
 
             foreach ($items as $item) {
                 $product = $products[$item['product_id']];
@@ -48,8 +48,8 @@ class AddOrderItems
                     'unit_price' => $product->sale_price,
                     'total' => Decimal::money(bcmul((string) $item['quantity'], $product->sale_price, 5)),
                     'notes' => $item['notes'] ?? null,
-                    'user_id' => $user->id,
-                    'user_name' => $user->name,
+                    'user_id' => $user?->id,
+                    'user_name' => $guestName ?? $user->name,
                 ])->save();
             }
         });

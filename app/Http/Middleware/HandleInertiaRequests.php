@@ -13,7 +13,7 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            'auth' => fn () => $request->user() ? [
+            'auth' => fn () => ! $request->routeIs('menu.*') && $request->user() ? [
                 'user' => [
                     'id' => $request->user()->id,
                     'name' => $request->user()->name,

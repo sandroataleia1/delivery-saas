@@ -180,11 +180,16 @@ class CashController extends Controller
             ->groupBy('sale_payments.method')
             ->pluck('total', 'method');
 
-        $cancellations = Sale::query()
-            ->where('status', Sale::CANCELLED)
-            ->whereDate('cancelled_at', $date)
-            ->whereDate('created_at', '!=', $date)
-            ->sum('total');
+        // Fiado não é dinheiro recebido: entra no saldo quando a conta for paga.
+        $creditSales = $inflows->pull('fiado', 0);
+
+        $cancellations = SalePayment::query()
+            ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->where('sales.status', Sale::CANCELLED)
+            ->whereDate('sales.cancelled_at', $date)
+            ->whereDate('sales.created_at', '!=', $date)
+            ->where('sale_payments.method', '!=', 'fiado')
+            ->sum('sale_payments.amount');
 
         $movements = CashMovement::query()
             ->whereDate('created_at', $date)
@@ -218,11 +223,12 @@ class CashController extends Controller
             'date' => $date->format('Y-m-d'),
             'dateLabel' => $date->format('d/m/Y'),
             'today' => today()->format('Y-m-d'),
-            'inflows' => collect($methods)->map(fn (string $label, string $method) => [
+            'inflows' => collect($methods)->except('fiado')->map(fn (string $label, string $method) => [
                 'label' => $label,
                 'total' => $money($inflows[$method] ?? 0),
             ])->values(),
             'gross' => $gross,
+            'creditSales' => $money($creditSales),
             'cancellations' => $money($cancellations),
             'net' => $net,
             'billsPaid' => $billsPaid,

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Minus, Plus, Trash2 } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
@@ -42,6 +43,7 @@ const grid = ref(null);
 
 const paying = ref(false);
 const discount = ref('');
+const customer = ref(null);
 const payments = ref([]);
 const paymentValid = ref(false);
 const receipt = ref(props.completed);
@@ -86,6 +88,7 @@ function removeItem(item) {
 function clearCart() {
     cart.value = [];
     discount.value = '';
+    customer.value = null;
     payments.value = [];
     saleUuid.value = newUuid();
 }
@@ -104,6 +107,7 @@ function finish() {
     form.transform(() => ({
         client_uuid: saleUuid.value,
         discount: discount.value || null,
+        customer_id: customer.value?.id ?? null,
         items: cart.value.map((item) => ({
             product_id: item.id,
             quantity: item.quantity,
@@ -222,6 +226,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 </ul>
 
                 <div class="border-line space-y-2 border-t p-4">
+                    <CustomerPicker v-if="can('customers.view')" v-model="customer" placeholder="Cliente (opcional)" />
                     <div class="flex items-center justify-between text-sm">
                         <span class="text-muted">Subtotal</span>
                         <span class="tabular-nums">{{ formatMoney(fromCents(subtotalCents)) }}</span>
@@ -251,7 +256,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             @confirm="finish"
             @cancel="paying = false"
         >
-            <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" />
+            <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" :allow-credit="Boolean(customer?.allow_credit) && can('sales.credit')" />
             <p v-for="message in [form.errors.cash, form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
         </ConfirmDialog>
 

@@ -20,6 +20,7 @@
         "@inertiajs/vue3": "^3.11.0",
         "@lucide/vue": "^1.69.0",
         "@vitejs/plugin-vue": "^6.0.10",
+        "qrcode": "^1.5.4",
         "vue": "^3.5.45",
         "ziggy-js": "^2.6.5"
     }

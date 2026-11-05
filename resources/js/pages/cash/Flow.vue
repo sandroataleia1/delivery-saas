@@ -12,6 +12,7 @@ const props = defineProps({
     today: { type: String, required: true },
     inflows: { type: Array, required: true },
     gross: { type: String, required: true },
+    creditSales: { type: String, required: true },
     cancellations: { type: String, required: true },
     net: { type: String, required: true },
     billsPaid: { type: String, required: true },
@@ -93,6 +94,9 @@ const differenceClass = (value) => (Number(value) === 0 ? 'text-muted' : Number(
                         <dd class="tabular-nums">{{ formatMoney(balance) }}</dd>
                     </div>
                 </dl>
+                <p v-if="Number(creditSales) > 0" class="text-muted mt-2 text-sm">
+                    {{ formatMoney(creditSales) }} vendidos fiado hoje, fora do saldo até serem recebidos.
+                </p>
                 <p v-if="Number(refunds) > 0" class="text-muted mt-2 text-sm">
                     {{ formatMoney(refunds) }} devolvidos em dinheiro por cancelamentos, já descontados acima.
                 </p>

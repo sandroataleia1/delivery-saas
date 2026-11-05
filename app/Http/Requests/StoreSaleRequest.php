@@ -2,12 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ChecksCreditSale;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreSaleRequest extends FormRequest
 {
+    use ChecksCreditSale;
+
     public function rules(): array
     {
         return [
@@ -20,6 +23,7 @@ class StoreSaleRequest extends FormRequest
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
             'items.*.expected_price' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
+            'customer_id' => ['nullable', Rule::exists('customers', 'id')->where('company_id', $this->user()->company_id)],
             'discount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
             'payments' => ['present', 'array', 'max:10'],
             'payments.*.method' => ['required', Rule::in(array_keys(config('sales.payment_methods')))],
@@ -53,6 +57,8 @@ class StoreSaleRequest extends FormRequest
             if ((float) $this->input('discount') > 0 && ! $this->user()->hasPermission('sales.discount')) {
                 $validator->errors()->add('discount', 'Você não tem permissão para dar desconto.');
             }
+
+            $this->checkCredit($validator, $this->input('customer_id'));
         }];
     }
 }

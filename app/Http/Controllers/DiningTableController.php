@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\DiningTable;
 use App\Models\TableOrder;
+use App\Support\Audit;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -44,6 +46,33 @@ class DiningTableController extends Controller
             'tables' => DiningTable::query()->orderBy('number')->get(['id', 'number', 'area', 'seats', 'active']),
             'nextNumber' => (int) DiningTable::max('number') + 1,
         ]);
+    }
+
+    public function qrCodes(Request $request): Response
+    {
+        return Inertia::render('tables/QrCodes', [
+            'tables' => DiningTable::query()
+                ->where('active', true)
+                ->orderBy('number')
+                ->get()
+                ->map(fn (DiningTable $table) => [
+                    'id' => $table->id,
+                    'number' => $table->number,
+                    'url' => route('menu.show', $table->qr_token),
+                ]),
+            'company' => $request->user()->company->trade_name,
+            'isLocal' => in_array($request->getHost(), ['127.0.0.1', 'localhost'], true),
+        ]);
+    }
+
+    /** Invalida o código impresso, por exemplo se circular uma foto dele. */
+    public function regenerateQr(DiningTable $table): RedirectResponse
+    {
+        $table->forceFill(['qr_token' => Str::random(32)])->saveQuietly();
+
+        Audit::record('qr_regenerated', $table, "QR Code da mesa {$table->number} trocado");
+
+        return back()->with('success', 'Novo QR Code gerado. Imprima e troque o da mesa.');
     }
 
     public function store(Request $request): RedirectResponse

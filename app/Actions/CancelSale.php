@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\Bill;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Sale;
@@ -26,6 +27,7 @@ class CancelSale
     public function __construct(
         private MoveStock $moveStock,
         private RecordCashMovement $recordCashMovement,
+        private CancelBill $cancelBill,
     ) {}
 
     public function handle(Sale $sale, string $reason): void
@@ -38,6 +40,7 @@ class CancelSale
                 throw ValidationException::withMessages(['sale' => 'Esta venda já foi cancelada.']);
             }
 
+            $this->cancelCredit($locked, $reason);
             $this->refundCash($locked);
 
             $movements = StockMovement::query()
@@ -74,6 +77,19 @@ class CancelSale
                 new: ['status' => 'Cancelada', 'cancel_reason' => $reason],
             );
         });
+    }
+
+    /** Fiado vira conta a receber: cancelada a venda, a conta deixa de existir. */
+    private function cancelCredit(Sale $sale, string $reason): void
+    {
+        $bills = Bill::where('sale_id', $sale->id)->get();
+
+        if ($bills->contains(fn (Bill $bill) => $bill->isPaid())) {
+            throw ValidationException::withMessages(['sale' => 'O fiado desta venda já foi recebido. Estorne a baixa antes de cancelar.']);
+        }
+
+        $bills->filter(fn (Bill $bill) => $bill->isOpen())
+            ->each(fn (Bill $bill) => $this->cancelBill->handle($bill, $reason));
     }
 
     private function refundCash(Sale $sale): void

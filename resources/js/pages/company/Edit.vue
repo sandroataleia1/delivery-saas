@@ -27,6 +27,7 @@ const form = useForm({
     city: props.company.city ?? '',
     state: props.company.state ?? '',
     service_fee_percent: props.company.service_fee_percent,
+    qr_menu_enabled: props.company.qr_menu_enabled,
 });
 </script>
 
@@ -82,6 +83,13 @@ const form = useForm({
                 <Field v-slot="{ id }" label="Taxa de serviço (%)" :error="form.errors.service_fee_percent" hint="Sugerida ao fechar a conta. Pode ser retirada se o cliente preferir.">
                     <DecimalInput :id="id" v-model="form.service_fee_percent" class="max-w-32" />
                 </Field>
+                <label class="mt-4 flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.qr_menu_enabled" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">Pedidos pelo QR Code</span>
+                        <span class="text-muted">Desmarque para tirar o cardápio do ar na hora.</span>
+                    </span>
+                </label>
             </div>
 
             <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>
