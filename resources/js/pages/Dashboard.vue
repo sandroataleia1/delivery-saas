@@ -21,7 +21,9 @@ const cards = computed(() => [
     props.stats.low_stock === null
         ? { label: 'Perfis de acesso', value: props.stats.roles }
         : { label: 'Produtos com estoque baixo', value: props.stats.low_stock, href: route('stock.index', { low: 1 }) },
-    { label: 'Entradas hoje', value: props.stats.logins_today },
+    props.stats.overdue_bills === null
+        ? { label: 'Entradas hoje', value: props.stats.logins_today }
+        : { label: 'Contas vencidas a pagar', value: props.stats.overdue_bills, href: route('bills.index', { type: 'pagar', status: 'overdue' }) },
     { label: 'Eventos auditados hoje', value: props.stats.events_today },
 ]);
 </script>

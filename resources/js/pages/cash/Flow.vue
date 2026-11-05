@@ -14,6 +14,9 @@ const props = defineProps({
     gross: { type: String, required: true },
     cancellations: { type: String, required: true },
     net: { type: String, required: true },
+    billsPaid: { type: String, required: true },
+    billsReceived: { type: String, required: true },
+    balance: { type: String, required: true },
     deposits: { type: String, required: true },
     withdrawals: { type: String, required: true },
     refunds: { type: String, required: true },
@@ -40,8 +43,8 @@ const differenceClass = (value) => (Number(value) === 0 ? 'text-muted' : Number(
 
         <div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div class="card col-span-2 p-4 lg:col-span-1">
-                <p class="text-muted text-sm">Resultado do dia</p>
-                <p class="mt-1 text-3xl font-bold tabular-nums">{{ formatMoney(net) }}</p>
+                <p class="text-muted text-sm">Saldo do dia</p>
+                <p class="mt-1 text-3xl font-bold tabular-nums" :class="{ 'text-danger': Number(balance) < 0 }">{{ formatMoney(balance) }}</p>
             </div>
             <div class="card p-4">
                 <p class="text-muted text-sm">Suprimentos</p>
@@ -73,9 +76,21 @@ const differenceClass = (value) => (Number(value) === 0 ? 'text-muted' : Number(
                         <dt class="text-muted">Cancelamentos de dias anteriores</dt>
                         <dd class="text-danger tabular-nums">− {{ formatMoney(cancellations) }}</dd>
                     </div>
-                    <div class="flex justify-between text-base font-bold">
-                        <dt>Resultado do dia</dt>
+                    <div class="flex justify-between font-semibold">
+                        <dt>Resultado das vendas</dt>
                         <dd class="tabular-nums">{{ formatMoney(net) }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-muted">Contas recebidas</dt>
+                        <dd class="tabular-nums">{{ formatMoney(billsReceived) }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-muted">Contas pagas</dt>
+                        <dd class="tabular-nums">− {{ formatMoney(billsPaid) }}</dd>
+                    </div>
+                    <div class="border-line flex justify-between border-t pt-1.5 text-base font-bold">
+                        <dt>Saldo do dia</dt>
+                        <dd class="tabular-nums">{{ formatMoney(balance) }}</dd>
                     </div>
                 </dl>
                 <p v-if="Number(refunds) > 0" class="text-muted mt-2 text-sm">

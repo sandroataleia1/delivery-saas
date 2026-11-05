@@ -115,8 +115,8 @@ function closeCash() {
                                 <p class="font-semibold">{{ movement.label }}</p>
                                 <p class="text-muted text-xs">{{ movement.reason }}</p>
                             </td>
-                            <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="movement.type === 'deposit' ? 'text-ok' : 'text-danger'">
-                                {{ movement.type === 'deposit' ? '+' : '−' }} {{ formatMoney(movement.amount) }}
+                            <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="movement.is_inflow ? 'text-ok' : 'text-danger'">
+                                {{ movement.is_inflow ? '+' : '−' }} {{ formatMoney(movement.amount) }}
                             </td>
                             <td class="text-muted whitespace-nowrap tabular-nums max-sm:hidden">{{ movement.date }}</td>
                         </tr>

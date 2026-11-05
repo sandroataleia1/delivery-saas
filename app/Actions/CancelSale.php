@@ -8,6 +8,7 @@ use App\Models\Sale;
 use App\Models\StockMovement;
 use App\Support\Audit;
 use App\Support\Decimal;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -105,8 +106,8 @@ class CancelSale
                 "Cancelamento da venda #{$sale->number}",
                 $sale,
             );
-        } catch (ValidationException) {
-            throw ValidationException::withMessages(['sale' => 'Não há dinheiro suficiente no caixa para devolver esta venda.']);
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages(['sale' => Arr::first(Arr::flatten($exception->errors()))]);
         }
     }
 }

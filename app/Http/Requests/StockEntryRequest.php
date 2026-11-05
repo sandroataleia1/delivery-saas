@@ -16,6 +16,9 @@ class StockEntryRequest extends FormRequest
             'invoice_number' => ['nullable', 'string', 'max:44'],
             'entry_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'generate_bill' => ['sometimes', 'boolean'],
+            'bill_due_date' => ['required_if_accepted:generate_bill', 'nullable', 'date_format:Y-m-d'],
+            'bill_installments' => ['nullable', 'integer', 'min:1', 'max:60'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.product_id' => [
                 'required',
@@ -34,6 +37,8 @@ class StockEntryRequest extends FormRequest
             'invoice_number' => 'número da nota',
             'entry_date' => 'data da entrada',
             'notes' => 'observações',
+            'bill_due_date' => 'vencimento',
+            'bill_installments' => 'parcelas',
             'items' => 'itens',
             'items.*.product_id' => 'produto',
             'items.*.quantity' => 'quantidade',
@@ -43,6 +48,9 @@ class StockEntryRequest extends FormRequest
 
     public function messages(): array
     {
-        return ['items.required' => 'Adicione pelo menos um produto.'];
+        return [
+            'items.required' => 'Adicione pelo menos um produto.',
+            'bill_due_date.required_if_accepted' => 'Informe o vencimento da conta a pagar.',
+        ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\Bill;
 use App\Models\StockEntry;
 use App\Models\StockMovement;
 use Illuminate\Support\Facades\Auth;
@@ -11,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 /** Desfaz a entrada com lançamentos contrários. Falhando um item, nada é desfeito. */
 class CancelStockEntry
 {
-    public function __construct(private MoveStock $moveStock) {}
+    public function __construct(
+        private MoveStock $moveStock,
+        private CancelBill $cancelBill,
+    ) {}
 
     public function handle(StockEntry $entry, string $reason): void
     {
@@ -22,6 +26,8 @@ class CancelStockEntry
             if ($locked->isCancelled()) {
                 throw ValidationException::withMessages(['stock' => 'Esta entrada já foi cancelada.']);
             }
+
+            $this->cancelBills($locked, $reason);
 
             $items = $locked->items()->with('product')->orderBy('product_id')->get();
 
@@ -43,5 +49,17 @@ class CancelStockEntry
                 'cancel_reason' => $reason,
             ])->save();
         });
+    }
+
+    private function cancelBills(StockEntry $entry, string $reason): void
+    {
+        $bills = Bill::where('stock_entry_id', $entry->id)->get();
+
+        if ($bills->contains(fn (Bill $bill) => $bill->isPaid())) {
+            throw ValidationException::withMessages(['stock' => 'Esta entrada tem conta quitada. Estorne a baixa antes de cancelar.']);
+        }
+
+        $bills->filter(fn (Bill $bill) => $bill->isOpen())
+            ->each(fn (Bill $bill) => $this->cancelBill->handle($bill, $reason));
     }
 }

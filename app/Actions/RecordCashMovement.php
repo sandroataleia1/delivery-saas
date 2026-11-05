@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/** Sangria, suprimento ou estorno. Saídas não podem passar do dinheiro no caixa. */
+/** Sangria, suprimento, estorno ou conta paga em dinheiro. Saídas não podem passar do dinheiro no caixa. */
 class RecordCashMovement
 {
     public function handle(CashSession $session, string $type, string $amount, string $reason, ?Sale $sale = null): CashMovement
@@ -22,7 +22,7 @@ class RecordCashMovement
                 throw ValidationException::withMessages(['amount' => 'Este caixa já foi fechado.']);
             }
 
-            $isOutflow = $type !== CashMovement::DEPOSIT;
+            $isOutflow = ! in_array($type, [CashMovement::DEPOSIT, CashMovement::BILL_RECEIPT], true);
 
             if ($isOutflow && bccomp($amount, $locked->calculateSummary()['expected_cash'], 2) > 0) {
                 throw ValidationException::withMessages(['amount' => 'O valor é maior que o dinheiro disponível no caixa.']);

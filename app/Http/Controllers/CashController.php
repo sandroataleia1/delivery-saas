@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\CloseCashSession;
 use App\Actions\OpenCashSession;
 use App\Actions\RecordCashMovement;
+use App\Models\Bill;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Sale;
@@ -148,6 +149,8 @@ class CashController extends Controller
                 'deposits' => $summary['deposits'],
                 'withdrawals' => $summary['withdrawals'],
                 'refunds' => $summary['refunds'],
+                'bill_payments' => $summary['bill_payments'] ?? '0.00',
+                'bill_receipts' => $summary['bill_receipts'] ?? '0.00',
                 'payments' => $revealsTotals
                     ? collect($summary['payments'])->map(fn (string $total, string $method) => [
                         'label' => $methods[$method],
@@ -200,6 +203,17 @@ class CashController extends Controller
         $gross = $inflows->reduce(fn (string $sum, $total) => bcadd($sum, (string) $total, 2), '0.00');
         $closedToday = $sessions->filter(fn (CashSession $session) => $session->closed_at?->isSameDay($date));
 
+        $settled = Bill::query()
+            ->where('status', Bill::PAID)
+            ->whereDate('paid_at', $date)
+            ->selectRaw('type, SUM(paid_amount) as total')
+            ->groupBy('type')
+            ->pluck('total', 'type');
+
+        $net = bcsub($gross, (string) $cancellations, 2);
+        $billsPaid = $money($settled[Bill::PAYABLE] ?? 0);
+        $billsReceived = $money($settled[Bill::RECEIVABLE] ?? 0);
+
         return Inertia::render('cash/Flow', [
             'date' => $date->format('Y-m-d'),
             'dateLabel' => $date->format('d/m/Y'),
@@ -210,7 +224,10 @@ class CashController extends Controller
             ])->values(),
             'gross' => $gross,
             'cancellations' => $money($cancellations),
-            'net' => bcsub($gross, (string) $cancellations, 2),
+            'net' => $net,
+            'billsPaid' => $billsPaid,
+            'billsReceived' => $billsReceived,
+            'balance' => bcsub(bcadd($net, $billsReceived, 2), $billsPaid, 2),
             'deposits' => $money($movements[CashMovement::DEPOSIT] ?? 0),
             'withdrawals' => $money($movements[CashMovement::WITHDRAWAL] ?? 0),
             'refunds' => $money($movements[CashMovement::REFUND] ?? 0),
@@ -233,6 +250,7 @@ class CashController extends Controller
             'id' => $movement->id,
             'type' => $movement->type,
             'label' => __("cash.movements.{$movement->type}"),
+            'is_inflow' => $movement->isInflow(),
             'amount' => $movement->amount,
             'reason' => $movement->reason,
             'user' => $movement->user_name,

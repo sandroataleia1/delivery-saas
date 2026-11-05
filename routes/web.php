@@ -6,6 +6,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\BillController;
 use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
@@ -45,6 +46,20 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+
+        Route::middleware('can:finance.view')->group(function () {
+            Route::get('financeiro/{type}', [BillController::class, 'index'])->whereIn('type', ['pagar', 'receber'])->name('bills.index');
+            Route::get('financeiro/contas/{bill}', [BillController::class, 'show'])->name('bills.show');
+        });
+        Route::middleware('can:finance.manage')->group(function () {
+            Route::get('financeiro/{type}/nova', [BillController::class, 'create'])->whereIn('type', ['pagar', 'receber'])->name('bills.create');
+            Route::post('financeiro/{type}', [BillController::class, 'store'])->whereIn('type', ['pagar', 'receber'])->name('bills.store');
+            Route::get('financeiro/contas/{bill}/editar', [BillController::class, 'edit'])->name('bills.edit');
+            Route::put('financeiro/contas/{bill}', [BillController::class, 'update'])->name('bills.update');
+            Route::post('financeiro/contas/{bill}/baixa', [BillController::class, 'settle'])->name('bills.settle');
+            Route::post('financeiro/contas/{bill}/estorno', [BillController::class, 'reopen'])->name('bills.reopen');
+            Route::post('financeiro/contas/{bill}/cancelar', [BillController::class, 'cancel'])->name('bills.cancel');
+        });
 
         Route::middleware('can:cash.operate')->group(function () {
             Route::get('caixa', [CashController::class, 'index'])->name('cash.index');

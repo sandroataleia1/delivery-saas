@@ -64,6 +64,14 @@ function close() {
                     <dt class="text-muted">Sangrias</dt>
                     <dd class="tabular-nums">− {{ formatMoney(session.withdrawals) }}</dd>
                 </div>
+                <div v-if="Number(session.bill_receipts) > 0" class="flex justify-between">
+                    <dt class="text-muted">Contas recebidas</dt>
+                    <dd class="tabular-nums">{{ formatMoney(session.bill_receipts) }}</dd>
+                </div>
+                <div v-if="Number(session.bill_payments) > 0" class="flex justify-between">
+                    <dt class="text-muted">Contas pagas</dt>
+                    <dd class="tabular-nums">− {{ formatMoney(session.bill_payments) }}</dd>
+                </div>
                 <div v-if="Number(session.refunds) > 0" class="flex justify-between">
                     <dt class="text-muted">Estornos</dt>
                     <dd class="tabular-nums">− {{ formatMoney(session.refunds) }}</dd>
@@ -108,8 +116,8 @@ function close() {
                             <p class="text-muted text-xs">{{ movement.reason }} · {{ movement.date }}</p>
                         </td>
                         <td class="whitespace-nowrap max-sm:hidden">{{ movement.user }}</td>
-                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="movement.type === 'deposit' ? 'text-ok' : 'text-danger'">
-                            {{ movement.type === 'deposit' ? '+' : '−' }} {{ formatMoney(movement.amount) }}
+                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="movement.is_inflow ? 'text-ok' : 'text-danger'">
+                            {{ movement.is_inflow ? '+' : '−' }} {{ formatMoney(movement.amount) }}
                         </td>
                     </tr>
                 </tbody>

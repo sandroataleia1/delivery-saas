@@ -72,8 +72,13 @@ class CashSession extends Model
         $deposits = $money($movements[CashMovement::DEPOSIT] ?? 0);
         $withdrawals = $money($movements[CashMovement::WITHDRAWAL] ?? 0);
         $refunds = $money($movements[CashMovement::REFUND] ?? 0);
+        $billPayments = $money($movements[CashMovement::BILL_PAYMENT] ?? 0);
+        $billReceipts = $money($movements[CashMovement::BILL_RECEIPT] ?? 0);
 
         $sales = Sale::query()->where('cash_session_id', $this->id)->where('status', Sale::COMPLETED);
+
+        $inflows = bcadd(bcadd(bcadd($this->opening_amount, $cash, 2), $deposits, 2), $billReceipts, 2);
+        $outflows = bcadd(bcadd($withdrawals, $refunds, 2), $billPayments, 2);
 
         return [
             'sales_count' => (clone $sales)->count(),
@@ -82,7 +87,9 @@ class CashSession extends Model
             'deposits' => $deposits,
             'withdrawals' => $withdrawals,
             'refunds' => $refunds,
-            'expected_cash' => bcsub(bcsub(bcadd(bcadd($this->opening_amount, $cash, 2), $deposits, 2), $withdrawals, 2), $refunds, 2),
+            'bill_payments' => $billPayments,
+            'bill_receipts' => $billReceipts,
+            'expected_cash' => bcsub($inflows, $outflows, 2),
         ];
     }
 

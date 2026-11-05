@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CancelStockEntry;
+use App\Actions\CreateBills;
 use App\Actions\RegisterStockEntry;
 use App\Http\Requests\StockEntryRequest;
+use App\Models\Bill;
 use App\Models\StockEntry;
 use App\Models\Supplier;
+use App\Support\Decimal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,11 +61,31 @@ class StockEntryController extends Controller
         ]);
     }
 
-    public function store(StockEntryRequest $request, RegisterStockEntry $registerEntry): RedirectResponse
+    public function store(StockEntryRequest $request, RegisterStockEntry $registerEntry, CreateBills $createBills): RedirectResponse
     {
         $data = $request->validated();
+        $generatesBill = $request->boolean('generate_bill') && $request->user()->hasPermission('finance.manage');
 
-        $entry = $registerEntry->handle(Arr::except($data, 'items'), $data['items']);
+        $entry = DB::transaction(function () use ($data, $registerEntry, $createBills, $generatesBill) {
+            $entry = $registerEntry->handle(
+                Arr::only($data, ['supplier_id', 'invoice_number', 'entry_date', 'notes']),
+                $data['items'],
+            );
+
+            if ($generatesBill && bccomp($entry->total, '0', 4) > 0) {
+                $createBills->handle([
+                    'type' => Bill::PAYABLE,
+                    'description' => "Entrada #{$entry->id}".($entry->invoice_number ? " · Nota {$entry->invoice_number}" : ''),
+                    'category' => 'Fornecedores',
+                    'supplier_id' => $entry->supplier_id,
+                    'stock_entry_id' => $entry->id,
+                    'amount' => Decimal::money($entry->total),
+                    'due_date' => $data['bill_due_date'],
+                ], (int) ($data['bill_installments'] ?? 1));
+            }
+
+            return $entry;
+        });
 
         return redirect()->route('entries.show', $entry)->with('success', 'Entrada lançada e estoque atualizado.');
     }

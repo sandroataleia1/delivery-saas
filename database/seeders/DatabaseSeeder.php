@@ -2,9 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Actions\CreateBills;
 use App\Actions\CreateCompany;
 use App\Actions\MoveStock;
 use App\Actions\SyncRecipe;
+use App\Models\Bill;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Role;
@@ -49,6 +51,25 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->seedStock($company->id);
+        $this->seedBills($company->id);
+    }
+
+    private function seedBills(int $companyId): void
+    {
+        foreach ([
+            [Bill::PAYABLE, 'Conta de energia', 'Energia', '380.50', -2, null],
+            [Bill::PAYABLE, 'Aluguel da loja', 'Aluguel', '2500.00', 5, null],
+            [Bill::RECEIVABLE, 'Encomenda para evento', 'Eventos e encomendas', '640.00', 3, 'Escola Modelo'],
+        ] as [$type, $description, $category, $amount, $days, $counterparty]) {
+            app(CreateBills::class)->handle([
+                'type' => $type,
+                'description' => $description,
+                'category' => $category,
+                'amount' => $amount,
+                'due_date' => today()->addDays($days)->format('Y-m-d'),
+                'counterparty' => $counterparty,
+            ], companyId: $companyId);
+        }
     }
 
     private function seedStock(int $companyId): void

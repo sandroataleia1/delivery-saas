@@ -8,6 +8,7 @@ import Field from '@/components/Field.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import ProductPicker from '@/components/ProductPicker.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { usePermissions } from '@/lib/can';
 import { formatMoney } from '@/lib/format';
 
 const props = defineProps({
@@ -21,7 +22,12 @@ const form = useForm({
     entry_date: props.today,
     notes: '',
     items: [],
+    generate_bill: false,
+    bill_due_date: '',
+    bill_installments: 1,
 });
+
+const { can } = usePermissions();
 
 const lineTotal = (item) => Number(item.quantity || 0) * Number(item.unit_cost || 0);
 const total = computed(() => form.items.reduce((sum, item) => sum + lineTotal(item), 0));
@@ -122,6 +128,25 @@ function submit() {
                 <div class="border-line flex items-center justify-between border-t pt-4">
                     <span class="font-bold">Total da entrada</span>
                     <span class="text-xl font-bold tabular-nums">{{ formatMoney(total) }}</span>
+                </div>
+            </div>
+
+            <div v-if="can('finance.manage')" class="card space-y-4 p-5">
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.generate_bill" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">Gerar conta a pagar</span>
+                        <span class="text-muted">Lança o total desta entrada no financeiro.</span>
+                    </span>
+                </label>
+
+                <div v-if="form.generate_bill" class="grid gap-4 sm:grid-cols-2">
+                    <Field v-slot="{ id }" label="Primeiro vencimento" required :error="form.errors.bill_due_date">
+                        <input :id="id" v-model="form.bill_due_date" class="input" type="date" required />
+                    </Field>
+                    <Field v-slot="{ id }" label="Parcelas" :error="form.errors.bill_installments">
+                        <input :id="id" v-model.number="form.bill_installments" class="input" type="number" min="1" max="60" />
+                    </Field>
                 </div>
             </div>
 

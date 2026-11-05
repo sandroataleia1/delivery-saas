@@ -21,6 +21,10 @@ class CashMovement extends Model
 
     public const REFUND = 'refund';
 
+    public const BILL_PAYMENT = 'bill_payment';
+
+    public const BILL_RECEIPT = 'bill_receipt';
+
     protected function casts(): array
     {
         return [
@@ -33,6 +37,11 @@ class CashMovement extends Model
     {
         static::updating(fn () => throw new LogicException('O lançamento de caixa não pode ser alterado.'));
         static::deleting(fn () => throw new LogicException('O lançamento de caixa não pode ser excluído.'));
+    }
+
+    public function isInflow(): bool
+    {
+        return in_array($this->type, [self::DEPOSIT, self::BILL_RECEIPT], true);
     }
 
     public function auditLabel(): string

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Models\Bill;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Sale;
@@ -27,6 +28,7 @@ class DashboardController extends Controller
                 'events_today' => AuditLog::whereDate('created_at', today())->count(),
                 'sales_total' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->sum('total') : null,
                 'sales_count' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->count() : null,
+                'overdue_bills' => $request->user()->hasPermission('finance.view') ? Bill::query()->where('type', Bill::PAYABLE)->overdue()->count() : null,
                 'low_stock' => $request->user()->hasPermission('stock.view') ? Product::query()->lowStock()->count() : null,
             ],
             'recent' => $canSeeAudit

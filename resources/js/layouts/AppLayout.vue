@@ -6,6 +6,8 @@ import {
     Boxes,
     Building2,
     CalendarDays,
+    CircleArrowDown,
+    CircleArrowUp,
     History,
     House,
     Landmark,
@@ -50,6 +52,8 @@ const nav = computed(() => {
         can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
         can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
         can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
+        can('finance.view') && { label: 'Contas a pagar', href: route('bills.index', 'pagar'), match: '/financeiro/pagar', icon: CircleArrowUp },
+        can('finance.view') && { label: 'Contas a receber', href: route('bills.index', 'receber'), match: '/financeiro/receber', icon: CircleArrowDown },
         can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
         can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
         can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
@@ -97,12 +101,12 @@ watch(() => page.url, () => (menuOpen.value = false));
                 </button>
             </div>
 
-            <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="Menu principal">
+            <nav class="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Menu principal">
                 <Link
                     v-for="item in nav"
                     :key="item.href"
                     :href="item.href"
-                    class="hover:bg-sidebar-hover flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:text-white"
+                    class="hover:bg-sidebar-hover flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:text-white"
                     :class="{ 'bg-sidebar-hover text-white': isActive(item) }"
                     :aria-current="isActive(item) ? 'page' : undefined"
                 >
