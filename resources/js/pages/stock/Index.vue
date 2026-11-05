@@ -48,7 +48,8 @@ const target = ref(null);
 const adjustForm = useForm({ type: 'adjustment_in', quantity: '', notes: '', stock: null });
 
 function openAdjust(product) {
-    adjustForm.reset();
+    // Depois de um envio com sucesso, reset() volta ao último valor enviado: é preciso limpar à mão.
+    Object.assign(adjustForm, { type: 'adjustment_in', quantity: '', notes: '' });
     adjustForm.clearErrors();
     target.value = product;
 }

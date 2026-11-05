@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Actions\OpenCashSession;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
@@ -14,6 +15,11 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->withoutVite();
+    }
+
+    protected function openCash(User $user, string $amount = '0'): void
+    {
+        app(OpenCashSession::class)->handle($user, $amount);
     }
 
     protected function adminOf(?Company $company = null): User

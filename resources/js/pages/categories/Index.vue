@@ -27,7 +27,8 @@ function startEdit(category) {
 
 function stopEdit() {
     editing.value = null;
-    form.reset();
+    // Depois de um envio com sucesso, reset() volta ao último valor enviado: é preciso limpar à mão.
+    form.name = '';
     form.clearErrors();
 }
 

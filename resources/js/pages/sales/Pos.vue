@@ -13,6 +13,7 @@ const props = defineProps({
     products: { type: Array, required: true },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
+    cashNumber: { type: Number, required: true },
     completed: { type: Object, default: null },
 });
 
@@ -225,6 +226,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 <span class="max-sm:hidden">Sair do PDV</span>
             </Link>
             <span class="min-w-0 flex-1 truncate text-center font-bold">{{ page.props.auth.company.trade_name }}</span>
+            <Link :href="route('cash.index')" class="text-sidebar-text text-sm hover:text-white">Caixa #{{ cashNumber }}</Link>
             <span class="text-sidebar-text text-sm max-sm:hidden">{{ page.props.auth.user.name }}</span>
         </header>
 
@@ -400,7 +402,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             </dl>
 
             <p v-if="overpaidWithoutCash" class="text-danger mt-2 text-sm" role="alert">Pix, cartão e vale não podem passar do total: só dinheiro tem troco.</p>
-            <p v-for="message in [form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
+            <p v-for="message in [form.errors.cash, form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
         </ConfirmDialog>
 
         <ConfirmDialog

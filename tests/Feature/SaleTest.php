@@ -29,6 +29,7 @@ class SaleTest extends TestCase
 
         $this->admin = $this->adminOf();
         $this->soda = $this->product(['name' => 'Refrigerante', 'sale_price' => '10', 'cost_price' => '6', 'stock_quantity' => '10']);
+        $this->openCash($this->admin);
     }
 
     private function product(array $attributes = []): Product
@@ -101,6 +102,7 @@ class SaleTest extends TestCase
     public function test_numeracao_e_por_empresa(): void
     {
         $other = $this->adminOf();
+        $this->openCash($other);
         $foreign = Product::factory()->create(['company_id' => $other->company_id, 'sale_price' => '10', 'stock_quantity' => '5']);
 
         $this->actingAs($this->admin);
@@ -168,7 +170,8 @@ class SaleTest extends TestCase
 
     public function test_desconto_exige_permissao_e_nao_passa_do_subtotal(): void
     {
-        $seller = $this->userWith(['sales.create'], $this->admin->company);
+        $seller = $this->userWith(['sales.create', 'cash.operate'], $this->admin->company);
+        $this->openCash($seller);
 
         $this->actingAs($seller)->post('/vendas', $this->sale([
             'discount' => '5', 'payments' => [['method' => 'pix', 'amount' => '15']],
@@ -308,7 +311,8 @@ class SaleTest extends TestCase
         $this->post('/vendas', $this->sale())->assertForbidden();
         $this->get('/vendas')->assertForbidden();
 
-        $seller = $this->userWith(['sales.create', 'sales.view'], $company);
+        $seller = $this->userWith(['sales.create', 'sales.view', 'cash.operate'], $company);
+        $this->openCash($seller);
         $this->actingAs($seller)->get('/pdv')->assertOk();
         $this->get('/vendas')->assertOk();
         $this->get("/vendas/{$sale->id}/cupom")->assertOk();
@@ -338,6 +342,7 @@ class SaleTest extends TestCase
             'items' => [['product_id' => $foreign->id, 'quantity' => '1', 'expected_price' => '10.00']],
         ]))->assertSessionHasErrors('items.0.product_id');
 
+        $this->openCash($other);
         $this->actingAs($other);
         $this->get('/vendas')->assertInertia(fn (Assert $page) => $page->has('sales.data', 0)->where('summary.count', 0));
         $this->get("/vendas/{$sale->id}")->assertNotFound();

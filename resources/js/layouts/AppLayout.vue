@@ -5,8 +5,10 @@ import {
     Bike,
     Boxes,
     Building2,
+    CalendarDays,
     History,
     House,
+    Landmark,
     LogOut,
     Menu,
     Package,
@@ -46,6 +48,8 @@ const nav = computed(() => {
         { label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House },
         can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
         can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
+        can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
+        can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
         can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
         can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
         can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
@@ -59,6 +63,10 @@ const nav = computed(() => {
 
 function isActive(item) {
     const path = page.url.split('?')[0];
+
+    if (item.exclude && path.startsWith(item.exclude)) {
+        return false;
+    }
 
     return item.exact ? path === item.match : path.startsWith(item.match);
 }

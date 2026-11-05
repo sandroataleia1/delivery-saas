@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\CancelSale;
 use App\Actions\RegisterSale;
 use App\Http\Requests\StoreSaleRequest;
+use App\Models\CashSession;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Sale;
@@ -18,9 +19,22 @@ use Inertia\Response;
 
 class SaleController extends Controller
 {
-    public function pos(): Response
+    public function pos(Request $request): Response|RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $user->hasPermission('cash.operate')) {
+            return redirect()->route('dashboard')->with('error', 'Seu perfil vende, mas não pode abrir caixa. Peça ajuda ao gerente.');
+        }
+
+        $session = CashSession::query()->openFor($user)->first();
+
+        if (! $session) {
+            return redirect()->route('cash.index')->with('error', 'Abra o caixa para começar a vender.');
+        }
+
         return Inertia::render('sales/Pos', [
+            'cashNumber' => $session->number,
             'products' => Product::query()
                 ->where('active', true)
                 ->where('sellable', true)

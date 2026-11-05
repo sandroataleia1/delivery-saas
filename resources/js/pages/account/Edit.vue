@@ -14,11 +14,15 @@ const page = usePage();
 const profile = useForm({ name: props.account.name, phone: formatPhone(props.account.phone) });
 const password = useForm({ current_password: '', password: '', password_confirmation: '' });
 
+// Depois de um envio com sucesso, reset() volta ao último valor enviado: é preciso limpar à mão.
+function clearPassword() {
+    Object.assign(password, { current_password: '', password: '', password_confirmation: '' });
+}
+
 function savePassword() {
     password.put(route('account.password'), {
         preserveScroll: true,
-        onSuccess: () => password.reset(),
-        onError: () => password.reset('current_password', 'password', 'password_confirmation'),
+        onFinish: clearPassword,
     });
 }
 </script>

@@ -2,6 +2,8 @@
 
 namespace App\Actions;
 
+use App\Models\CashMovement;
+use App\Models\CashSession;
 use App\Models\Sale;
 use App\Models\StockMovement;
 use App\Support\Audit;
@@ -13,10 +15,17 @@ use Illuminate\Validation\ValidationException;
 /**
  * Devolve ao estoque exatamente o que a venda baixou, lendo as movimentações:
  * funciona mesmo que a ficha técnica tenha mudado depois da venda.
+ *
+ * No dinheiro: com o caixa da venda aberto, a venda sai do esperado sozinha. Com
+ * ele fechado, os totais ficam congelados e o valor sai como estorno do caixa
+ * aberto de quem cancelou.
  */
 class CancelSale
 {
-    public function __construct(private MoveStock $moveStock) {}
+    public function __construct(
+        private MoveStock $moveStock,
+        private RecordCashMovement $recordCashMovement,
+    ) {}
 
     public function handle(Sale $sale, string $reason): void
     {
@@ -27,6 +36,8 @@ class CancelSale
             if ($locked->isCancelled()) {
                 throw ValidationException::withMessages(['sale' => 'Esta venda já foi cancelada.']);
             }
+
+            $this->refundCash($locked);
 
             $movements = StockMovement::query()
                 ->where('sale_id', $locked->id)
@@ -62,5 +73,40 @@ class CancelSale
                 new: ['status' => 'Cancelada', 'cancel_reason' => $reason],
             );
         });
+    }
+
+    private function refundCash(Sale $sale): void
+    {
+        $origin = CashSession::query()->whereKey($sale->cash_session_id)->lockForUpdate()->first();
+
+        if ($origin?->isOpen()) {
+            return;
+        }
+
+        $cash = (string) $sale->payments()->where('method', 'cash')->sum('amount');
+
+        if (bccomp($cash, '0', 2) === 0) {
+            return;
+        }
+
+        $session = CashSession::query()->openFor(Auth::user())->first();
+
+        if (! $session) {
+            throw ValidationException::withMessages([
+                'sale' => 'O caixa desta venda já fechou. Abra o seu caixa: o dinheiro será devolvido dele.',
+            ]);
+        }
+
+        try {
+            $this->recordCashMovement->handle(
+                $session,
+                CashMovement::REFUND,
+                bcadd($cash, '0', 2),
+                "Cancelamento da venda #{$sale->number}",
+                $sale,
+            );
+        } catch (ValidationException) {
+            throw ValidationException::withMessages(['sale' => 'Não há dinheiro suficiente no caixa para devolver esta venda.']);
+        }
     }
 }

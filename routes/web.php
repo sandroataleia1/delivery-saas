@@ -6,6 +6,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
@@ -44,6 +45,16 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+
+        Route::middleware('can:cash.operate')->group(function () {
+            Route::get('caixa', [CashController::class, 'index'])->name('cash.index');
+            Route::post('caixa/abrir', [CashController::class, 'open'])->name('cash.open');
+            Route::post('caixa/movimentos', [CashController::class, 'movement'])->name('cash.movement');
+            Route::get('caixa/historico', [CashController::class, 'sessions'])->name('cash.sessions');
+            Route::get('caixa/{cashSession}', [CashController::class, 'show'])->whereNumber('cashSession')->name('cash.show');
+            Route::post('caixa/{cashSession}/fechar', [CashController::class, 'close'])->name('cash.close');
+        });
+        Route::middleware('can:cash.manage')->get('caixa/fluxo', [CashController::class, 'flow'])->name('cash.flow');
 
         Route::middleware('can:sales.create')->group(function () {
             Route::get('pdv', [SaleController::class, 'pos'])->name('pos');

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\RecipeItem;
@@ -41,6 +42,12 @@ class RegisterSale
                 return [$existing, []];
             }
 
+            $session = CashSession::query()->openFor($user)->lockForUpdate()->first();
+
+            if (! $session) {
+                throw ValidationException::withMessages(['cash' => 'Seu caixa não está aberto. Abra o caixa para concluir a venda.']);
+            }
+
             $items = collect($data['items'])->sortBy('product_id')->values();
             $products = $this->lockProducts($items->pluck('product_id'));
 
@@ -77,6 +84,7 @@ class RegisterSale
                 'company_id' => $user->company_id,
                 'number' => (int) Sale::max('number') + 1,
                 'client_uuid' => $data['client_uuid'],
+                'cash_session_id' => $session->id,
                 'subtotal' => $subtotal,
                 'discount' => $discount,
                 'total' => $total,
