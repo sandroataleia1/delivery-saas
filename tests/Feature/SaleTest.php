@@ -76,6 +76,23 @@ class SaleTest extends TestCase
         $this->assertSame('10.000', $this->soda->fresh()->stock_quantity);
     }
 
+    public function test_pdv_ignora_campos_internos_do_fechamento_de_mesa(): void
+    {
+        $this->actingAs($this->admin)->post('/vendas', $this->sale([
+            'items' => [['product_id' => $this->soda->id, 'quantity' => '2', 'expected_price' => '10.00', 'fixed_price' => '0.01']],
+            'service_percent' => '50',
+            'origin' => 'table',
+            'table_number' => 99,
+        ]))->assertSessionHasNoErrors();
+
+        $sale = Sale::sole();
+        $this->assertSame('20.00', $sale->total);
+        $this->assertSame('0.00', $sale->service_fee);
+        $this->assertSame('counter', $sale->origin);
+        $this->assertNull($sale->table_number);
+        $this->assertSame('10.00', $sale->items()->sole()->unit_price);
+    }
+
     public function test_preco_alterado_durante_a_venda_avisa_e_nao_cobra_errado(): void
     {
         $this->soda->sale_price = '12';

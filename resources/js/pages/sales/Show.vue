@@ -28,7 +28,7 @@ function cancelSale() {
 
 <template>
     <AppLayout :title="`Venda #${sale.number}`">
-        <PageHeader :title="`Venda #${sale.number}`" :subtitle="`${sale.user} em ${sale.date}`">
+        <PageHeader :title="`Venda #${sale.number}`" :subtitle="`${sale.table_number ? `Mesa ${sale.table_number} · ` : ''}${sale.user} em ${sale.date}`">
             <a :href="route('sales.receipt', sale.id)" target="_blank" class="btn btn-secondary">
                 <Printer :size="16" />
                 Imprimir cupom
@@ -74,6 +74,10 @@ function cancelSale() {
                 <div v-if="Number(sale.discount) > 0" class="flex justify-between">
                     <dt class="text-muted">Desconto</dt>
                     <dd class="tabular-nums">− {{ formatMoney(sale.discount) }}</dd>
+                </div>
+                <div v-if="Number(sale.service_fee) > 0" class="flex justify-between">
+                    <dt class="text-muted">Taxa de serviço</dt>
+                    <dd class="tabular-nums">{{ formatMoney(sale.service_fee) }}</dd>
                 </div>
                 <div class="flex justify-between text-base font-bold">
                     <dt>Total</dt>

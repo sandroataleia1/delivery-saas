@@ -51,11 +51,12 @@ class RegisterSale
             $items = collect($data['items'])->sortBy('product_id')->values();
             $products = $this->lockProducts($items->pluck('product_id'));
 
-            $this->ensurePricesAreCurrent($items, $products);
+            $this->ensurePricesAreCurrent($items->whereNull('fixed_price'), $products);
 
             $lines = $items->map(function (array $item) use ($products) {
                 $product = $products[$item['product_id']];
                 $quantity = (string) $item['quantity'];
+                $price = $item['fixed_price'] ?? $product->sale_price;
 
                 return [
                     'company_id' => $product->company_id,
@@ -63,9 +64,9 @@ class RegisterSale
                     'product_name' => $product->name,
                     'unit' => $product->unit,
                     'quantity' => $quantity,
-                    'unit_price' => $product->sale_price,
+                    'unit_price' => $price,
                     'unit_cost' => $product->effectiveCost(),
-                    'total' => Decimal::money(bcmul($quantity, $product->sale_price, 5)),
+                    'total' => Decimal::money(bcmul($quantity, $price, 5)),
                 ];
             });
 
@@ -76,7 +77,11 @@ class RegisterSale
                 throw ValidationException::withMessages(['discount' => 'O desconto não pode ser maior que o subtotal.']);
             }
 
-            $total = bcsub($subtotal, $discount, 2);
+            $afterDiscount = bcsub($subtotal, $discount, 2);
+            $serviceFee = isset($data['service_percent'])
+                ? Decimal::money(bcdiv(bcmul($afterDiscount, (string) $data['service_percent'], 6), '100', 6))
+                : '0.00';
+            $total = bcadd($afterDiscount, $serviceFee, 2);
             [$payments, $change] = $this->settle($data['payments'], $total);
 
             $sale = new Sale;
@@ -85,8 +90,11 @@ class RegisterSale
                 'number' => (int) Sale::max('number') + 1,
                 'client_uuid' => $data['client_uuid'],
                 'cash_session_id' => $session->id,
+                'origin' => $data['origin'] ?? 'counter',
+                'table_number' => $data['table_number'] ?? null,
                 'subtotal' => $subtotal,
                 'discount' => $discount,
+                'service_fee' => $serviceFee,
                 'total' => $total,
                 'change' => $change,
                 'status' => Sale::COMPLETED,
@@ -192,11 +200,12 @@ class RegisterSale
         Audit::record(
             'sale',
             $sale,
-            "Venda #{$sale->number} de R$ ".Decimal::currency($sale->total),
+            "Venda #{$sale->number} de R$ ".Decimal::currency($sale->total).($sale->table_number ? " na mesa {$sale->table_number}" : ''),
             new: [
                 'items' => $lines->map(fn (array $line) => Decimal::br($line['quantity'])." {$line['unit']} de {$line['product_name']} a R$ ".Decimal::currency($line['unit_price']))->all(),
                 'subtotal' => Decimal::currency($sale->subtotal),
                 'discount' => Decimal::currency($sale->discount),
+                'service_fee' => Decimal::currency($sale->service_fee),
                 'total' => Decimal::currency($sale->total),
                 'payments' => $payments->map(fn (array $payment) => "{$methods[$payment['method']]}: R$ ".Decimal::currency($payment['amount']))->all(),
                 'change' => Decimal::currency($sale->change),

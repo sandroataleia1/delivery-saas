@@ -99,6 +99,7 @@ watch(filters, () => {
                     <tr v-for="sale in sales.data" :key="sale.id">
                         <td>
                             <Link :href="route('sales.show', sale.id)" class="text-brand font-semibold hover:underline">#{{ sale.number }}</Link>
+                            <span v-if="sale.table_number" class="badge bg-canvas text-muted ml-2">Mesa {{ sale.table_number }}</span>
                             <span v-if="sale.cancelled" class="badge bg-danger-soft text-danger ml-2">Cancelada</span>
                             <p class="text-muted text-xs tabular-nums">{{ sale.date }}</p>
                         </td>

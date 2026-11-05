@@ -8,6 +8,7 @@ use App\Actions\MoveStock;
 use App\Actions\SyncRecipe;
 use App\Models\Bill;
 use App\Models\Category;
+use App\Models\DiningTable;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\StockMovement;
@@ -43,6 +44,7 @@ class DatabaseSeeder extends Seeder
         foreach ([
             'Gerente' => ['Gabriel Gerente', 'gerente@delivery.test'],
             'Caixa' => ['Carla Caixa', 'caixa@delivery.test'],
+            'Garçom' => ['Gustavo Garçom', 'garcom@delivery.test'],
         ] as $roleName => [$name, $email]) {
             $user = new User(['name' => $name, 'email' => $email, 'password' => 'password']);
             $user->company_id = $company->id;
@@ -52,6 +54,17 @@ class DatabaseSeeder extends Seeder
 
         $this->seedStock($company->id);
         $this->seedBills($company->id);
+        $this->seedTables($company->id);
+    }
+
+    private function seedTables(int $companyId): void
+    {
+        foreach (range(1, 8) as $number) {
+            $table = new DiningTable(['number' => $number, 'area' => $number <= 6 ? 'Salão' : 'Varanda', 'seats' => 4]);
+            $table->company_id = $companyId;
+            $table->active = true;
+            $table->save();
+        }
     }
 
     private function seedBills(int $companyId): void

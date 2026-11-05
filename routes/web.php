@@ -11,12 +11,14 @@ use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -46,6 +48,27 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+
+        Route::middleware('can:tables.operate')->group(function () {
+            Route::get('mesas', [DiningTableController::class, 'index'])->name('tables.index');
+            Route::post('mesas/{table}/abrir', [TableOrderController::class, 'open'])->whereNumber('table')->name('orders.open');
+            Route::get('mesas/comandas/{order}', [TableOrderController::class, 'show'])->name('orders.show');
+            Route::post('mesas/comandas/{order}/itens', [TableOrderController::class, 'addItems'])->name('orders.items');
+            Route::post('mesas/comandas/{order}/cozinha', [TableOrderController::class, 'kitchen'])->name('orders.kitchen');
+            Route::get('mesas/comandas/{order}/cozinha/{batch}', [TableOrderController::class, 'ticket'])->whereNumber('batch')->name('orders.ticket');
+            Route::post('mesas/comandas/{order}/transferir', [TableOrderController::class, 'transfer'])->name('orders.transfer');
+        });
+        Route::middleware('can:tables.close')->post('mesas/comandas/{order}/fechar', [TableOrderController::class, 'close'])->name('orders.close');
+        Route::middleware('can:tables.cancel')->group(function () {
+            Route::post('mesas/comandas/{order}/cancelar', [TableOrderController::class, 'cancel'])->name('orders.cancel');
+            Route::post('mesas/comandas/{order}/itens/{item}/cancelar', [TableOrderController::class, 'cancelItem'])->name('orders.items.cancel');
+        });
+        Route::middleware('can:tables.manage')->group(function () {
+            Route::get('mesas/gerenciar', [DiningTableController::class, 'manage'])->name('tables.manage');
+            Route::post('mesas', [DiningTableController::class, 'store'])->name('tables.store');
+            Route::put('mesas/{table}', [DiningTableController::class, 'update'])->whereNumber('table')->name('tables.update');
+            Route::patch('mesas/{table}/status', [DiningTableController::class, 'toggleStatus'])->whereNumber('table')->name('tables.status');
+        });
 
         Route::middleware('can:finance.view')->group(function () {
             Route::get('financeiro/{type}', [BillController::class, 'index'])->whereIn('type', ['pagar', 'receber'])->name('bills.index');

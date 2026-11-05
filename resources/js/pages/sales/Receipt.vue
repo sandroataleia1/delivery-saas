@@ -27,6 +27,7 @@ onMounted(() => window.print());
 
         <p>Venda #{{ sale.number }} · {{ sale.date }}</p>
         <p>Operador: {{ sale.user }}</p>
+        <p v-if="sale.table_number" class="font-bold">Mesa {{ sale.table_number }}</p>
         <p v-if="sale.cancelled" class="my-1 font-bold">VENDA CANCELADA</p>
 
         <ul class="my-2 border-t border-dashed border-black pt-2">
@@ -43,6 +44,10 @@ onMounted(() => window.print());
             <div v-if="Number(sale.discount) > 0" class="flex justify-between">
                 <dt>Desconto</dt>
                 <dd>- {{ formatMoney(sale.discount) }}</dd>
+            </div>
+            <div v-if="Number(sale.service_fee) > 0" class="flex justify-between">
+                <dt>Taxa de serviço</dt>
+                <dd>{{ formatMoney(sale.service_fee) }}</dd>
             </div>
             <div class="flex justify-between text-sm font-bold">
                 <dt>TOTAL</dt>

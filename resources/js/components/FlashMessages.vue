@@ -3,6 +3,11 @@ import { ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { CircleAlert, CircleCheck, X } from '@lucide/vue';
 
+// Em telas com ações no rodapé, o aviso fica no topo para não cobrir os botões.
+defineProps({
+    top: { type: Boolean, default: false },
+});
+
 const page = usePage();
 const message = ref(null);
 let timer = null;
@@ -26,7 +31,7 @@ watch(
 </script>
 
 <template>
-    <div class="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-end" aria-live="polite">
+    <div class="pointer-events-none fixed inset-x-4 z-50 flex justify-end" :class="top ? 'top-16' : 'bottom-4'" aria-live="polite">
         <div
             v-if="message"
             class="pointer-events-auto flex max-w-md items-start gap-2.5 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg"

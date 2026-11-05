@@ -7,6 +7,7 @@ use App\Models\Bill;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Sale;
+use App\Models\TableOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,6 +30,7 @@ class DashboardController extends Controller
                 'sales_total' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->sum('total') : null,
                 'sales_count' => $request->user()->hasPermission('sales.view') ? (clone $salesToday)->count() : null,
                 'overdue_bills' => $request->user()->hasPermission('finance.view') ? Bill::query()->where('type', Bill::PAYABLE)->overdue()->count() : null,
+                'open_tables' => $request->user()->hasPermission('tables.operate') ? TableOrder::where('status', TableOrder::OPEN)->count() : null,
                 'low_stock' => $request->user()->hasPermission('stock.view') ? Product::query()->lowStock()->count() : null,
             ],
             'recent' => $canSeeAudit

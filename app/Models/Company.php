@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 
 #[Fillable([
     'legal_name', 'trade_name', 'document', 'segment', 'email', 'phone',
-    'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state',
+    'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'service_fee_percent',
 ])]
 class Company extends Model
 {
@@ -21,7 +21,10 @@ class Company extends Model
 
     protected function casts(): array
     {
-        return ['active' => 'boolean'];
+        return [
+            'active' => 'boolean',
+            'service_fee_percent' => 'decimal:2',
+        ];
     }
 
     public function users(): HasMany

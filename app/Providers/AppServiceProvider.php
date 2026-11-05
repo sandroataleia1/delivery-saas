@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\DiningTable;
 use App\Models\StockEntry;
+use App\Models\TableOrder;
+use App\Models\TableOrderItem;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::preventLazyLoading(! app()->isProduction());
         Route::model('entry', StockEntry::class);
+        Route::model('table', DiningTable::class);
+        Route::model('order', TableOrder::class);
+        Route::model('item', TableOrderItem::class);
 
         // As permissões do catálogo viram abilities: Gate e middleware can:.
         Gate::before(fn (User $user, string $ability) => $user->hasPermission($ability) ? true : null);

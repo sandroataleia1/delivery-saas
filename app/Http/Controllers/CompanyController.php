@@ -16,7 +16,7 @@ class CompanyController extends Controller
         return Inertia::render('company/Edit', [
             'company' => $request->user()->company->only(
                 'legal_name', 'trade_name', 'document', 'segment', 'email', 'phone',
-                'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state',
+                'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'service_fee_percent',
             ),
             'segments' => config('company.segments'),
             'states' => config('company.states'),

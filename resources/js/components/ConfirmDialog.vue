@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     open: { type: Boolean, required: true },
@@ -19,6 +19,13 @@ watch(
     () => props.open,
     (open) => (open ? dialog.value?.showModal() : dialog.value?.close()),
 );
+
+// A página pode já nascer com o diálogo aberto, como a confirmação ao fechar uma mesa.
+onMounted(() => {
+    if (props.open) {
+        dialog.value?.showModal();
+    }
+});
 </script>
 
 <template>

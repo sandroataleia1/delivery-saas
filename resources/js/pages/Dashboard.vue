@@ -24,7 +24,9 @@ const cards = computed(() => [
     props.stats.overdue_bills === null
         ? { label: 'Entradas hoje', value: props.stats.logins_today }
         : { label: 'Contas vencidas a pagar', value: props.stats.overdue_bills, href: route('bills.index', { type: 'pagar', status: 'overdue' }) },
-    { label: 'Eventos auditados hoje', value: props.stats.events_today },
+    props.stats.open_tables === null
+        ? { label: 'Eventos auditados hoje', value: props.stats.events_today }
+        : { label: 'Mesas ocupadas', value: props.stats.open_tables, href: route('tables.index') },
 ]);
 </script>
 

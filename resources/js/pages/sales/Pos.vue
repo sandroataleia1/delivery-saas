@@ -1,13 +1,16 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Banknote, CreditCard, Minus, Plus, QrCode, Search, Ticket, Trash2, TriangleAlert } from '@lucide/vue';
+import { ArrowLeft, Minus, Plus, Trash2 } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
+import PaymentPanel from '@/components/PaymentPanel.vue';
+import ProductGrid from '@/components/ProductGrid.vue';
+import SaleCompleteDialog from '@/components/SaleCompleteDialog.vue';
 import { usePermissions } from '@/lib/can';
-import { formatMoney, formatQuantity } from '@/lib/format';
-import { fromCents, lineCents, toCents } from '@/lib/money';
+import { formatMoney } from '@/lib/format';
+import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
     products: { type: Array, required: true },
@@ -20,12 +23,7 @@ const props = defineProps({
 const page = usePage();
 const { can } = usePermissions();
 
-const methodIcons = { cash: Banknote, pix: QrCode, credit: CreditCard, debit: CreditCard, voucher: Ticket };
 const storageKey = `pos-cart-${page.props.auth.company.id}`;
-
-const newUuid = () => (crypto.randomUUID
-    ? crypto.randomUUID()
-    : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16)));
 
 function loadDraft() {
     try {
@@ -39,41 +37,21 @@ const draft = loadDraft();
 const cart = ref(draft.cart ?? []);
 const saleUuid = ref(draft.uuid ?? newUuid());
 
-const term = ref('');
-const category = ref(null);
-const notFound = ref(false);
 const view = ref('products');
-const searchField = ref(null);
+const grid = ref(null);
 
 const paying = ref(false);
 const discount = ref('');
 const payments = ref([]);
+const paymentValid = ref(false);
 const receipt = ref(props.completed);
 
 const form = useForm({ client_uuid: '', items: [], discount: null, payments: [], stale: null });
-
-const normalize = (text) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-const visibleProducts = computed(() => {
-    const query = normalize(term.value.trim());
-
-    return props.products
-        .filter((product) => category.value === null || product.category_id === category.value)
-        .filter((product) => query === '' || normalize(product.name).includes(query))
-        .slice(0, 120);
-});
 
 const subtotalCents = computed(() => cart.value.reduce((sum, item) => sum + lineCents(item.quantity, item.sale_price), 0));
 const discountCents = computed(() => toCents(discount.value));
 const totalCents = computed(() => Math.max(subtotalCents.value - discountCents.value, 0));
 const itemCount = computed(() => cart.value.length);
-
-const paidCents = computed(() => payments.value.reduce((sum, payment) => sum + toCents(payment.amount), 0));
-const cashCents = computed(() => payments.value.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + toCents(payment.amount), 0));
-const remainingCents = computed(() => Math.max(totalCents.value - paidCents.value, 0));
-const changeCents = computed(() => Math.max(paidCents.value - totalCents.value, 0));
-const overpaidWithoutCash = computed(() => paidCents.value - cashCents.value > totalCents.value);
-const canFinish = computed(() => cart.value.length > 0 && remainingCents.value === 0 && !overpaidWithoutCash.value);
 
 function addProduct(product, quantity = 1) {
     const line = cart.value.find((item) => item.id === product.id);
@@ -89,8 +67,6 @@ function addProduct(product, quantity = 1) {
             quantity: String(quantity),
         });
     }
-
-    notFound.value = false;
 }
 
 function changeQuantity(item, delta) {
@@ -105,27 +81,6 @@ function changeQuantity(item, delta) {
 
 function removeItem(item) {
     cart.value = cart.value.filter((line) => line !== item);
-}
-
-// Aceita "3*7891234" para lançar três unidades de uma vez pelo leitor.
-function submitSearch() {
-    const match = term.value.trim().match(/^(\d+(?:[.,]\d+)?)\*(.+)$/);
-    const quantity = match ? Number(match[1].replace(',', '.')) : 1;
-    const code = (match ? match[2] : term.value).trim();
-
-    if (code === '') {
-        return;
-    }
-
-    const exact = props.products.find((product) => product.barcode === code || product.sku === code);
-    const found = exact ?? (visibleProducts.value.length === 1 ? visibleProducts.value[0] : null);
-
-    if (found) {
-        addProduct(found, quantity);
-        term.value = '';
-    } else {
-        notFound.value = visibleProducts.value.length === 0;
-    }
 }
 
 function clearCart() {
@@ -143,16 +98,6 @@ function openPayment() {
     form.clearErrors();
     payments.value = [];
     paying.value = true;
-}
-
-function addPayment(method) {
-    const existing = payments.value.find((payment) => payment.method === method);
-
-    if (existing) {
-        existing.amount = fromCents(toCents(existing.amount) + remainingCents.value);
-    } else {
-        payments.value.push({ method, amount: fromCents(remainingCents.value) });
-    }
 }
 
 function finish() {
@@ -173,7 +118,7 @@ function finish() {
             paying.value = false;
             clearCart();
             receipt.value = props.completed;
-            searchField.value?.focus();
+            grid.value?.focus();
         },
     });
 }
@@ -187,7 +132,7 @@ function refreshCart() {
 function onKeydown(event) {
     if (event.key === 'F2') {
         event.preventDefault();
-        searchField.value?.focus();
+        grid.value?.focus();
     }
 
     if (event.key === 'F9') {
@@ -209,7 +154,7 @@ watch([cart, saleUuid], () => {
 onMounted(() => {
     refreshCart();
     window.addEventListener('keydown', onKeydown);
-    searchField.value?.focus();
+    grid.value?.focus();
 });
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
@@ -218,7 +163,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 <template>
     <div class="flex h-dvh flex-col overflow-hidden">
         <Head title="PDV" />
-        <FlashMessages />
+        <FlashMessages top />
 
         <header class="bg-sidebar flex h-14 shrink-0 items-center gap-3 px-4 text-white">
             <Link :href="route('dashboard')" class="flex items-center gap-2 text-sm font-semibold" aria-label="Sair do PDV">
@@ -232,66 +177,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'cart' }" aria-label="Produtos">
-                <div class="border-line bg-surface space-y-3 border-b p-3">
-                    <div class="relative">
-                        <Search :size="18" class="text-muted pointer-events-none absolute top-3 left-3" />
-                        <input
-                            ref="searchField"
-                            v-model="term"
-                            class="input pl-10"
-                            type="search"
-                            placeholder="Nome ou código de barras (F2)"
-                            aria-label="Buscar produto"
-                            autocomplete="off"
-                            @input="notFound = false"
-                            @keydown.enter.prevent="submitSearch"
-                        />
-                    </div>
-                    <p v-if="notFound" class="text-danger text-sm" role="alert">Produto não encontrado.</p>
-                    <div class="flex gap-2 overflow-x-auto pb-1">
-                        <button
-                            type="button"
-                            class="btn shrink-0"
-                            :class="category === null ? 'btn-primary' : 'btn-secondary'"
-                            @click="category = null"
-                        >
-                            Todos
-                        </button>
-                        <button
-                            v-for="item in categories"
-                            :key="item.id"
-                            type="button"
-                            class="btn shrink-0"
-                            :class="category === item.id ? 'btn-primary' : 'btn-secondary'"
-                            @click="category = item.id"
-                        >
-                            {{ item.name }}
-                        </button>
-                    </div>
-                </div>
+                <ProductGrid ref="grid" :products="products" :categories="categories" placeholder="Nome ou código de barras (F2)" @add="addProduct" />
 
-                <div class="min-h-0 flex-1 overflow-y-auto p-3">
-                    <p v-if="visibleProducts.length === 0" class="text-muted py-12 text-center">Nenhum produto encontrado.</p>
-                    <ul class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                        <li v-for="product in visibleProducts" :key="product.id">
-                            <button
-                                type="button"
-                                class="card hover:border-brand flex h-24 w-full cursor-pointer flex-col justify-between p-3 text-left transition-colors"
-                                @click="addProduct(product)"
-                            >
-                                <span class="line-clamp-2 text-sm leading-tight font-semibold">{{ product.name }}</span>
-                                <span class="text-brand-strong text-sm font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</span>
-                            </button>
-                        </li>
-                    </ul>
-                </div>
-
-                <button
-                    v-if="itemCount > 0"
-                    type="button"
-                    class="btn btn-primary m-3 shrink-0 lg:hidden"
-                    @click="view = 'cart'"
-                >
+                <button v-if="itemCount > 0" type="button" class="btn btn-primary m-3 shrink-0 lg:hidden" @click="view = 'cart'">
                     Ver carrinho ({{ itemCount }}) · {{ formatMoney(fromCents(totalCents)) }}
                 </button>
             </section>
@@ -358,76 +246,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             :open="paying"
             :title="`Pagamento de ${formatMoney(fromCents(totalCents))}`"
             confirm-label="Concluir venda"
-            :disabled="!canFinish"
+            :disabled="!paymentValid || itemCount === 0"
             :processing="form.processing"
             @confirm="finish"
             @cancel="paying = false"
         >
-            <div class="mt-4 grid grid-cols-2 gap-2">
-                <button
-                    v-for="(label, method) in paymentMethods"
-                    :key="method"
-                    type="button"
-                    class="btn btn-secondary justify-start"
-                    @click="addPayment(method)"
-                >
-                    <component :is="methodIcons[method]" :size="16" />
-                    {{ label }}
-                </button>
-            </div>
-
-            <ul v-if="payments.length" class="mt-4 space-y-2">
-                <li v-for="(payment, index) in payments" :key="payment.method" class="flex items-center gap-2">
-                    <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ paymentMethods[payment.method] }}</span>
-                    <DecimalInput v-model="payment.amount" class="w-28 text-right" pad :aria-label="`Valor em ${paymentMethods[payment.method]}`" />
-                    <button type="button" class="btn btn-ghost" :aria-label="`Remover ${paymentMethods[payment.method]}`" @click="payments.splice(index, 1)">
-                        <Trash2 :size="16" />
-                    </button>
-                </li>
-            </ul>
-
-            <dl class="border-line mt-4 space-y-1 border-t pt-3 text-sm">
-                <div class="flex justify-between">
-                    <dt class="text-muted">Pago</dt>
-                    <dd class="font-semibold tabular-nums">{{ formatMoney(fromCents(paidCents)) }}</dd>
-                </div>
-                <div v-if="remainingCents > 0" class="flex justify-between">
-                    <dt class="text-muted">Falta</dt>
-                    <dd class="text-danger font-bold tabular-nums">{{ formatMoney(fromCents(remainingCents)) }}</dd>
-                </div>
-                <div v-if="changeCents > 0 && !overpaidWithoutCash" class="flex justify-between text-base">
-                    <dt class="font-bold">Troco</dt>
-                    <dd class="text-ok font-bold tabular-nums">{{ formatMoney(fromCents(changeCents)) }}</dd>
-                </div>
-            </dl>
-
-            <p v-if="overpaidWithoutCash" class="text-danger mt-2 text-sm" role="alert">Pix, cartão e vale não podem passar do total: só dinheiro tem troco.</p>
+            <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" />
             <p v-for="message in [form.errors.cash, form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
         </ConfirmDialog>
 
-        <ConfirmDialog
-            :open="receipt !== null"
-            :title="`Venda #${receipt?.number ?? ''} concluída`"
-            confirm-label="Nova venda"
-            cancel-label="Fechar"
-            @confirm="receipt = null"
-            @cancel="receipt = null"
-        >
-            <div v-if="receipt" class="mt-4 space-y-3">
-                <p class="text-sm">Total: <strong class="tabular-nums">{{ formatMoney(receipt.total) }}</strong></p>
-                <div v-if="Number(receipt.change) > 0" class="bg-ok-soft rounded-lg px-4 py-3">
-                    <p class="text-ok text-sm font-semibold">Troco</p>
-                    <p class="text-ok text-3xl font-bold tabular-nums">{{ formatMoney(receipt.change) }}</p>
-                </div>
-                <div v-if="receipt.negative.length" class="bg-warn-soft text-warn flex gap-2 rounded-lg px-3 py-2 text-sm">
-                    <TriangleAlert :size="16" class="mt-0.5 shrink-0" />
-                    <div>
-                        <p class="font-semibold">Estoque ficou negativo:</p>
-                        <p>{{ receipt.negative.join(', ') }}</p>
-                    </div>
-                </div>
-                <a :href="route('sales.receipt', receipt.id)" target="_blank" class="btn btn-secondary w-full">Imprimir cupom</a>
-            </div>
-        </ConfirmDialog>
+        <SaleCompleteDialog :sale="receipt" @close="receipt = null" />
     </div>
 </template>

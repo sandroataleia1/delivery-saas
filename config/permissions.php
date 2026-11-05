@@ -30,6 +30,15 @@ return [
                 'finance.manage' => 'Criar, dar baixa, estornar e cancelar contas',
             ],
         ],
+        'tables' => [
+            'label' => 'Mesas',
+            'permissions' => [
+                'tables.operate' => 'Abrir mesas, lançar pedidos e transferir',
+                'tables.close' => 'Fechar a conta da mesa',
+                'tables.cancel' => 'Cancelar itens e comandas',
+                'tables.manage' => 'Cadastrar mesas',
+            ],
+        ],
         'products' => [
             'label' => 'Produtos',
             'permissions' => [
@@ -77,9 +86,9 @@ return [
     // Perfis criados em toda empresa nova.
     'default_roles' => [
         ['name' => 'Administrador', 'description' => 'Acesso total ao sistema da empresa.', 'is_admin' => true, 'permissions' => []],
-        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'sales.discount', 'sales.cancel', 'cash.operate', 'cash.manage', 'finance.view', 'finance.manage', 'products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
-        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'cash.operate', 'products.view']],
-        ['name' => 'Garçom', 'description' => 'Atende as mesas.', 'is_admin' => false, 'permissions' => ['products.view']],
+        ['name' => 'Gerente', 'description' => 'Acompanha a operação e a equipe.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'sales.discount', 'sales.cancel', 'cash.operate', 'cash.manage', 'finance.view', 'finance.manage', 'tables.operate', 'tables.close', 'tables.cancel', 'tables.manage', 'products.view', 'products.manage', 'stock.view', 'stock.adjust', 'entries.manage', 'suppliers.manage', 'users.view', 'roles.view', 'audit.view']],
+        ['name' => 'Caixa', 'description' => 'Opera o caixa e as vendas.', 'is_admin' => false, 'permissions' => ['sales.create', 'sales.view', 'cash.operate', 'tables.operate', 'tables.close', 'products.view']],
+        ['name' => 'Garçom', 'description' => 'Atende as mesas.', 'is_admin' => false, 'permissions' => ['tables.operate', 'products.view']],
         ['name' => 'Entregador', 'description' => 'Realiza as entregas.', 'is_admin' => false, 'permissions' => []],
     ],
 

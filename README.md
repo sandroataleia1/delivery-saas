@@ -28,6 +28,7 @@ Criados pelo seeder, todos com a senha `password`. Nunca rode o seeder em produ�
 | Administrador da Pizzaria Demo | admin@delivery.test |
 | Gerente | gerente@delivery.test |
 | Caixa | caixa@delivery.test |
+| Garçom | garcom@delivery.test |
 
 Em desenvolvimento os e-mails de redefinição de senha vão para `storage/logs/laravel.log`.
 
@@ -47,4 +48,5 @@ Os testes usam SQLite em memória, então os triggers de auditoria, que existem 
 - **Estoque:** o saldo só muda pela ação `MoveStock`, que trava o produto e grava a movimentação. Vendas usam a ação `ConsumeProduct`, que baixa os insumos da ficha técnica ou o saldo do próprio produto.
 - **Caixa:** vender exige caixa aberto. Totais de caixa fechado ficam congelados em `summary`; correções posteriores entram como lançamento no caixa aberto.
 - **Financeiro:** só `SettleBill` e `ReopenBill` mudam a situação de pagamento de uma conta. Baixa em dinheiro vira lançamento no caixa aberto de quem fez a operação.
+- **Mesas:** o estoque só baixa ao fechar a conta, que vira uma venda comum por `RegisterSale`, com os preços de quando cada item foi lançado.
 - **Campos sensíveis:** ficam fora do `Fillable` e são atribuídos um a um no controller.

@@ -20,6 +20,7 @@ class Sale extends Model
         return [
             'subtotal' => 'decimal:2',
             'discount' => 'decimal:2',
+            'service_fee' => 'decimal:2',
             'total' => 'decimal:2',
             'change' => 'decimal:2',
             'cancelled_at' => 'datetime',

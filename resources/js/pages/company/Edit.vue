@@ -1,6 +1,7 @@
 <script setup>
 import { useForm } from '@inertiajs/vue3';
 import AddressFields from '@/components/AddressFields.vue';
+import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -25,6 +26,7 @@ const form = useForm({
     district: props.company.district ?? '',
     city: props.company.city ?? '',
     state: props.company.state ?? '',
+    service_fee_percent: props.company.service_fee_percent,
 });
 </script>
 
@@ -73,6 +75,13 @@ const form = useForm({
             <div class="card p-5">
                 <h2 class="mb-4 font-bold">Endereço</h2>
                 <AddressFields :form="form" :states="states" />
+            </div>
+
+            <div class="card p-5">
+                <h2 class="mb-4 font-bold">Mesas</h2>
+                <Field v-slot="{ id }" label="Taxa de serviço (%)" :error="form.errors.service_fee_percent" hint="Sugerida ao fechar a conta. Pode ser retirada se o cliente preferir.">
+                    <DecimalInput :id="id" v-model="form.service_fee_percent" class="max-w-32" />
+                </Field>
             </div>
 
             <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>
