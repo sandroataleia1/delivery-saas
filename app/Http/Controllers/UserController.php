@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,7 +15,11 @@ class UserController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'status', 'role');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', Rule::in(['ativos', 'inativos'])],
+            'role' => ['nullable', 'integer', 'min:1'],
+        ]);
         $actor = $request->user();
 
         $users = User::query()

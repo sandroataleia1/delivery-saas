@@ -15,7 +15,7 @@ class CompanyController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search');
+        $filters = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
 
         return Inertia::render('admin/companies/Index', [
             'companies' => Company::query()

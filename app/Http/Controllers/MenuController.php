@@ -62,7 +62,9 @@ class MenuController extends Controller
             'known_order_id' => ['nullable', 'integer'],
             'items' => ['required', 'array', 'min:1', 'max:30'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 Rule::exists('products', 'id')->where('company_id', $table->company_id)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],

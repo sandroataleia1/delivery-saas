@@ -15,7 +15,7 @@ class CustomerController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search');
+        $filters = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
 
         return Inertia::render('customers/Index', [
             'customers' => Customer::query()
@@ -33,7 +33,8 @@ class CustomerController extends Controller
     /** Busca para o PDV, mesas e pedidos de entrega. */
     public function search(Request $request): JsonResponse
     {
-        $term = trim((string) $request->query('q'));
+        $data = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+        $term = trim($data['q'] ?? '');
 
         if ($term === '') {
             return response()->json([]);

@@ -17,7 +17,9 @@ class StoreSaleRequest extends FormRequest
             'client_uuid' => ['required', 'uuid'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 'distinct',
                 Rule::exists('products', 'id')->where('company_id', $this->user()->company_id)->where('active', true)->where('sellable', true),
             ],

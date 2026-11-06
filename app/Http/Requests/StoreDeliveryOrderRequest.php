@@ -18,7 +18,9 @@ class StoreDeliveryOrderRequest extends FormRequest
             'type' => ['required', Rule::in([DeliveryOrder::DELIVERY, DeliveryOrder::PICKUP])],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 Rule::exists('products', 'id')->where('company_id', $companyId)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],

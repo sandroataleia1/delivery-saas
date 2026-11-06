@@ -6,6 +6,7 @@ use App\Http\Requests\SupplierRequest;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,7 +14,10 @@ class SupplierController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'status');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', Rule::in(['ativos', 'inativos'])],
+        ]);
 
         return Inertia::render('suppliers/Index', [
             'suppliers' => Supplier::query()

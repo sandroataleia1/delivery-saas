@@ -91,7 +91,9 @@ class TableOrderController extends Controller
             'client_uuid' => ['required', 'uuid'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],

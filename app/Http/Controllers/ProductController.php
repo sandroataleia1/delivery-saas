@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +21,11 @@ class ProductController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'category', 'status');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', 'integer', 'min:1'],
+            'status' => ['nullable', 'string', Rule::in(['ativos', 'inativos'])],
+        ]);
         $canSeeCost = $request->user()->hasPermission('stock.view');
 
         $products = Product::query()
@@ -67,7 +72,8 @@ class ProductController extends Controller
             403,
         );
 
-        $term = trim((string) $request->query('q'));
+        $data = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+        $term = trim($data['q'] ?? '');
 
         if ($term === '') {
             return response()->json([]);

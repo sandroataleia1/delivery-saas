@@ -30,7 +30,9 @@ class ProductRequest extends FormRequest
             'initial_stock' => [Rule::excludeIf($product !== null), 'nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
             'recipe' => ['present', 'array', 'max:50'],
             'recipe.*.ingredient_id' => [
+                'bail',
                 'required',
+                'integer',
                 'distinct',
                 Rule::exists('products', 'id')->where('company_id', $companyId)->where('track_stock', true),
             ],
