@@ -1,0 +1,63 @@
+# Delivery SaaS
+
+Sistema de gestão para delivery, multiempresa. Laravel 13, Vue 3, Inertia 3, Tailwind 4 e MariaDB.
+
+## Como rodar
+
+Requer PHP 8.3+, Node 22+ e MariaDB (o do XAMPP atende).
+
+```sh
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+npm run build
+php artisan serve
+```
+
+Acesse http://127.0.0.1:8000. Para alterar o frontend com recarga automática, rode `npm run dev` junto.
+
+## Acessos de desenvolvimento
+
+Criados pelo seeder, todos com a senha `password`. Nunca rode o seeder em produção.
+
+| Usuário | E-mail |
+| --- | --- |
+| Super administrador da plataforma | super@delivery.test |
+| Administrador da Pizzaria Demo | admin@delivery.test |
+| Gerente | gerente@delivery.test |
+| Caixa | caixa@delivery.test |
+| Garçom | garcom@delivery.test |
+| Entregador | entregador@delivery.test |
+
+Em desenvolvimento os e-mails de redefinição de senha vão para `storage/logs/laravel.log`.
+
+## Histórico de demonstração
+
+Para ver os relatórios com dados, gere 45 dias de operação fictícia (só em desenvolvimento):
+
+```sh
+php artisan db:seed --class=DemoHistorySeeder
+```
+
+## Testes
+
+```sh
+php artisan test
+```
+
+Os testes usam SQLite em memória, então os triggers de auditoria, que existem só no MariaDB/MySQL, não são exercitados por eles.
+
+## Convenções para novos módulos
+
+- **Isolamento:** toda tabela de dados de empresa tem `company_id` e o modelo usa o trait `BelongsToCompany`.
+- **Auditoria:** todo modelo usa o trait `Auditable`. Ações sem alteração de modelo usam `Audit::record()`, com um rótulo em `lang/pt_BR/audit.php`.
+- **Permissões:** cada módulo adiciona seu grupo em `config/permissions.php` e protege as rotas com `can:`.
+- **Estoque:** o saldo só muda pela ação `MoveStock`, que trava o produto e grava a movimentação. Vendas usam a ação `ConsumeProduct`, que baixa os insumos da ficha técnica ou o saldo do próprio produto.
+- **Caixa:** vender exige caixa aberto. Totais de caixa fechado ficam congelados em `summary`; correções posteriores entram como lançamento no caixa aberto.
+- **Financeiro:** só `SettleBill` e `ReopenBill` mudam a situação de pagamento de uma conta. Baixa em dinheiro vira lançamento no caixa aberto de quem fez a operação.
+- **Mesas:** o estoque só baixa ao fechar a conta, que vira uma venda comum por `RegisterSale`, com os preços de quando cada item foi lançado.
+- **Fiado:** a forma de pagamento `fiado` gera conta a receber em `RegisterSale` e fica fora do saldo do fluxo até ser recebida.
+- **Páginas públicas:** usam o middleware `public.page` e filtram a empresa de forma explícita. Nunca dependem do usuário da sessão.
+- **Campos sensíveis:** ficam fora do `Fillable` e são atribuídos um a um no controller.

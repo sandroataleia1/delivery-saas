@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+@source '../js/**/*.vue';
+
+@theme {
+    --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
+    --color-canvas: #f7f4ef;
+    --color-surface: #ffffff;
+    --color-line: #e6e0d6;
+    --color-ink: #211d18;
+    --color-muted: #6a6257;
+    --color-sidebar: #211d18;
+    --color-sidebar-hover: #342e27;
+    --color-sidebar-text: #cfc8bd;
+
+    --color-brand: #c8321f;
+    --color-brand-strong: #a52715;
+    --color-brand-soft: #fbe9e4;
+
+    --color-ok: #1b7046;
+    --color-ok-soft: #e3f3ea;
+    --color-warn: #8a5c00;
+    --color-warn-soft: #fbf0d5;
+    --color-danger: #b4231a;
+    --color-danger-soft: #fbe6e4;
+}
+
+@layer base {
+    body {
+        @apply bg-canvas text-ink font-sans antialiased;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-brand;
+    }
+}
+
+@layer components {
+    .btn {
+        @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-transparent px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    .btn-primary {
+        @apply bg-brand hover:bg-brand-strong text-white;
+    }
+
+    .btn-secondary {
+        @apply border-line bg-surface text-ink hover:bg-canvas;
+    }
+
+    .btn-danger {
+        @apply bg-danger hover:bg-brand-strong text-white;
+    }
+
+    .btn-ghost {
+        @apply text-muted hover:bg-canvas hover:text-ink min-h-9 px-2.5 py-1.5;
+    }
+
+    .input {
+        @apply border-line bg-surface placeholder:text-muted/70 focus:border-brand focus:ring-brand/20 block min-h-10 w-full rounded-lg border px-3 py-2 text-sm transition-shadow outline-none focus:ring-3 disabled:cursor-not-allowed disabled:bg-canvas disabled:text-muted;
+    }
+
+    .card {
+        @apply border-line bg-surface rounded-xl border;
+    }
+
+    .table-wrap {
+        @apply border-line bg-surface relative overflow-x-auto rounded-xl border;
+    }
+
+    .data-table {
+        @apply w-full text-left text-sm;
+    }
+
+    .data-table th {
+        @apply border-line text-muted border-b px-4 py-3 text-xs font-semibold tracking-wide whitespace-nowrap uppercase;
+    }
+
+    .data-table td {
+        @apply border-line border-b px-4 py-3 align-middle;
+    }
+
+    .data-table tbody tr:last-child td {
+        @apply border-b-0;
+    }
+
+    .badge {
+        @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+    }
+}
