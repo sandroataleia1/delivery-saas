@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/** Sem venda ainda, nada saiu do estoque nem entrou no caixa. Com venda, cancele a venda. */
+/** Cancelamento comum é permitido apenas antes da entrega e do acerto. */
 class CancelDeliveryOrder
 {
     public function handle(DeliveryOrder $order, string $reason): void
@@ -22,6 +22,10 @@ class CancelDeliveryOrder
 
             if ($locked->isSettled()) {
                 throw ValidationException::withMessages(['reason' => 'Este pedido já foi acertado. Cancele a venda em Vendas.']);
+            }
+
+            if ($locked->status === DeliveryOrder::DELIVERED) {
+                throw ValidationException::withMessages(['reason' => 'Pedido entregue não permite cancelamento comum. É necessário um procedimento de devolução, perda ou ajuste financeiro.']);
             }
 
             $locked->forceFill([
