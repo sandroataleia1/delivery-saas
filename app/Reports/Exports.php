@@ -81,6 +81,7 @@ class Exports
             ['Custo das mercadorias vendidas', Csv::money(-$statement['cost'])],
             ['Lucro bruto', Csv::money($statement['gross_profit'])],
             ['Outras receitas', Csv::money($statement['other_income'])],
+            ['Descontos na quitação de fiado', Csv::money(-$statement['credit_discounts'])],
         ];
 
         foreach ($data['expenses'] as $expense) {

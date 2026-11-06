@@ -10,6 +10,7 @@ use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Reports\BillLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -208,10 +209,8 @@ class CashController extends Controller
         $gross = $inflows->reduce(fn (string $sum, $total) => bcadd($sum, (string) $total, 2), '0.00');
         $closedToday = $sessions->filter(fn (CashSession $session) => $session->closed_at?->isSameDay($date));
 
-        $settled = Bill::query()
-            ->where('status', Bill::PAID)
-            ->whereDate('paid_at', $date)
-            ->selectRaw('type, SUM(paid_amount) as total')
+        $settled = BillLedger::entries($date->format('Y-m-d'), $date->format('Y-m-d'))
+            ->selectRaw('type, SUM(amount) as total')
             ->groupBy('type')
             ->pluck('total', 'type');
 

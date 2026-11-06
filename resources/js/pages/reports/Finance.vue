@@ -42,6 +42,7 @@ defineProps({
                     <div class="flex justify-between"><dt class="text-muted">Custo do que foi vendido</dt><dd class="tabular-nums">− {{ formatMoney(statement.cost) }}</dd></div>
                     <div class="border-line flex justify-between border-t pt-1.5 font-semibold"><dt>Lucro bruto</dt><dd class="tabular-nums">{{ formatMoney(statement.gross_profit) }}</dd></div>
                     <div class="flex justify-between"><dt class="text-muted">Outras receitas</dt><dd class="tabular-nums">{{ formatMoney(statement.other_income) }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-muted">Descontos na quitação de fiado</dt><dd class="tabular-nums">− {{ formatMoney(statement.credit_discounts) }}</dd></div>
                     <div class="flex justify-between"><dt class="text-muted">Despesas pagas</dt><dd class="tabular-nums">− {{ formatMoney(statement.expenses) }}</dd></div>
                     <div class="border-line flex justify-between border-t pt-1.5 text-base font-bold"><dt>Resultado</dt><dd class="tabular-nums">{{ formatMoney(statement.result) }}</dd></div>
                 </dl>

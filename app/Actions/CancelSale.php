@@ -82,9 +82,9 @@ class CancelSale
     /** Fiado vira conta a receber: cancelada a venda, a conta deixa de existir. */
     private function cancelCredit(Sale $sale, string $reason): void
     {
-        $bills = Bill::where('sale_id', $sale->id)->get();
+        $bills = Bill::where('sale_id', $sale->id)->orderBy('id')->lockForUpdate()->get();
 
-        if ($bills->contains(fn (Bill $bill) => $bill->isPaid())) {
+        if ($bills->contains(fn (Bill $bill) => $bill->isPaid() || $bill->hasActiveSettlements() || $bill->legacy_review_required)) {
             throw ValidationException::withMessages(['sale' => 'O fiado desta venda já foi recebido. Estorne a baixa antes de cancelar.']);
         }
 

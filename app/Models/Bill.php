@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /** Conta a pagar ou a receber. Valor pago e situação só mudam pelas ações de baixa. */
 #[Fillable(['description', 'category', 'supplier_id', 'counterparty', 'amount', 'due_date', 'notes'])]
@@ -34,6 +35,8 @@ class Bill extends Model
         return [
             'amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'legacy_review_required' => 'boolean',
             'due_date' => 'date:Y-m-d',
             'paid_at' => 'date:Y-m-d',
             'cancelled_at' => 'datetime',
@@ -75,6 +78,39 @@ class Bill extends Model
         return $this->sale_id !== null || $this->stock_entry_id !== null;
     }
 
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(BillSettlement::class);
+    }
+
+    /** Somente usado em consultas que já restringem a contas em aberto. */
+    public static function balanceExpression(): string
+    {
+        return 'CASE WHEN bills.legacy_review_required = 1 THEN bills.amount ELSE bills.amount - COALESCE(bills.paid_amount, 0) - COALESCE(bills.discount_amount, 0) END';
+    }
+
+    public function balance(): string
+    {
+        if (! $this->isOpen()) {
+            return '0.00';
+        }
+
+        return $this->legacy_review_required ? $this->amount
+            : bcsub(bcsub($this->amount, $this->paid_amount ?? '0', 2), $this->discount_amount ?? '0', 2);
+    }
+
+    public function hasActiveSettlements(): bool
+    {
+        return bccomp($this->paid_amount ?? '0', '0', 2) > 0
+            || bccomp($this->discount_amount ?? '0', '0', 2) > 0;
+    }
+
+    public function canEditDirectly(): bool
+    {
+        return $this->isOpen() && ! $this->isLinked() && ! $this->legacy_review_required
+            && ($this->settlements_count !== null ? $this->settlements_count === 0 : ! $this->settlements()->exists());
+    }
+
     /** Situação na linguagem da tela: em aberto vira "vencida" depois do vencimento. */
     public function statusKey(): string
     {
@@ -101,7 +137,7 @@ class Bill extends Model
     protected function auditDisplayValue(string $field, mixed $value): mixed
     {
         return match ($field) {
-            'amount', 'paid_amount' => $value === null ? null : Decimal::currency($value),
+            'amount', 'paid_amount', 'discount_amount' => $value === null ? null : Decimal::currency($value),
             'supplier_id' => $value ? Supplier::withoutGlobalScopes()->find($value)?->name ?? $value : $value,
             'status' => __("finance.status.$value"),
             'payment_method' => $value ? config("finance.payment_methods.$value") : null,

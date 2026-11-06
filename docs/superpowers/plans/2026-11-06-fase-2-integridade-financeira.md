@@ -1,6 +1,6 @@
 # Fase 2 — integridade financeira
 
-> Execução nativa com `superpowers:executing-plans`, autorizada expressamente no pedido anexado da Fase 2. Implementação limitada a AUD-005/006/007. Decisões financeiras ainda não definidas aguardam resposta antes de schema ou comportamento dependente.
+> Execução nativa com `superpowers:executing-plans`, autorizada expressamente no pedido anexado da Fase 2. Implementação limitada a AUD-005/006/007. Decisões financeiras respondidas pelo usuário: preservar e bloquear legado divergente para reconciliação; estornar uma baixa selecionada.
 
 **Objetivo:** registrar baixas efetivas e saldo remanescente, impedir alteração direta de contas vinculadas e cancelamento comum de delivery entregue.
 
@@ -37,11 +37,11 @@ Arquivos previstos: migration aditiva, modelo de baixa e factory; `Bill`, `Custo
 
 Interfaces a fechar antes de alterar schema: representação do legado divergente e granularidade do estorno, perguntadas ao usuário. O principal original não será reescrito; valor recebido e desconto serão distintos. Leituras de saldo devem usar a mesma expressão decimal.
 
-- [ ] Registrar as decisões pendentes e o schema exato antes de migrations.
-- [ ] RED: R$ 80 → R$ 1 → saldo R$ 79 → R$ 30 → R$ 49 → R$ 49 → quitada; valores inválidos e excessivos não gravam nada.
-- [ ] GREEN: histórico, saldo, desconto autorizado e auditoria na mesma transação; caixa movimenta somente dinheiro efetivo.
-- [ ] Testar autorização, multiempresa, estornos, legado e relatórios/limite de crédito, incluindo baixa parcial em datas diferentes.
-- [ ] Adequar interface financeira e testes anteriores somente onde a nova regra muda o contrato.
+- [x] Registrar as decisões pendentes e o schema exato antes de migrations.
+- [x] RED: R$ 80 → R$ 1 → saldo R$ 79 → R$ 30 → R$ 49 → R$ 49 → quitada; valores inválidos e excessivos não gravam nada.
+- [x] GREEN: histórico, saldo, desconto autorizado e auditoria na mesma transação; caixa movimenta somente dinheiro efetivo.
+- [x] Testar autorização, multiempresa, estornos, legado e relatórios/limite de crédito, incluindo baixa parcial em datas diferentes.
+- [x] Adequar interface financeira e testes anteriores somente onde a nova regra muda o contrato.
 - [ ] Rodar SQLite/MariaDB e registrar commit local.
 
 ## Tarefa 3 — contas vinculadas e reversão pela origem
@@ -50,16 +50,16 @@ Arquivos: `BillController`, Action de edição se necessária, `CancelBill`, `Ca
 
 Interface: operação direta recusa `sale_id`/`stock_entry_id`; caminho interno explícito pela origem mantém transação e validação de saldo/baixas sob lock. Sem bypass enviado pela requisição.
 
-- [ ] RED: edição/cancelamento direto recusados; dinheiro/estoque/origem inalterados.
-- [ ] GREEN: bloquear diretamente e preservar cancelamento legítimo pela venda/entrada.
-- [ ] Testar origem com baixa parcial, concorrência baixa × cancelamento e necessidade de estorno antes da reversão.
+- [x] RED: edição/cancelamento direto recusados; dinheiro/estoque/origem inalterados.
+- [x] GREEN: bloquear diretamente e preservar cancelamento legítimo pela venda/entrada.
+- [x] Testar origem com baixa parcial, concorrência baixa × cancelamento e necessidade de estorno antes da reversão.
 - [ ] Rodar regressões SQLite/MariaDB e registrar commit local.
 
 ## Tarefa 4 — concorrência, revisão e entrega
 
 Arquivos: harness financeiro em `tests/Concurrency`, documentação e evidências novas da Fase 2.
 
-- [ ] Processos independentes sincronizados disputam uma conta: soma dos pagamentos nunca excede saldo; conferir ledger, caixa e auditoria.
+- [x] Processos independentes sincronizados disputam uma conta: soma dos pagamentos nunca excede saldo; conferir ledger, caixa e auditoria.
 - [ ] Executar suíte SQLite/MariaDB, concorrência financeira e C1–C9; registrar AUD-020 separadamente.
 - [ ] Pint, build sem sobreposição com testes HTTP, diff e revisão independente da branch.
 - [ ] Relatório com arquivos, migrations/schema, testes, reconciliação, riscos e commits; deixar branch limpa e local.
@@ -90,3 +90,16 @@ Relatórios devem somar recebimentos na data de pagamento e negativos na data de
 Tela financeira: diálogo usa saldo, apresenta desconto somente com permissão e exige motivo; detalhe mostra principal/recebido/desconto/saldo, histórico e estorno por baixa. Não oferecer edição/cancelamento de vinculada nem operação de conta bloqueada para reconciliação. Seguir componentes Vue existentes e habilidades Inertia/Tailwind quando aplicáveis.
 
 Origem com baixa ativa, mesmo parcial, exige estorno selecionado antes de cancelamento. `CancelBill::handleFromOrigin` precisa conferir essa condição sob lock para não perder corrida com uma baixa. `CancelSale` e `CancelStockEntry` mantêm suas reversões existentes, sem alterar estoque por presunção. Acrescentar concorrência baixa × origem e soma de pagamentos acima do saldo, com processos/barreira do harness existente.
+
+## Evidências da implementação e revisão final
+
+- Tarefa 2: RED de baixas parciais e descontos demonstrou nove falhas reais; GREEN inicial de 15 testes/90 asserções. A regra anterior de aceitar pagamento acima do principal foi substituída por recusa explícita, conforme o pedido; não houve redução de cobertura para obter resultado verde.
+- Relatórios: cinco casos RED provaram falta de saldo/baixas/datas/estornos; GREEN inclui parcial, despesas, fiado com desconto separado e multiempresa. Uma falha intermediária de data em SQLite veio de fixtures antigas com timestamp em coluna de data: a consulta usa limites `whereDate`, sem retirar a asserção.
+- Legado: importação das cinco formas não monetárias existentes e dinheiro coerente; repetição não duplica. RED adicional encontrou cinco baixas importadas indevidamente para um único movimento coerente; GREEN passou a conferir empresa, valor, direção e ausência de vínculo de caixa no não monetário. Não foram fabricados juros/descontos ou novos movimentos.
+- Origem: duas regressões adicionais provam que R$ 1 recebido bloqueia cancelamento sem efeitos colaterais; estornar a baixa selecionada libera o cancelamento legítimo, volta estoque a 10 e mantém caixa em R$ 100.
+- Estorno de caixa após fechamento: snapshot anterior permanece idêntico; saída de R$ 1 é registrada no caixa atual. Históricos preservados, inclusive a baixa estornada.
+- F1–F5 passaram no MariaDB com processos independentes: limite concorrente de saldo, desconto único, estorno selecionado único, baixa versus venda e baixa versus entrada. F4/F5 alternam precedência e provaram ambos os desfechos em dez rodadas cada; zero estados inconsistentes e zero erros inesperados.
+- C1–C8 passaram; C9 preserva integridade, reproduz 60 deadlocks AUD-020 e não é apresentado como corrigido.
+- Revisão independente da branch pelo agente `phase2_final_review`: achado importante de observações salvas mas invisíveis no histórico. Final: fixed observações por baixa invisíveis — `test_each_receipt_keeps_its_own_notes_visible_in_history` RED (campo ausente) → GREEN (15 asserções); suíte final documentada no relatório.
+- Final: Ruling: a revisão independente não executou testes nem migração em dados operacionais — resultados de testes são comprovados pelo executor em ambientes descartáveis; aplicação a dados reais permanece fora da autorização — custo se errado: incompatibilidades de dados operacionais exigirão ensaio em cópia sanitizada e reconciliação antes da implantação.
+- Nenhum achado menor foi adiado. Encerramento por `superpowers:finishing-a-development-branch` mantém a branch local, opção já expressamente determinada pelo usuário; não apresentar menu de push/merge contrário à autorização.

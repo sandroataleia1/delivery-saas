@@ -117,14 +117,16 @@ class BillTest extends TestCase
         $this->assertSame(0, CashMovement::count());
     }
 
-    public function test_pode_pagar_valor_diferente_por_juros_ou_desconto(): void
+    public function test_nao_presume_juros_ao_receber_acima_do_saldo(): void
     {
         $bill = $this->bill(['amount' => '100']);
 
-        $this->actingAs($this->admin)->post("/financeiro/contas/{$bill->id}/baixa", $this->settlement(['paid_amount' => '103.50']));
+        $this->actingAs($this->admin)->post("/financeiro/contas/{$bill->id}/baixa", $this->settlement(['paid_amount' => '103.50']))->assertSessionHasErrors('paid_amount');
 
         $this->assertSame('100.00', $bill->fresh()->amount);
-        $this->assertSame('103.50', $bill->fresh()->paid_amount);
+        $this->assertNull($bill->fresh()->paid_amount);
+        $this->assertTrue($bill->fresh()->isOpen());
+        $this->assertDatabaseCount('bill_settlements', 0);
     }
 
     public function test_conta_paga_em_dinheiro_sai_do_caixa_aberto(): void

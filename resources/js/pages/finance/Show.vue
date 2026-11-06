@@ -22,10 +22,11 @@ const isOpen = computed(() => props.bill.status === 'open' || props.bill.status 
 
 const settling = ref(null);
 const action = ref(null);
-const form = useForm({ reason: '' });
+const form = useForm({ reason: '', settlement_id: null });
 
-function start(name) {
+function start(name, settlement = null) {
     form.reason = '';
+    form.settlement_id = settlement?.id ?? null;
     form.clearErrors();
     action.value = name;
 }
@@ -44,24 +45,23 @@ function confirm() {
     <AppLayout :title="bill.description">
         <PageHeader :title="bill.description" :subtitle="bill.type === 'pagar' ? 'Conta a pagar' : 'Conta a receber'">
             <template v-if="can('finance.manage')">
-                <button v-if="isOpen" type="button" class="btn btn-primary" @click="settling = bill">
+                <button v-if="isOpen && !bill.legacy_review_required" type="button" class="btn btn-primary" @click="settling = bill">
                     <Check :size="16" />
                     Dar baixa
                 </button>
-                <Link v-if="isOpen" :href="route('bills.edit', bill.id)" class="btn btn-secondary">
+                <Link v-if="bill.can_edit" :href="route('bills.edit', bill.id)" class="btn btn-secondary">
                     <Pencil :size="16" />
                     Editar
                 </Link>
-                <button v-if="isOpen" type="button" class="btn btn-secondary" @click="start('cancel')">
+                <button v-if="bill.can_cancel" type="button" class="btn btn-secondary" @click="start('cancel')">
                     <Ban :size="16" />
                     Cancelar conta
                 </button>
-                <button v-if="bill.status === 'paid'" type="button" class="btn btn-secondary" @click="start('reopen')">
-                    <Undo2 :size="16" />
-                    Estornar baixa
-                </button>
             </template>
         </PageHeader>
+
+        <p v-if="bill.legacy_review_required" class="mb-4 text-danger" role="alert">Esta conta contém uma quitação antiga pendente de reconciliação. Os valores históricos foram preservados; alterações estão bloqueadas.</p>
+        <p v-if="bill.linked" class="mb-4 text-muted">Edição e cancelamento devem ser realizados pela venda ou entrada de origem. Baixas precisam ser estornadas antes do cancelamento.</p>
 
         <div v-if="bill.status === 'cancelled'" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm">
             <p class="font-semibold">Cancelada por {{ bill.cancelled_by }} em {{ bill.cancelled_at }}</p>
@@ -74,8 +74,16 @@ function confirm() {
                 <dd class="mt-0.5"><BillStatus :status="bill.status" :label="bill.status_label" /></dd>
             </div>
             <div>
-                <dt class="text-muted">Valor</dt>
+                <dt class="text-muted">Valor original</dt>
                 <dd class="font-semibold tabular-nums">{{ formatMoney(bill.amount) }}</dd>
+            </div>
+            <div>
+                <dt class="text-muted">Saldo</dt>
+                <dd class="font-semibold tabular-nums">{{ formatMoney(bill.balance) }}</dd>
+            </div>
+            <div>
+                <dt class="text-muted">Total de descontos</dt>
+                <dd class="font-semibold tabular-nums">{{ formatMoney(bill.discount_amount) }}</dd>
             </div>
             <div>
                 <dt class="text-muted">Vencimento</dt>
@@ -103,13 +111,13 @@ function confirm() {
             </div>
         </dl>
 
-        <dl v-if="bill.status === 'paid'" class="card mt-4 grid max-w-3xl gap-4 p-5 text-sm sm:grid-cols-3">
+        <dl v-if="bill.paid_amount !== null" class="card mt-4 grid max-w-3xl gap-4 p-5 text-sm sm:grid-cols-3">
             <div>
                 <dt class="text-muted">{{ bill.type === 'pagar' ? 'Pago em' : 'Recebido em' }}</dt>
                 <dd class="font-semibold tabular-nums">{{ bill.paid_at }}</dd>
             </div>
             <div>
-                <dt class="text-muted">Valor da baixa</dt>
+                <dt class="text-muted">Total efetivamente {{ bill.type === 'pagar' ? 'pago' : 'recebido' }}</dt>
                 <dd class="font-semibold tabular-nums">{{ formatMoney(bill.paid_amount) }}</dd>
             </div>
             <div>
@@ -122,12 +130,28 @@ function confirm() {
             </div>
         </dl>
 
+        <section v-if="bill.settlements?.length" class="card mt-4 max-w-3xl p-5">
+            <h2 class="mb-3 font-semibold">Histórico de baixas</h2>
+            <ul class="space-y-4">
+                <li v-for="entry in bill.settlements" :key="entry.id" class="border-line border-t pt-3 text-sm">
+                    <p class="font-semibold">#{{ entry.id }} · {{ entry.paid_at }} · {{ formatMoney(entry.amount) }} · {{ entry.payment_method }}</p>
+                    <p>Responsável: {{ entry.user }}<span v-if="entry.legacy_imported"> · Importada do histórico</span></p>
+                    <p v-if="entry.notes">Observação: {{ entry.notes }}</p>
+                    <p v-if="Number(entry.discount_amount) > 0">Desconto: {{ formatMoney(entry.discount_amount) }} · {{ entry.discount_reason }}</p>
+                    <p v-if="entry.reversed_at">Estornada em {{ entry.reversed_at }} por {{ entry.reversed_by }} · {{ entry.reversal_reason }}</p>
+                    <button v-else-if="can('finance.manage') && !bill.legacy_review_required" type="button" class="btn btn-secondary mt-2" @click="start('reopen', entry)">
+                        <Undo2 :size="16" /> Estornar esta baixa
+                    </button>
+                </li>
+            </ul>
+        </section>
+
         <SettleDialog :bill="settling" :methods="methods" :today="today" @close="settling = null" />
 
         <ConfirmDialog
             :open="action !== null"
             :title="action === 'cancel' ? 'Cancelar esta conta?' : 'Estornar esta baixa?'"
-            :message="action === 'reopen' ? 'A conta volta a ficar em aberto. Se a baixa usou dinheiro do caixa, o valor volta pelo seu caixa aberto.' : null"
+            :message="action === 'reopen' ? 'Somente a baixa selecionada e seu desconto serão estornados. Dinheiro do caixa exige seu caixa aberto; as outras baixas serão preservadas.' : null"
             :confirm-label="action === 'cancel' ? 'Cancelar conta' : 'Estornar baixa'"
             danger
             :processing="form.processing"
@@ -138,6 +162,7 @@ function confirm() {
                 <Field v-slot="{ id }" label="Motivo" required :error="form.errors.reason">
                     <input :id="id" v-model="form.reason" class="input" maxlength="255" />
                 </Field>
+                <p v-if="form.errors.settlement_id" class="text-danger" role="alert">{{ form.errors.settlement_id }}</p>
             </div>
         </ConfirmDialog>
     </AppLayout>

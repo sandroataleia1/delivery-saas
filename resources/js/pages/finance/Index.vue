@@ -101,7 +101,7 @@ const target = ref(null);
                         <th>Conta</th>
                         <th class="max-md:hidden">Vencimento</th>
                         <th class="max-sm:hidden">Situação</th>
-                        <th class="text-right">Valor</th>
+                        <th class="text-right">Saldo / valor original</th>
                         <th v-if="can('finance.manage')"><span class="sr-only">Ações</span></th>
                     </tr>
                 </thead>
@@ -115,10 +115,14 @@ const target = ref(null);
                         </td>
                         <td class="whitespace-nowrap tabular-nums max-md:hidden">{{ bill.due_date }}</td>
                         <td class="max-sm:hidden"><BillStatus :status="bill.status" :label="bill.status_label" /></td>
-                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="{ 'text-muted line-through': bill.status === 'cancelled' }">{{ formatMoney(bill.amount) }}</td>
+                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="{ 'text-muted line-through': bill.status === 'cancelled' }">
+                            {{ formatMoney(bill.status === 'open' || bill.status === 'overdue' ? bill.balance : bill.amount) }}
+                            <p v-if="Number(bill.paid_amount) > 0 && (bill.status === 'open' || bill.status === 'overdue')" class="text-muted text-xs">Original: {{ formatMoney(bill.amount) }}</p>
+                            <p v-if="bill.legacy_review_required" class="text-danger text-xs">Reconciliação pendente</p>
+                        </td>
                         <td v-if="can('finance.manage')" class="text-right whitespace-nowrap">
                             <button
-                                v-if="bill.status === 'open' || bill.status === 'overdue'"
+                                v-if="(bill.status === 'open' || bill.status === 'overdue') && !bill.legacy_review_required"
                                 type="button"
                                 class="btn btn-ghost"
                                 :aria-label="`Dar baixa em ${bill.description}`"

@@ -38,7 +38,7 @@ class CancelBill
                 throw ValidationException::withMessages(['reason' => 'Conta vinculada só pode ser cancelada pela operação de origem.']);
             }
 
-            if (! $locked->isOpen()) {
+            if (! $locked->isOpen() || $locked->hasActiveSettlements() || $locked->legacy_review_required) {
                 throw ValidationException::withMessages(['reason' => 'Só é possível cancelar uma conta em aberto.']);
             }
 

@@ -4,12 +4,14 @@
 
 use App\Actions\AddOrderItems;
 use App\Actions\CancelSale;
+use App\Actions\CancelStockEntry;
 use App\Actions\CloseCashSession;
 use App\Actions\CloseTableOrder;
 use App\Actions\OpenCashSession;
 use App\Actions\OpenTable;
 use App\Actions\PlaceMenuOrder;
 use App\Actions\RegisterSale;
+use App\Actions\ReopenBill;
 use App\Actions\SettleBill;
 use App\Actions\TransferTable;
 use App\Models\Bill;
@@ -21,6 +23,7 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Models\StockEntry;
 use App\Models\StockMovement;
 use App\Models\TableOrder;
 use App\Models\User;
@@ -66,6 +69,9 @@ if (($argv[1] ?? '') === 'worker') {
         Auth::setUser(User::find($p['user']));
     }
     ConcurrencyBarrier::awaitRelease($p['_barrier_directory'], $p['_worker_id']);
+    if (isset($p['delay_after_barrier_us'])) {
+        usleep($p['delay_after_barrier_us']);
+    }
     $t = microtime(true);
     try {
         match ($op) {
@@ -73,7 +79,9 @@ if (($argv[1] ?? '') === 'worker') {
             'qr' => app(PlaceMenuOrder::class)->handle(DiningTable::withoutGlobalScopes()->find($p['table']), [['product_id' => $p['product'], 'quantity' => 1, 'notes' => null]], $p['uuid'], null),
             'close' => app(CloseTableOrder::class)->handle(TableOrder::find($p['order']), ['client_uuid' => $p['uuid'], 'expected_subtotal' => $p['subtotal'], 'charge_service' => false, 'payments' => [['method' => 'pix', 'amount' => $p['subtotal']]]]),
             'transfer' => app(TransferTable::class)->handle(TableOrder::find($p['order']), DiningTable::find($p['target'])),
-            'settle' => app(SettleBill::class)->handle(Bill::find($p['bill']), ['paid_at' => today()->format('Y-m-d'), 'paid_amount' => '100.00', 'payment_method' => 'cash']),
+            'settle' => app(SettleBill::class)->handle(Bill::find($p['bill']), ['paid_at' => today()->format('Y-m-d'), 'paid_amount' => $p['amount'] ?? '100.00', 'payment_method' => $p['method'] ?? 'cash', 'discount_amount' => $p['discount'] ?? '0', 'discount_reason' => $p['discount_reason'] ?? null]),
+            'reopenbill' => app(ReopenBill::class)->handle(Bill::find($p['bill']), 'Concorrência de estorno', $p['settlement']),
+            'cancelentry' => app(CancelStockEntry::class)->handle(StockEntry::find($p['entry']), 'Concorrência de origem'),
             'closecash' => app(CloseCashSession::class)->handle(CashSession::find($p['session']), '0', 'auditoria'),
             'opencash' => app(OpenCashSession::class)->handle(User::find($p['user']), '0'),
             'cancel' => app(CancelSale::class)->handle(Sale::find($p['sale']), 'auditoria'),
@@ -260,6 +268,8 @@ report('C8 fechar caixa com 15 vendas simultâneas', $r, [
     inv('status', $session->status, 'closed'),
     inv('esperado congelado = vendas gravadas no caixa', (float) $session->expected_cash, $cashOfSession),
 ]);
+
+require __DIR__.'/financial.php';
 
 // C9: fechar x transferir a mesma comanda (ordem de lock invertida), 30 rodadas.
 $deadlocks = 0;

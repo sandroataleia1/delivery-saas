@@ -29,6 +29,7 @@ return [
             'permissions' => [
                 'finance.view' => 'Ver contas a pagar e a receber',
                 'finance.manage' => 'Criar, dar baixa, estornar e cancelar contas',
+                'finance.discount' => 'Conceder desconto na quitação de contas',
             ],
         ],
         'tables' => [

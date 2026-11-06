@@ -62,6 +62,29 @@ class LinkedBillSafetyTest extends TestCase
     }
 
     #[DataProvider('origins')]
+    public function test_partial_receipt_must_be_reversed_before_cancelling_origin(string $origin): void
+    {
+        $bill = $this->linkedBill($origin);
+        $url = $origin === 'sale' ? '/vendas/'.$bill->sale_id.'/cancelar' : '/entradas/'.$bill->stock_entry_id.'/cancelar';
+        $this->post("/financeiro/contas/{$bill->id}/baixa", ['paid_at' => today()->format('Y-m-d'), 'paid_amount' => '1', 'payment_method' => 'cash'])->assertSessionHasNoErrors();
+        $before = $this->effects();
+
+        $this->post($url, ['reason' => 'Ainda existe baixa'])->assertSessionHasErrors($origin === 'sale' ? 'sale' : 'stock');
+        $this->assertSame($before, $this->effects());
+        $this->assertSame('79.00', $bill->fresh()->balance());
+        $selected = $bill->settlements()->sole();
+        $this->post("/financeiro/contas/{$bill->id}/estorno", ['reason' => 'Corrigir origem', 'settlement_id' => $selected->id])->assertSessionHasNoErrors();
+        $this->post($url, ['reason' => 'Origem após estorno'])->assertSessionHasNoErrors();
+
+        $this->assertSame(Bill::CANCELLED, $bill->fresh()->status);
+        $this->assertSame('10.000', $this->product->fresh()->stock_quantity);
+        $this->assertSame('100.00', $this->session->calculateSummary()['expected_cash']);
+        $this->assertDatabaseCount('cash_movements', 2);
+        $this->assertDatabaseCount('stock_movements', 2);
+        $this->assertNotNull($selected->fresh()->reversed_at);
+    }
+
+    #[DataProvider('origins')]
     public function test_linked_bill_cannot_be_edited_directly(string $origin): void
     {
         $bill = $this->linkedBill($origin);
