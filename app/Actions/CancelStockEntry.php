@@ -60,6 +60,6 @@ class CancelStockEntry
         }
 
         $bills->filter(fn (Bill $bill) => $bill->isOpen())
-            ->each(fn (Bill $bill) => $this->cancelBill->handle($bill, $reason));
+            ->each(fn (Bill $bill) => $this->cancelBill->handleFromOrigin($bill, $entry, $reason));
     }
 }

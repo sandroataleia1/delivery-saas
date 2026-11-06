@@ -89,7 +89,7 @@ class CancelSale
         }
 
         $bills->filter(fn (Bill $bill) => $bill->isOpen())
-            ->each(fn (Bill $bill) => $this->cancelBill->handle($bill, $reason));
+            ->each(fn (Bill $bill) => $this->cancelBill->handleFromOrigin($bill, $sale, $reason));
     }
 
     private function refundCash(Sale $sale): void

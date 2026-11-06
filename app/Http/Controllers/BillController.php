@@ -12,6 +12,7 @@ use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -97,7 +98,7 @@ class BillController extends Controller
 
     public function edit(Bill $bill): Response
     {
-        abort_unless($bill->isOpen(), 403);
+        abort_unless($bill->isOpen() && ! $bill->isLinked(), 403);
 
         return Inertia::render('finance/Form', [
             ...$this->formProps($bill->isPayable() ? 'pagar' : 'receber'),
@@ -111,9 +112,11 @@ class BillController extends Controller
 
     public function update(BillRequest $request, Bill $bill): RedirectResponse
     {
-        abort_unless($bill->isOpen(), 403);
-
-        $bill->update($request->validated());
+        DB::transaction(function () use ($request, $bill) {
+            $locked = Bill::whereKey($bill->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->isOpen() && ! $locked->isLinked(), 403);
+            $locked->update($request->validated());
+        });
 
         return redirect()->route('bills.show', $bill)->with('success', 'Conta atualizada.');
     }

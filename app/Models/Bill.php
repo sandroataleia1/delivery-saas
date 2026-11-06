@@ -70,6 +70,11 @@ class Bill extends Model
         return $this->type === self::PAYABLE;
     }
 
+    public function isLinked(): bool
+    {
+        return $this->sale_id !== null || $this->stock_entry_id !== null;
+    }
+
     /** Situação na linguagem da tela: em aberto vira "vencida" depois do vencimento. */
     public function statusKey(): string
     {
