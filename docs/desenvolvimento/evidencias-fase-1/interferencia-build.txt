@@ -1,0 +1,4 @@
+Falha intermediaria: DeliveryTest::test_taxa_por_bairro, zones.0.fee ausente.
+Log em 2026-11-06 13:31:20: Unable to locate font CSS file from manifest: public/build/assets/fonts-CBc-swC9.css.
+Causa: build executado simultaneamente substituiu assets durante renderizacao do teste.
+Sem build simultaneo: teste isolado e suite completa MariaDB passaram.

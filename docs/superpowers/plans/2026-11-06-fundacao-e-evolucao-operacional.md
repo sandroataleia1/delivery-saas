@@ -1,6 +1,6 @@
 # Fundação e evolução operacional — plano de implementação
 
-> Para execução futura: usar `superpowers:executing-plans`, tarefa por tarefa. Este documento é uma proposta para revisão; não autoriza iniciar a implementação.
+> Fase 1 autorizada expressamente pelo usuário e executada com `superpowers:executing-plans`. Resultado em [relatório da Fase 1](../../desenvolvimento/RELATORIO-FASE-1-2026-11-06.md). As fases seguintes continuam sem autorização.
 
 **Objetivo:** preparar uma base verificável para corrigir a auditoria, preservando o núcleo de pedidos, vendas, caixa, estoque e isolamento por empresa.
 
@@ -10,7 +10,7 @@
 
 **Especificação:** pedido de continuidade anexado nesta conversa, regras aprovadas das seções 3 e 4, e `docs/auditoria/RELATORIO-AUDITORIA-2026-11-06.md`. Em caso de divergência, prevalecem as novas regras do pedido.
 
-**Data:** 06/11/2026. **Estado:** reconhecimento realizado; Fase 1 aguardando autorização.
+**Data:** 06/11/2026. **Estado:** Fase 1 concluída localmente; CI remoto e equivalência com produção pendentes. Aguardando revisão do usuário antes de qualquer nova fase.
 
 ## 1. Estado encontrado e limites da verificação
 

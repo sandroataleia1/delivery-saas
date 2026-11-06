@@ -1,0 +1,4 @@
+Composer install --dry-run, copia de diagnostico com platform-overrides.ext-bcmath=false.
+Exit: 2
+Root composer.json requires PHP extension ext-bcmath * but the ext-bcmath package is disabled by your platform config.
+Nenhuma dependencia instalada ou atualizada. Nao representa desativacao fisica da extensao compilada no PHP local.
