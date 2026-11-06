@@ -36,6 +36,10 @@ class DemoHistorySeeder extends Seeder
 
     public function run(): void
     {
+        if (app()->isProduction()) {
+            throw new \RuntimeException('Seeder de demonstração proibido em produção.');
+        }
+
         mt_srand(2026);
 
         $today = today();
