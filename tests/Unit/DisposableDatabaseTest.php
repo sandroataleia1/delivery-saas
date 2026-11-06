@@ -18,6 +18,7 @@ class DisposableDatabaseTest extends TestCase
             'remote host' => ['host', 'db.example.com'],
             'operational schema' => ['database', 'delivery'],
             'URL override' => ['url', 'mysql://localhost/real'],
+            'socket override' => ['socket', '/var/run/operational-mysql.sock'],
             'missing marker' => ['marker', []],
             'different port' => ['marker', ['port' => 34002]],
             'different instance' => ['actual_directory', '/real/mysql'],
@@ -30,7 +31,7 @@ class DisposableDatabaseTest extends TestCase
         return [
             'environment' => 'testing', 'cached' => false, 'driver' => 'mariadb',
             'host' => '127.0.0.1', 'port' => 34001, 'database' => 'delivery_test_ab12cd34',
-            'url' => '', 'actual_directory' => '/tmp/disposable/data/',
+            'url' => '', 'socket' => '', 'actual_directory' => '/tmp/disposable/data/',
             'marker' => [
                 'port' => 34001, 'database' => 'delivery_test_ab12cd34',
                 'directory' => '/tmp/disposable/data', 'token' => str_repeat('a', 32),

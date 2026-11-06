@@ -20,7 +20,7 @@ $database = 'delivery_test_' + [guid]::NewGuid().ToString('N').Substring(0, 16)
 $testEnvironment = @{
     APP_ENV='testing'; APP_DEBUG='false'; APP_KEY=('base64:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($token)))
     DB_CONNECTION='mariadb'; DB_HOST='127.0.0.1'; DB_PORT=[string]$testPort; DB_DATABASE=$database
-    DB_USERNAME='delivery_test'; DB_PASSWORD=$token; DB_URL=''; CACHE_STORE='array'; SESSION_DRIVER='array'
+    DB_USERNAME='delivery_test'; DB_PASSWORD=$token; DB_URL=''; DB_SOCKET=''; CACHE_STORE='array'; SESSION_DRIVER='array'
     QUEUE_CONNECTION='sync'; MAIL_MAILER='array'; BCRYPT_ROUNDS='4'; DISPOSABLE_DB_MARKER=$markerPath
     DISPOSABLE_DB_TOKEN=$token; DISPOSABLE_ADMIN_PASSWORD=([guid]::NewGuid().ToString('N'))
 }

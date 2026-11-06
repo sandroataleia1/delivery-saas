@@ -9,8 +9,8 @@ final class DisposableDatabase
 {
     public static function assertSafe(array $target): void
     {
-        if ($target['environment'] !== 'testing' || $target['cached'] || ! empty($target['url'])) {
-            throw new RuntimeException('Testes recusados: ambiente, cache ou DB_URL inseguro.');
+        if ($target['environment'] !== 'testing' || $target['cached'] || ! empty($target['url']) || ! empty($target['socket'])) {
+            throw new RuntimeException('Testes recusados: ambiente, cache, DB_URL ou socket inseguro.');
         }
 
         if ($target['driver'] === 'sqlite' && $target['database'] === ':memory:') {
@@ -49,6 +49,7 @@ final class DisposableDatabase
             'environment' => $app->environment(), 'cached' => $app->configurationIsCached(),
             'driver' => $driver, 'host' => $connection['host'] ?? '', 'port' => $connection['port'] ?? 0,
             'database' => $connection['database'] ?? '', 'url' => $connection['url'] ?? '',
+            'socket' => $connection['unix_socket'] ?? '',
             'marker' => $marker, 'token' => getenv('DISPOSABLE_DB_TOKEN') ?: '',
         ];
         self::assertSafe($target);

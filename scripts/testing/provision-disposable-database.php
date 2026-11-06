@@ -9,6 +9,7 @@ $target = [
     'environment' => getenv('APP_ENV'), 'cached' => is_file(dirname(__DIR__, 2).'/bootstrap/cache/config.php'),
     'driver' => getenv('DB_CONNECTION'), 'host' => getenv('DB_HOST'), 'port' => getenv('DB_PORT'),
     'database' => getenv('DB_DATABASE'), 'url' => getenv('DB_URL'),
+    'socket' => getenv('DB_SOCKET') ?: '',
     'marker' => $marker, 'token' => getenv('DISPOSABLE_DB_TOKEN'),
 ];
 DisposableDatabase::assertSafe($target);

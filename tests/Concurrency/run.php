@@ -30,8 +30,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
+use Tests\Support\ConcurrencyBarrier;
 use Tests\Support\ConcurrencyFailure;
 use Tests\Support\DisposableDatabase;
+use Tests\Support\TableCloseIntegrity;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -63,9 +65,7 @@ if (($argv[1] ?? '') === 'worker') {
     if (isset($p['user'])) {
         Auth::setUser(User::find($p['user']));
     }
-    while (microtime(true) < (float) $startAt) {
-        usleep(200);
-    }
+    ConcurrencyBarrier::awaitRelease($p['_barrier_directory'], $p['_worker_id']);
     $t = microtime(true);
     try {
         match ($op) {
@@ -86,23 +86,48 @@ if (($argv[1] ?? '') === 'worker') {
 }
 
 // ---- ORQUESTRADOR ----
-function run_all(array $jobs, float $delay = 3.0): array
+function run_all(array $jobs): array
 {
-    $startAt = microtime(true) + $delay;
+    $barrier = dirname(getenv('DISPOSABLE_DB_MARKER')).'/barrier-'.bin2hex(random_bytes(8));
+    mkdir($barrier, 0700);
     $procs = [];
-    foreach ($jobs as [$op, $params]) {
-        $process = new Process([PHP_BINARY, __FILE__, 'worker', $op, (string) $startAt, base64_encode(json_encode($params))], dirname(__DIR__, 2), timeout: 45);
-        $process->start();
-        $procs[] = [$process, $op];
-    }
-    $out = [];
-    foreach ($procs as [$process, $op]) {
-        $process->wait();
-        $raw = $process->getOutput();
-        $out[] = ['op' => $op] + (json_decode($raw, true) ?? ['ok' => false, 'class' => 'CRASH', 'msg' => substr($process->getErrorOutput().$raw, 0, 110)]);
-    }
+    try {
+        foreach ($jobs as $index => [$op, $params]) {
+            $params += ['_barrier_directory' => $barrier, '_worker_id' => (string) $index];
+            $process = new Process([PHP_BINARY, __FILE__, 'worker', $op, '0', base64_encode(json_encode($params))], dirname(__DIR__, 2), timeout: 45);
+            $process->start();
+            $procs[] = [$process, $op];
+        }
+        $deadline = microtime(true) + 20;
+        while (count(glob($barrier.'/ready-*')) !== count($jobs)) {
+            foreach ($procs as [$process]) {
+                if (! $process->isRunning()) {
+                    throw new RuntimeException('Worker saiu antes da barreira: '.$process->getErrorOutput());
+                }
+            }
+            if (microtime(true) >= $deadline) {
+                throw new RuntimeException('Timeout aguardando todos os workers na barreira.');
+            }
+            usleep(10000);
+        }
+        file_put_contents($barrier.'/release', 'go');
+        $out = [];
+        foreach ($procs as [$process, $op]) {
+            $process->wait();
+            $raw = $process->getOutput();
+            $out[] = ['op' => $op, 'barrier_ready' => true] + (json_decode($raw, true) ?? ['ok' => false, 'class' => 'CRASH', 'msg' => substr($process->getErrorOutput().$raw, 0, 110)]);
+        }
 
-    return $out;
+        return $out;
+    } finally {
+        foreach ($procs as [$process]) {
+            $process->stop();
+        }
+        foreach (glob($barrier.'/*') as $file) {
+            unlink($file);
+        }
+        rmdir($barrier);
+    }
 }
 
 function tally(array $results): array
@@ -118,7 +143,7 @@ function tally(array $results): array
     $times = array_column($results, 'ms');
     sort($times);
 
-    return ['workers' => count($results), 'ok' => $ok, 'errors' => $errors, 'ms_max' => end($times)];
+    return ['workers' => count($results), 'barrier_ready' => count(array_filter($results, fn ($result) => $result['barrier_ready'])), 'ok' => $ok, 'errors' => $errors, 'ms_max' => end($times)];
 }
 
 function report(string $name, array $results, array $invariants): void
@@ -247,13 +272,14 @@ foreach (range(1, 30) as $round) {
     $to = DiningTable::factory()->create(['company_id' => $company->id, 'number' => 1001 + $round * 2]);
     $o = app(OpenTable::class)->handle($from, 1, $admin);
     app(AddOrderItems::class)->handle($o, [['product_id' => $p8->id, 'quantity' => 1, 'notes' => null]], $u());
-    $startAt = 1.5;
+    $closeUuids = [$u(), $u()];
+    $stockBefore = $p8->fresh()->stock_quantity;
     $r = run_all([
-        ['close', ['user' => $admin->id, 'order' => $o->id, 'uuid' => $u(), 'subtotal' => '10.00', 'force_lock_overlap' => true]],
+        ['close', ['user' => $admin->id, 'order' => $o->id, 'uuid' => $closeUuids[0], 'subtotal' => '10.00', 'force_lock_overlap' => true]],
         ['transfer', ['user' => $admin->id, 'order' => $o->id, 'target' => $to->id, 'force_lock_overlap' => true]],
-        ['close', ['user' => $admin->id, 'order' => $o->id, 'uuid' => $u(), 'subtotal' => '10.00', 'force_lock_overlap' => true]],
+        ['close', ['user' => $admin->id, 'order' => $o->id, 'uuid' => $closeUuids[1], 'subtotal' => '10.00', 'force_lock_overlap' => true]],
         ['transfer', ['user' => $admin->id, 'order' => $o->id, 'target' => $to->id, 'force_lock_overlap' => true]],
-    ], $startAt);
+    ]);
     foreach ($r as $x) {
         $all[] = $x;
         if (! $x['ok'] && ($x['code'] ?? null) === 1213) {
@@ -264,10 +290,23 @@ foreach (range(1, 30) as $round) {
         }
     }
     $o->refresh();
-    $sales = Sale::whereIn('id', [$o->sale_id])->count();
+    // Consultar os dois UUIDs também encontra vendas órfãs ou duplicadas fora do vínculo da comanda.
+    $sales = Sale::whereIn('client_uuid', $closeUuids)->get();
+    $saleIds = $sales->modelKeys();
+    $payments = SalePayment::whereIn('sale_id', $saleIds);
+    $movements = StockMovement::where('product_id', $p8->id)->whereIn('sale_id', $saleIds);
+    $consistentEffects = TableCloseIntegrity::isConsistent([
+        'status' => $o->status, 'linked_sale_id' => $o->sale_id, 'sale_ids' => $saleIds,
+        'completed_sales' => $sales->where('status', 'completed')->count(),
+        'sale_total' => (string) $sales->sum('total'), 'payment_total' => (string) $payments->sum('amount'),
+        'payments' => $payments->count(), 'sale_items' => DB::table('sale_items')->whereIn('sale_id', $saleIds)->count(),
+        'stock_before' => $stockBefore, 'stock_after' => $p8->fresh()->stock_quantity,
+        'movement_quantity' => (string) $movements->sum('quantity'), 'movements' => $movements->count(),
+    ]);
     if (! in_array($o->status, ['closed', 'open'], true)
-        || ($o->isOpen() && ($o->open_table_id !== $o->dining_table_id || $sales !== 0))
-        || (! $o->isOpen() && ($o->open_table_id !== null || $sales !== 1))
+        || ! $consistentEffects
+        || ($o->isOpen() && $o->open_table_id !== $o->dining_table_id)
+        || (! $o->isOpen() && $o->open_table_id !== null)
         || TableOrder::whereIn('open_table_id', [$from->id, $to->id])->count() > 1) {
         $bad++;
     }

@@ -337,8 +337,11 @@ class DeliveryTest extends TestCase
 
     public function test_taxa_por_bairro(): void
     {
-        $this->actingAs($this->admin)->post('/entregas/bairros', ['name' => 'Centro', 'fee' => '6'])->assertSessionHasNoErrors();
+        $this->actingAs($this->admin)->post('/entregas/bairros', ['name' => 'Centro', 'fee' => '6'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('delivery_zones', ['company_id' => $this->admin->company_id, 'name' => 'Centro', 'fee' => '6.00']);
         $this->post('/entregas/bairros', ['name' => 'Centro', 'fee' => '6'])->assertSessionHasErrors('name');
+        $this->assertDatabaseCount('delivery_zones', 1);
 
         $this->get('/entregas/novo')->assertInertia(fn (Assert $page) => $page->where('zones.0.fee', '6.00'));
     }
