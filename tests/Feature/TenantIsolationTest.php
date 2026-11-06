@@ -79,12 +79,11 @@ class TenantIsolationTest extends TestCase
 
     public function test_auditoria_mostra_apenas_a_propria_empresa(): void
     {
-        AuditLog::query()->withoutGlobalScopes()->delete();
-        AuditLog::forceCreateQuietly(['company_id' => $this->otherAdmin->company_id, 'event' => 'login', 'description' => 'outra']);
-        AuditLog::forceCreateQuietly(['company_id' => $this->admin->company_id, 'event' => 'login', 'description' => 'minha']);
+        AuditLog::forceCreateQuietly(['company_id' => $this->otherAdmin->company_id, 'event' => 'login', 'description' => 'isolamento-auditoria: outra']);
+        AuditLog::forceCreateQuietly(['company_id' => $this->admin->company_id, 'event' => 'login', 'description' => 'isolamento-auditoria: minha']);
 
-        $this->actingAs($this->admin)->get('/auditoria')->assertInertia(
-            fn (Assert $page) => $page->has('logs.data', 1)->where('logs.data.0.description', 'minha')
+        $this->actingAs($this->admin)->get('/auditoria?search=isolamento-auditoria')->assertInertia(
+            fn (Assert $page) => $page->has('logs.data', 1)->where('logs.data.0.description', 'isolamento-auditoria: minha')
         );
     }
 
