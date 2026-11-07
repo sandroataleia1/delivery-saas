@@ -44,7 +44,17 @@ class AppServiceProvider extends ServiceProvider
             : Limit::perHour(5)->by('signup|'.$request->ip()));
 
         // Rota pública: quem abusa do QR Code é barrado sem atrapalhar o salão cheio.
-        RateLimiter::for('menu', fn (Request $request) => Limit::perMinute(20)->by('menu|'.$request->ip()));
+        RateLimiter::for('menu', function (Request $request) {
+            $token = (string) $request->route('token');
+            $table = DiningTable::withoutGlobalScopes()->where('qr_token', $token)->first(['id', 'company_id']);
+            $tableKey = hash('sha256', $token);
+
+            return [Limit::perMinute(20)->by('menu-ip|'.$tableKey.'|'.$request->ip()),
+                Limit::perMinute(60)->by('menu-table|'.$tableKey),
+                Limit::perMinute(600)->by('menu-company|'.($table?->company_id ?? $tableKey))];
+        });
+        RateLimiter::for('menu-tracking', fn (Request $request) => Limit::perMinute(120)
+            ->by('menu-tracking|'.hash('sha256', (string) $request->route('token').'|'.(string) $request->route('uuid')).'|'.$request->ip()));
 
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
     }

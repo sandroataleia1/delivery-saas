@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\CompanyProfileRequest;
+use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,6 +19,8 @@ class CompanyController extends Controller
                 'legal_name', 'trade_name', 'document', 'segment', 'email', 'phone',
                 'zip_code', 'street', 'number', 'complement', 'district', 'city', 'state', 'service_fee_percent', 'qr_menu_enabled',
             ),
+            'operation' => app(RestaurantOperationPolicy::class)->resolve($request->user()->company),
+            'operationCeilings' => config('restaurant.ceilings'),
             'segments' => config('company.segments'),
             'states' => config('company.states'),
         ]);

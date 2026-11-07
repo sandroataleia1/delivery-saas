@@ -2,13 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Actions\AddOrderItems;
+use App\Actions\CancelTableOrder;
 use App\Actions\OpenTable;
-use App\Actions\PlaceMenuOrder;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\DiningTable;
+use App\Models\MenuOrderReceipt;
+use App\Models\MenuOrderReceiptItem;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\TableOrder;
@@ -54,6 +55,8 @@ class MenuTest extends TestCase
     {
         return $this->post($this->url(), [
             'client_uuid' => (string) Str::uuid(),
+            'service_context' => $this->table->service_context,
+            'tracking_key' => str_repeat('a', 64),
             'items' => [['product_id' => $this->product->id, 'quantity' => 2, 'notes' => 'Sem cebola']],
             ...$overrides,
         ]);
@@ -102,7 +105,7 @@ class MenuTest extends TestCase
         $this->order()->assertSessionHas('success');
 
         $order = TableOrder::withoutGlobalScopes()->sole();
-        $item = TableOrderItem::withoutGlobalScopes()->sole();
+        $item = MenuOrderReceiptItem::withoutGlobalScopes()->sole();
 
         $this->assertSame($this->table->id, $order->open_table_id);
         $this->assertSame('Cliente (QR Code)', $order->user_name);
@@ -110,7 +113,8 @@ class MenuTest extends TestCase
         $this->assertSame($this->admin->company_id, $order->company_id);
         $this->assertSame('80.00', $item->total);
         $this->assertSame('Sem cebola', $item->notes);
-        $this->assertSame('Cliente (QR Code)', $item->user_name);
+        $this->assertSame('0.00', $order->subtotal());
+        $this->assertSame(0, TableOrderItem::withoutGlobalScopes()->count());
     }
 
     public function test_pedido_cai_na_comanda_ja_aberta_pelo_garcom(): void
@@ -123,45 +127,36 @@ class MenuTest extends TestCase
         $this->order()->assertSessionHas('success');
 
         $this->assertSame(1, TableOrder::withoutGlobalScopes()->count());
-        $this->assertSame(1, TableOrder::withoutGlobalScopes()->sole()->items()->withoutGlobalScopes()->count());
+        $this->assertSame(1, MenuOrderReceipt::withoutGlobalScopes()->count());
+        $this->assertSame(0, TableOrderItem::withoutGlobalScopes()->count());
     }
 
     public function test_quem_chega_depois_entra_na_comanda_que_o_outro_abriu(): void
     {
-        $open = new class(app(OpenTable::class)) extends OpenTable
-        {
-            public function __construct(private OpenTable $real) {}
-
-            public function handle(DiningTable $table, int $people, ?User $user, ?string $guestName = null): TableOrder
-            {
-                $this->real->handle($table, 2, null, 'Outro celular');
-
-                return $this->real->handle($table, $people, $user, $guestName);
-            }
-        };
-
-        (new PlaceMenuOrder($open, app(AddOrderItems::class)))
-            ->handle($this->table, [['product_id' => $this->product->id, 'quantity' => 1]], (string) Str::uuid(), null);
+        app(OpenTable::class)->handle($this->table, 2, null, 'Outro celular');
+        $this->order()->assertSessionHasNoErrors();
+        $this->order()->assertSessionHasNoErrors();
 
         $this->assertSame(1, TableOrder::withoutGlobalScopes()->count());
-        $this->assertSame(1, TableOrderItem::withoutGlobalScopes()->count());
+        $this->assertSame(2, MenuOrderReceipt::withoutGlobalScopes()->count());
+        $this->assertSame(0, TableOrderItem::withoutGlobalScopes()->count());
     }
 
     public function test_preco_vem_do_servidor(): void
     {
         $this->order(['items' => [['product_id' => $this->product->id, 'quantity' => 1, 'unit_price' => '0.01', 'total' => '0.01']]]);
 
-        $this->assertSame('40.00', TableOrderItem::withoutGlobalScopes()->sole()->unit_price);
+        $this->assertSame('40.00', MenuOrderReceiptItem::withoutGlobalScopes()->sole()->unit_price);
     }
 
     public function test_reenviar_nao_duplica(): void
     {
-        $payload = ['client_uuid' => (string) Str::uuid(), 'items' => [['product_id' => $this->product->id, 'quantity' => 1]]];
+        $payload = ['client_uuid' => (string) Str::uuid(), 'service_context' => $this->table->service_context, 'tracking_key' => str_repeat('b', 64), 'items' => [['product_id' => $this->product->id, 'quantity' => 1]]];
 
         $this->post($this->url(), $payload);
         $this->post($this->url(), $payload)->assertSessionHasNoErrors();
 
-        $this->assertSame(1, TableOrderItem::withoutGlobalScopes()->count());
+        $this->assertSame(1, MenuOrderReceipt::withoutGlobalScopes()->count());
     }
 
     public function test_quantidade_tem_limite_por_item(): void
@@ -174,27 +169,19 @@ class MenuTest extends TestCase
         $this->order();
 
         $this->get($this->url())->assertInertia(
-            fn (Assert $page) => $page->where('order.subtotal', '80.00')->has('order.items', 1)->where('order.items.0.product_name', 'Pizza')
+            fn (Assert $page) => $page->where('order', null)->missing('products.0.barcode')->missing('products.0.sku')
         );
     }
 
     public function test_pedido_de_pagina_antiga_nao_cai_na_conta_do_proximo_cliente(): void
     {
-        $this->order();
-        $old = TableOrder::withoutGlobalScopes()->sole();
-
-        $old->forceFill(['status' => TableOrder::CLOSED, 'open_table_id' => null])->saveQuietly();
-
-        $this->post($this->url(), ['client_uuid' => (string) Str::uuid(), 'items' => [['product_id' => $this->product->id, 'quantity' => 1]]]);
-        $current = TableOrder::withoutGlobalScopes()->where('open_table_id', $this->table->id)->sole();
-
-        $this->post($this->url(), [
-            'client_uuid' => (string) Str::uuid(),
-            'known_order_id' => $old->id,
-            'items' => [['product_id' => $this->product->id, 'quantity' => 1]],
-        ])->assertSessionHasErrors('items');
-
-        $this->assertSame(1, TableOrderItem::withoutGlobalScopes()->where('table_order_id', $current->id)->count());
+        $old = app(OpenTable::class)->handle($this->table, 1, null, 'Anterior');
+        $this->actingAs($this->admin);
+        app(CancelTableOrder::class)->handle($old, 'Fim do atendimento');
+        $current = app(OpenTable::class)->handle($this->table->fresh(), 1, null, 'Atual');
+        $this->order()->assertSessionHasErrors('service_context');
+        $this->assertSame(0, $current->items()->count());
+        $this->assertSame(0, MenuOrderReceipt::withoutGlobalScopes()->count());
     }
 
     public function test_codigo_invalido_mesa_inativa_e_empresa_inativa_dao_404(): void
@@ -230,7 +217,7 @@ class MenuTest extends TestCase
 
         $this->assertSame($this->admin->company_id, $order->company_id);
         $this->assertNull($order->user_id);
-        $log = AuditLog::withoutGlobalScopes()->where('auditable_type', 'TableOrderItem')->sole();
+        $log = AuditLog::withoutGlobalScopes()->where('auditable_type', 'MenuOrderReceipt')->sole();
         $this->assertSame('Cliente (QR Code)', $log->user_name);
         $this->assertNull($log->user_id);
         $this->assertSame($this->admin->company_id, $log->company_id);
@@ -269,6 +256,8 @@ class MenuTest extends TestCase
         $order = TableOrder::withoutGlobalScopes()->sole();
 
         $this->openCash($this->admin);
+
+        $this->actingAs($this->admin)->post(route('receipts.confirm', MenuOrderReceipt::withoutGlobalScopes()->sole()->id))->assertSessionHasNoErrors();
 
         $this->actingAs($this->admin)->post("/mesas/comandas/{$order->id}/fechar", [
             'client_uuid' => (string) Str::uuid(),

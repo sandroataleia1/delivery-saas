@@ -1,6 +1,6 @@
 # Fase 3 — recebimento seguro de pedidos por QR Code
 
-**Data:** 07/11/2026. **Estado:** início da fase autorizado; desenho detalhado em revisão antes de migrations ou implementação. Base `d622c79`, branch local `phase3/qr-receiving`. Não iniciar a Fase 4.
+**Data:** 07/11/2026. **Estado:** desenho aprovado expressamente pelo usuário; implementação autorizada. Base `d622c79`, branch local `phase3/qr-receiving`. Não iniciar a Fase 4.
 
 **Referências:** seções 3 e 4 do pedido original de continuidade; [plano geral aprovado](../plans/2026-11-06-fundacao-e-evolucao-operacional.md), especialmente seções 4 e 5; [auditoria original](../../auditoria/RELATORIO-AUDITORIA-2026-11-06.md). A numeração vigente é a do plano reorganizado: Fase 2 financeira, Fase 3 recebimento, Fase 4 produção.
 

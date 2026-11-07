@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -13,7 +14,7 @@ class CancelOrderItem
     public function handle(TableOrderItem $item, string $reason): void
     {
         DB::transaction(function () use ($item, $reason) {
-            $order = TableOrder::whereKey($item->table_order_id)->lockForUpdate()->firstOrFail();
+            $order = TableOperationLock::order(TableOrder::findOrFail($item->table_order_id));
 
             if (! $order->isOpen()) {
                 throw ValidationException::withMessages(['reason' => 'Esta comanda já foi fechada.']);

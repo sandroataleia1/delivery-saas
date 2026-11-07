@@ -7,10 +7,12 @@ use App\Actions\CancelSale;
 use App\Actions\CancelStockEntry;
 use App\Actions\CloseCashSession;
 use App\Actions\CloseTableOrder;
+use App\Actions\ConfirmMenuOrder;
 use App\Actions\OpenCashSession;
 use App\Actions\OpenTable;
 use App\Actions\PlaceMenuOrder;
 use App\Actions\RegisterSale;
+use App\Actions\RejectMenuOrder;
 use App\Actions\ReopenBill;
 use App\Actions\SettleBill;
 use App\Actions\TransferTable;
@@ -19,7 +21,9 @@ use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\DiningTable;
+use App\Models\MenuOrderReceipt;
 use App\Models\Product;
+use App\Models\RestaurantOperationSettings;
 use App\Models\Role;
 use App\Models\Sale;
 use App\Models\SalePayment;
@@ -76,7 +80,9 @@ if (($argv[1] ?? '') === 'worker') {
     try {
         match ($op) {
             'sale' => app(RegisterSale::class)->handle(sale_payload($p['product'], $p['uuid'], $p['price'] ?? '10.00')),
-            'qr' => app(PlaceMenuOrder::class)->handle(DiningTable::withoutGlobalScopes()->find($p['table']), [['product_id' => $p['product'], 'quantity' => 1, 'notes' => null]], $p['uuid'], null),
+            'qr' => app(PlaceMenuOrder::class)->handle(DiningTable::withoutGlobalScopes()->findOrFail($p['table']), ['service_context' => $p['context'], 'client_uuid' => $p['uuid'], 'tracking_key' => $p['key'] ?? str_repeat('a', 64), 'items' => [['product_id' => $p['product'], 'quantity' => 1, 'notes' => null]]]),
+            'confirmreceipt' => app(ConfirmMenuOrder::class)->handle(MenuOrderReceipt::findOrFail($p['receipt'])),
+            'rejectreceipt' => app(RejectMenuOrder::class)->handle(MenuOrderReceipt::findOrFail($p['receipt']), 'Rejeição concorrente'),
             'close' => app(CloseTableOrder::class)->handle(TableOrder::find($p['order']), ['client_uuid' => $p['uuid'], 'expected_subtotal' => $p['subtotal'], 'charge_service' => false, 'payments' => [['method' => 'pix', 'amount' => $p['subtotal']]]]),
             'transfer' => app(TransferTable::class)->handle(TableOrder::find($p['order']), DiningTable::find($p['target'])),
             'settle' => app(SettleBill::class)->handle(Bill::find($p['bill']), ['paid_at' => today()->format('Y-m-d'), 'paid_amount' => $p['amount'] ?? '100.00', 'payment_method' => $p['method'] ?? 'cash', 'discount_amount' => $p['discount'] ?? '0', 'discount_reason' => $p['discount_reason'] ?? null]),
@@ -206,12 +212,15 @@ echo json_encode(['info' => 'C2 vendidas', 'vendidas' => $sold, 'saldo_final' =>
 // C3: QR simultâneo em mesa livre.
 $p3 = $product();
 $table = DiningTable::factory()->create(['company_id' => $company->id, 'number' => 101]);
-$r = run_all(array_map(fn () => ['qr', ['table' => $table->id, 'product' => $p3->id, 'uuid' => (string) Str::uuid()]], range(1, 20)));
+RestaurantOperationSettings::factory()->create(['company_id' => $company->id, 'max_pending_orders' => 20]);
+$r = run_all(array_map(fn () => ['qr', ['context' => $table->service_context, 'table' => $table->id, 'product' => $p3->id, 'uuid' => (string) Str::uuid()]], range(1, 20)));
 $orders = TableOrder::where('dining_table_id', $table->id)->get();
 report('C3 20 pedidos QR simultâneos em mesa livre', $r, [
     inv('pedidos aceitos', tally($r)['ok'], 20),
     inv('comandas abertas', $orders->count(), 1),
-    inv('itens = pedidos ok', $orders->first()?->items()->count() ?? 0, tally($r)['ok']),
+    inv('recebimentos pendentes', MenuOrderReceipt::where('table_order_id', $orders->sole()->id)->where('status', 'pending')->count(), 20),
+    inv('nenhum item cobrado', $orders->sole()->items()->count(), 0),
+    inv('saldo preservado', $p3->fresh()->stock_quantity, '10.000'),
 ]);
 
 // C4: fechamento simultâneo com client_uuid diferente (dois caixas/abas).
@@ -270,6 +279,7 @@ report('C8 fechar caixa com 15 vendas simultâneas', $r, [
 ]);
 
 require __DIR__.'/financial.php';
+require __DIR__.'/receipts.php';
 
 // C9: fechar x transferir a mesma comanda (ordem de lock invertida), 30 rodadas.
 $deadlocks = 0;
@@ -324,7 +334,7 @@ foreach (range(1, 30) as $round) {
 $unexpected = array_filter($all, fn ($result) => ! $result['ok']
     && ($result['class'] ?? '') !== 'ValidationException'
     && ! (in_array($result['class'] ?? '', ['QueryException', 'DeadlockException'], true) && ($result['code'] ?? null) === 1213));
-$c9Pass = $bad === 0 && $unexpected === [];
+$c9Pass = $bad === 0 && $unexpected === [] && $deadlocks === 0 && $lockWait === 0;
 $failedScenarios += $c9Pass ? 0 : 1;
-echo json_encode(['cenario' => 'C9 fechar x transferir, 30 rodadas, 4 workers', 'integridade' => $c9Pass ? 'PASSOU' : 'FALHOU', 'operacao' => $deadlocks ? 'FALHA_CONHECIDA_AUD_020' : 'DEADLOCK_NAO_REPRODUZIDO', 'estados_invalidos' => $bad, 'erros_inesperados' => count($unexpected), 'deadlocks_1213' => $deadlocks, 'lock_wait_1205' => $lockWait, 'tally' => tally($all)], JSON_UNESCAPED_UNICODE)."\n";
+echo json_encode(['cenario' => 'C9 fechar x transferir, 30 rodadas, 4 workers', 'integridade' => $c9Pass ? 'PASSOU' : 'FALHOU', 'operacao' => $deadlocks ? 'FALHOU_AUD_020' : 'PASSOU_SEM_DEADLOCK', 'estados_invalidos' => $bad, 'erros_inesperados' => count($unexpected), 'deadlocks_1213' => $deadlocks, 'lock_wait_1205' => $lockWait, 'tally' => tally($all)], JSON_UNESCAPED_UNICODE)."\n";
 exit($failedScenarios ? 1 : 0);

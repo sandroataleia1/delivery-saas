@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\Decimal;
+use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,7 +21,7 @@ class AddOrderItems
     {
         DB::transaction(function () use ($order, $items, $clientUuid, $guestName) {
             /** @var TableOrder $locked */
-            $locked = TableOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = TableOperationLock::order($order);
 
             if (! $locked->isOpen()) {
                 throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);

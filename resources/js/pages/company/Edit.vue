@@ -1,5 +1,6 @@
 <script setup>
 import { useForm } from '@inertiajs/vue3';
+import RestaurantOperationForm from '@/components/RestaurantOperationForm.vue';
 import AddressFields from '@/components/AddressFields.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
@@ -9,6 +10,8 @@ import { formatCep, formatCnpj, formatPhone } from '@/lib/format';
 
 const props = defineProps({
     company: { type: Object, required: true },
+    operation: { type: Object, required: true },
+    operationCeilings: { type: Object, required: true },
     segments: { type: Array, required: true },
     states: { type: Array, required: true },
 });
@@ -94,5 +97,6 @@ const form = useForm({
 
             <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>
         </form>
+        <RestaurantOperationForm :operation="operation" :ceilings="operationCeilings" />
     </AppLayout>
 </template>

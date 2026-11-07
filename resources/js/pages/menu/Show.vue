@@ -1,70 +1,114 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { Head, useForm, usePoll } from '@inertiajs/vue3';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Head, useHttp } from '@inertiajs/vue3';
 import { Minus, Plus, Receipt, ShoppingBag, X } from '@lucide/vue';
-import FlashMessages from '@/components/FlashMessages.vue';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid } from '@/lib/money';
 
 const props = defineProps({
-    token: { type: String, required: true },
-    company: { type: String, required: true },
-    table: { type: Number, required: true },
-    categories: { type: Array, required: true },
-    products: { type: Array, required: true },
-    order: { type: Object, default: null },
+    token: { type: String, required: true }, company: { type: String, required: true },
+    table: { type: Number, required: true }, serviceContext: { type: String, required: true },
+    categories: { type: Array, required: true }, products: { type: Array, required: true },
+    limits: { type: Object, required: true },
 });
-
-usePoll(20000, { only: ['order'] });
-
-const knownOrderId = ref(props.order?.id ?? null);
 const category = ref(null);
 const cart = ref([]);
 const sheet = ref(null);
-const uuid = ref(newUuid());
-const form = useForm({});
-
-const categories = computed(() => props.categories.filter((item) => props.products.some((product) => product.category_id === item.id)));
-const visible = computed(() => props.products.filter((product) => category.value === null || product.category_id === category.value));
+const journal = ref([]);
+const error = ref('');
+const storageReady = ref(true);
+const clock = ref(Date.now());
+const lastUpdated = ref(Date.now());
+const form = useHttp({});
+const tracking = useHttp({});
+const storageKey = `menu-receipts:${props.token}`;
+let timer;
+let disposed = false;
+const uncertain = computed(() => journal.value.find(record => record.uncertain));
+const frozen = computed(() => Boolean(uncertain.value) || form.processing);
+const categories = computed(() => props.categories.filter(item => props.products.some(product => product.category_id === item.id)));
+const visible = computed(() => props.products.filter(product => category.value === null || product.category_id === category.value));
 const count = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
 const totalCents = computed(() => cart.value.reduce((sum, item) => sum + lineCents(item.quantity, item.sale_price), 0));
-const quantityOf = (product) => cart.value.find((item) => item.product_id === product.id)?.quantity ?? 0;
-
+const quantityOf = product => cart.value.find(item => item.product_id === product.id)?.quantity ?? 0;
+const stale = computed(() => journal.value.length && clock.value - lastUpdated.value > 30000);
+function persist() {
+    try { localStorage.setItem(storageKey, JSON.stringify(journal.value)); return true; }
+    catch { error.value = 'Não foi possível guardar o envio neste aparelho. Chame a equipe antes de pedir novamente.'; storageReady.value = false; return false; }
+}
 function change(product, delta) {
-    const line = cart.value.find((item) => item.product_id === product.id);
-
-    if (line) {
-        line.quantity += delta;
-
-        if (line.quantity <= 0) {
-            cart.value = cart.value.filter((item) => item !== line);
-        }
-    } else if (delta > 0) {
-        cart.value.push({ product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: 1, notes: '' });
+    if (frozen.value) return;
+    const line = cart.value.find(item => item.product_id === product.id);
+    if (delta > 0 && (count.value >= props.limits.max_order_units || (line?.quantity ?? 0) >= props.limits.max_line_units || (!line && cart.value.length >= props.limits.max_lines))) {
+        error.value = 'Limite de itens atingido. Confira seu pedido.'; return;
     }
+    if (line) { line.quantity += delta; if (line.quantity <= 0) cart.value = cart.value.filter(item => item !== line); }
+    else if (delta > 0) cart.value.push({ product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: 1, notes: '' });
 }
-
-function send() {
-    form.transform(() => ({
-        client_uuid: uuid.value,
-        known_order_id: knownOrderId.value,
-        items: cart.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })),
-    })).post(route('menu.store', props.token), {
-        preserveScroll: true,
-        onSuccess: () => {
-            cart.value = [];
-            sheet.value = null;
-            uuid.value = newUuid();
-            knownOrderId.value = props.order?.id ?? null;
-        },
-    });
+async function send() {
+    if (form.processing || !storageReady.value) return;
+    error.value = '';
+    let record = uncertain.value;
+    if (!record) {
+        if (!count.value) return;
+        const key = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
+        record = { payload: { client_uuid: newUuid(), service_context: props.serviceContext, tracking_key: key,
+            items: cart.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })) },
+            cart: JSON.parse(JSON.stringify(cart.value)), uncertain: true, receipt: null };
+        journal.value = [...journal.value.slice(-19), record];
+    }
+    if (!persist()) return;
+    const uuid = record.payload.client_uuid;
+    const timeout = setTimeout(() => form.cancel(), 15000);
+    try {
+        const response = await form.transform(() => record.payload).post(route('menu.store', props.token));
+        if (!response) {
+            error.value = Object.values(form.errors).join(' ') || 'Confira os dados do pedido.';
+            journal.value = journal.value.filter(item => item.payload.client_uuid !== uuid);
+            persist(); return;
+        }
+        journal.value = journal.value.map(item => item.payload.client_uuid === uuid ? { ...item, uncertain: false, receipt: response.receipt } : item);
+        cart.value = []; sheet.value = 'receipts'; lastUpdated.value = Date.now(); persist();
+    } catch (exception) {
+        const status = exception.response?.status;
+        error.value = status === 429 ? 'Muitos envios. Aguarde e use Reenviar o mesmo pedido.' : status === 409
+            ? 'Este identificador já foi usado com outro conteúdo. Chame a equipe para conferir.'
+            : 'Não foi possível confirmar o recebimento. Seu envio está preservado. Confira com a equipe ou reenvie o mesmo pedido.';
+    } finally { clearTimeout(timeout); }
 }
+async function poll() {
+    if (disposed || tracking.processing || form.processing || !journal.value.length) return;
+    let allOk = true;
+    for (const record of [...journal.value]) {
+        if (disposed) return;
+        const timeout = setTimeout(() => tracking.cancel(), 10000);
+        try {
+            const response = await tracking.get(route('menu.track', [props.token, record.payload.client_uuid]), { headers: { 'X-Menu-Receipt-Key': record.payload.tracking_key } });
+            if (!response || disposed) { allOk = false; continue; }
+            journal.value = journal.value.map(item => item.payload.client_uuid === record.payload.client_uuid ? { ...item, uncertain: false, receipt: response.receipt } : item);
+            if (record.uncertain) { cart.value = []; error.value = ''; }
+        } catch { allOk = false; } finally { clearTimeout(timeout); }
+    }
+    if (allOk) lastUpdated.value = Date.now();
+    if (!disposed) persist();
+}
+onMounted(() => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        if (!Array.isArray(saved) || saved.some(record => !record.payload?.client_uuid || !/^[a-f0-9]{64}$/.test(record.payload?.tracking_key) || !Array.isArray(record.cart))) throw new Error('Invalid journal');
+        journal.value = saved.slice(-20);
+        if (uncertain.value) { cart.value = uncertain.value.cart; error.value = 'Há um envio sem resposta confirmada. Reenvie o mesmo pedido ou chame a equipe.'; }
+        poll();
+    } catch { storageReady.value = false; error.value = 'Não foi possível recuperar seus envios neste aparelho. Chame a equipe antes de pedir novamente.'; }
+    timer = setInterval(() => { clock.value = Date.now(); if (clock.value % 20000 < 1000) poll(); }, 1000);
+});
+onUnmounted(() => { disposed = true; clearInterval(timer); form.cancel(); tracking.cancel(); });
 </script>
 
 <template>
     <div class="bg-canvas min-h-dvh pb-24">
         <Head :title="`Cardápio · ${company}`" />
-        <FlashMessages top />
+
 
         <header class="bg-sidebar sticky top-0 z-20 px-4 py-3 text-white">
             <p class="truncate font-bold">{{ company }}</p>
@@ -77,6 +121,10 @@ function send() {
         </nav>
 
         <main class="mx-auto max-w-2xl p-3">
+            <p class="text-muted mb-3 text-sm">Seu pedido aguarda confirmação da equipe. Limite por envio: {{ formatMoney(limits.max_order_value) }}.</p>
+            <p v-if="error" class="text-danger mb-3 text-sm" role="alert">{{ error }}</p>
+            <p v-if="stale" class="text-danger mb-3 text-sm" role="alert">Acompanhamento sem atualização há mais de 30 segundos. Confira a conexão e chame a equipe se necessário.</p>
+            <button v-if="uncertain" type="button" class="btn btn-primary mb-3" :disabled="form.processing || !storageReady" @click="send">Reenviar o mesmo pedido</button>
             <p v-if="visible.length === 0" class="text-muted py-12 text-center">Cardápio indisponível no momento.</p>
             <ul class="space-y-2">
                 <li v-for="product in visible" :key="product.id" class="card flex items-center gap-3 p-3">
@@ -86,19 +134,19 @@ function send() {
                         <p class="text-brand-strong mt-1 font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</p>
                     </div>
                     <div v-if="quantityOf(product)" class="flex items-center gap-2">
-                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${product.name}`" @click="change(product, -1)"><Minus :size="16" /></button>
+                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${product.name}`" :disabled="frozen" @click="change(product, -1)"><Minus :size="16" /></button>
                         <span class="w-5 text-center font-bold tabular-nums">{{ quantityOf(product) }}</span>
-                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" @click="change(product, 1)"><Plus :size="16" /></button>
+                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" :disabled="frozen" @click="change(product, 1)"><Plus :size="16" /></button>
                     </div>
-                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" @click="change(product, 1)"><Plus :size="18" /></button>
+                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="frozen" @click="change(product, 1)"><Plus :size="18" /></button>
                 </li>
             </ul>
         </main>
 
         <div class="bg-surface border-line fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t p-3">
-            <button v-if="order" type="button" class="btn btn-secondary shrink-0" @click="sheet = 'bill'">
+            <button v-if="journal.length" type="button" class="btn btn-secondary shrink-0" @click="sheet = 'receipts'">
                 <Receipt :size="16" />
-                Minha conta
+                Meus envios
             </button>
             <button type="button" class="btn btn-primary min-h-12 flex-1" :disabled="count === 0" @click="sheet = 'cart'">
                 <ShoppingBag :size="18" />
@@ -109,7 +157,7 @@ function send() {
         <div v-if="sheet" class="fixed inset-0 z-30 bg-black/40" @click.self="sheet = null">
             <section class="bg-surface absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4">
                 <div class="mb-3 flex items-center justify-between">
-                    <h2 class="text-lg font-bold">{{ sheet === 'cart' ? 'Seu pedido' : 'Minha conta' }}</h2>
+                    <h2 class="text-lg font-bold">{{ sheet === 'cart' ? 'Seu pedido' : 'Meus envios' }}</h2>
                     <button type="button" class="btn btn-ghost" aria-label="Fechar" @click="sheet = null"><X :size="18" /></button>
                 </div>
 
@@ -120,27 +168,22 @@ function send() {
                                 <span>{{ item.quantity }} × {{ item.name }}</span>
                                 <span class="tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                             </div>
-                            <input v-model="item.notes" class="input mt-1" maxlength="120" placeholder="Alguma observação?" :aria-label="`Observação de ${item.name}`" />
+                            <input v-model="item.notes" :disabled="frozen" class="input mt-1" maxlength="120" placeholder="Alguma observação?" :aria-label="`Observação de ${item.name}`" />
                         </li>
                     </ul>
                     <p v-if="form.errors.items" class="text-danger mt-3 text-sm" role="alert">{{ form.errors.items }}</p>
-                    <button type="button" class="btn btn-primary mt-4 min-h-12 w-full" :disabled="form.processing || count === 0" @click="send">
-                        Enviar pedido · {{ formatMoney(fromCents(totalCents)) }}
+                    <button type="button" class="btn btn-primary mt-4 min-h-12 w-full" :disabled="form.processing || count === 0 || !storageReady" @click="send">
+                        {{ uncertain ? 'Reenviar o mesmo pedido' : 'Enviar pedido' }} · {{ formatMoney(fromCents(totalCents)) }}
                     </button>
                 </template>
 
-                <template v-else-if="order">
-                    <ul class="divide-line divide-y text-sm">
-                        <li v-for="item in order.items" :key="item.id" class="flex justify-between gap-3 py-2">
-                            <span>{{ formatQuantity(item.quantity) }} × {{ item.product_name }}</span>
-                            <span class="tabular-nums">{{ formatMoney(item.total) }}</span>
-                        </li>
-                    </ul>
-                    <p class="border-line mt-2 flex justify-between border-t pt-3 text-lg font-bold">
-                        <span>Total</span>
-                        <span class="tabular-nums">{{ formatMoney(order.subtotal) }}</span>
-                    </p>
-                    <p class="text-muted mt-1 text-sm">Para fechar, chame um atendente.</p>
+                <template v-else>
+                    <article v-for="record in [...journal].reverse()" :key="record.payload.client_uuid" class="border-line mb-3 rounded-lg border p-3 text-sm">
+                        <p class="font-bold" role="status">{{ record.receipt?.message ?? 'Aguardando resposta do envio. Não faça outro pedido com os mesmos itens.' }}</p>
+                        <ul><li v-for="(item, index) in record.receipt?.items ?? record.cart" :key="index" :class="{ 'line-through': item.cancelled }">{{ formatQuantity(item.quantity) }} × {{ item.product_name ?? item.name }} <span v-if="item.notes">· {{ item.notes }}</span></li></ul>
+                        <p v-if="record.receipt" class="mt-2 font-semibold">Valor deste envio: {{ formatMoney(record.receipt.total) }}</p>
+                    </article>
+                    <p class="text-muted text-sm">Estes são apenas os envios deste aparelho. Para conferir ou fechar a conta completa, chame um atendente. Rejeitados e cancelados não são cobrados.</p>
                 </template>
             </section>
         </div>

@@ -15,8 +15,10 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
+use App\Http\Controllers\MenuOrderReceiptController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RestaurantOperationSettingsController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\StockController;
@@ -29,6 +31,7 @@ use Illuminate\Support\Facades\Route;
 // Cardápio da mesa: público, acessado pelo QR Code.
 Route::middleware('public.page')->group(function () {
     Route::get('m/{token}', [MenuController::class, 'show'])->name('menu.show');
+    Route::get('m/{token}/envios/{uuid}', [MenuController::class, 'track'])->whereUuid('uuid')->middleware('throttle:menu-tracking')->name('menu.track');
     Route::post('m/{token}', [MenuController::class, 'store'])->middleware('throttle:menu')->name('menu.store');
 });
 
@@ -67,6 +70,10 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('mesas/comandas/{order}/cozinha', [TableOrderController::class, 'kitchen'])->name('orders.kitchen');
             Route::get('mesas/comandas/{order}/cozinha/{batch}', [TableOrderController::class, 'ticket'])->whereNumber('batch')->name('orders.ticket');
             Route::post('mesas/comandas/{order}/transferir', [TableOrderController::class, 'transfer'])->name('orders.transfer');
+        });
+        Route::middleware('can:tables.confirm')->group(function () {
+            Route::post('mesas/recebimentos/{receipt}/confirmar', [MenuOrderReceiptController::class, 'confirm'])->name('receipts.confirm');
+            Route::post('mesas/recebimentos/{receipt}/rejeitar', [MenuOrderReceiptController::class, 'reject'])->name('receipts.reject');
         });
         Route::middleware('can:tables.close')->post('mesas/comandas/{order}/fechar', [TableOrderController::class, 'close'])->name('orders.close');
         Route::middleware('can:tables.cancel')->group(function () {
@@ -225,11 +232,13 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         Route::middleware('can:company.manage')->group(function () {
             Route::get('empresa', [CompanyController::class, 'edit'])->name('company.edit');
             Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');
+            Route::put('empresa/operacao', [RestaurantOperationSettingsController::class, 'update'])->name('company.operation');
         });
     });
 
     // Painel da plataforma, só para o super administrador.
     Route::middleware('super')->prefix('admin')->name('admin.')->group(function () {
+        Route::post('empresas/{company}/operacao/bloqueio', [RestaurantOperationSettingsController::class, 'block'])->name('companies.operation.block');
         Route::get('empresas', [AdminCompanyController::class, 'index'])->name('companies.index');
         Route::get('empresas/nova', [AdminCompanyController::class, 'create'])->name('companies.create');
         Route::post('empresas', [AdminCompanyController::class, 'store'])->name('companies.store');

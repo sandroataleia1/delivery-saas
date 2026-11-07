@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
 import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, Minus, Plus, Receipt, Trash2, X } from '@lucide/vue';
+import MenuReceiptAlerts from '@/components/MenuReceiptAlerts.vue';
+import MenuReceiptDecisions from '@/components/MenuReceiptDecisions.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
@@ -14,6 +16,8 @@ import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
+    receipts: { type: Array, required: true },
+    operation: { type: Object, required: true },
     order: { type: Object, required: true },
     products: { type: Array, required: true },
     categories: { type: Array, required: true },
@@ -26,7 +30,9 @@ const props = defineProps({
 const page = usePage();
 const { can } = usePermissions();
 
-usePoll(10000, { only: ['order', 'freeTables'] });
+const lastUpdated = ref(Date.now());
+usePoll(10000, { only: ['order', 'freeTables', 'receipts', 'operation'], onSuccess: () => lastUpdated.value = Date.now() }, { keepAlive: true });
+const pendingIds = computed(() => props.receipts.filter(receipt => receipt.status === 'pending').map(receipt => receipt.id));
 
 const view = ref('menu');
 const drafts = ref([]);
@@ -228,6 +234,7 @@ function close() {
                     <p class="text-muted text-xs">{{ order.people }} {{ order.people === 1 ? 'pessoa' : 'pessoas' }} · aberta por {{ order.waiter }}</p>
                 </div>
 
+                <div class="px-4 pt-3"><MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" /><MenuReceiptDecisions :receipts="receipts" :late-minutes="operation.late_after_minutes" /></div>
                 <p v-if="order.items.length === 0" class="text-muted flex-1 px-4 py-12 text-center text-sm">Nenhum item lançado.</p>
 
                 <ul v-else class="divide-line min-h-0 flex-1 divide-y overflow-y-auto">

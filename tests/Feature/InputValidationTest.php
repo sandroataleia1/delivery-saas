@@ -103,14 +103,19 @@ class InputValidationTest extends TestCase
 
     public static function validFlows(): array
     {
-        return [['sale', 'sale_items', '9.000'], ['entry', 'stock_entry_items', '11.000'], ['delivery', 'delivery_order_items', '10.000'], ['table', 'table_order_items', '10.000'], ['menu', 'table_order_items', '10.000'], ['recipe', 'recipe_items', '10.000']];
+        return [['sale', 'sale_items', '9.000'], ['entry', 'stock_entry_items', '11.000'], ['delivery', 'delivery_order_items', '10.000'], ['table', 'table_order_items', '10.000'], ['menu', 'menu_order_receipt_items', '10.000'], ['recipe', 'recipe_items', '10.000']];
     }
 
     #[DataProvider('validFlows')]
     public function test_valid_integer_reference_preserves_existing_behavior(string $flow, string $itemsTable, string $stock): void
     {
         [$url, $payload] = $this->requestFor($flow, (string) $this->product->id);
-        $this->postJson($url, $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $response = $this->postJson($url, $payload);
+        if ($flow === 'menu') {
+            $response->assertCreated()->assertJsonPath('receipt.status', 'pending');
+        } else {
+            $response->assertRedirect()->assertSessionHasNoErrors();
+        }
         $this->assertDatabaseCount($itemsTable, 1);
         $this->assertSame($stock, $this->product->fresh()->stock_quantity);
         if ($flow === 'sale') {
@@ -141,7 +146,9 @@ class InputValidationTest extends TestCase
             'table' => "/mesas/comandas/{$this->order->id}/itens", 'menu' => '/m/'.$this->table->qr_token,
             'recipe' => '/produtos',
         };
-        if ($flow === 'sale') {
+        if ($flow === 'menu') {
+            $payload += ['service_context' => $this->table->service_context, 'tracking_key' => str_repeat('b', 64)];
+        } elseif ($flow === 'sale') {
             $payload['payments'] = [['method' => 'pix', 'amount' => '10.00']];
         } elseif ($flow === 'entry') {
             $payload['entry_date'] = today()->format('Y-m-d');
@@ -158,7 +165,7 @@ class InputValidationTest extends TestCase
     private function snapshot(): array
     {
         $snapshot = [];
-        foreach (['sales', 'sale_items', 'sale_payments', 'stock_entries', 'stock_entry_items', 'stock_movements', 'cash_movements', 'bills', 'table_order_items', 'delivery_orders', 'delivery_order_items', 'products', 'recipe_items'] as $table) {
+        foreach (['sales', 'sale_items', 'sale_payments', 'stock_entries', 'stock_entry_items', 'stock_movements', 'cash_movements', 'bills', 'table_order_items', 'menu_order_receipts', 'menu_order_receipt_items', 'delivery_orders', 'delivery_order_items', 'products', 'recipe_items'] as $table) {
             $snapshot[$table] = DB::table($table)->orderBy('id')->get()->map(fn ($row) => (array) $row)->all();
         }
 

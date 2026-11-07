@@ -6,6 +6,7 @@ use App\Actions\CreateCompany;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CompanyRequest;
 use App\Models\Company;
+use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -57,6 +58,7 @@ class CompanyController extends Controller
     {
         return Inertia::render('admin/companies/Form', [
             'company' => $company->only('id', 'legal_name', 'trade_name', 'document', 'email', 'phone'),
+            'operation' => app(RestaurantOperationPolicy::class)->resolve($company),
         ]);
     }
 

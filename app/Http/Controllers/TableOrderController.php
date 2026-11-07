@@ -15,6 +15,7 @@ use App\Models\DiningTable;
 use App\Models\Product;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -82,6 +83,11 @@ class TableOrderController extends Controller
                 ->orderBy('number')
                 ->get(['id', 'number']),
             'ticketBatch' => session('ticket_batch'),
+            'receipts' => $order->receipts()->with('items')->orderBy('id')->get()->map(fn ($receipt) => [
+                ...$receipt->only('id', 'status', 'total', 'created_at', 'decision_reason'),
+                'items' => $receipt->items->map(fn ($item) => $item->only('id', 'product_name', 'quantity', 'total', 'notes')),
+            ]),
+            'operation' => array_intersect_key(app(RestaurantOperationPolicy::class)->resolve($request->user()->company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
         ]);
     }
 

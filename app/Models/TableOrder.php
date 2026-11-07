@@ -36,6 +36,16 @@ class TableOrder extends Model
         return $this->hasMany(TableOrderItem::class)->orderBy('id');
     }
 
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(MenuOrderReceipt::class);
+    }
+
+    public function pendingReceipts(): HasMany
+    {
+        return $this->receipts()->where('status', MenuOrderReceipt::PENDING);
+    }
+
     public function activeItems(): HasMany
     {
         return $this->items()->whereNull('cancelled_at');

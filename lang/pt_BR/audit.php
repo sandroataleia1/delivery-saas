@@ -22,6 +22,8 @@ return [
     'models' => [
         'Bill' => 'conta',
         'BillSettlement' => 'baixa de conta',
+        'MenuOrderReceipt' => 'recebimento QR',
+        'RestaurantOperationSettings' => 'configuração de operação',
         'CashMovement' => 'lançamento de caixa',
         'CashSession' => 'caixa',
         'Category' => 'categoria',
@@ -42,6 +44,14 @@ return [
     ],
     'fields' => [
         'active' => 'Ativo',
+        'confirmation_mode' => 'Preferência de confirmação',
+        'automatic_blocked' => 'Automático bloqueado',
+        'automatic_block_reason' => 'Motivo do bloqueio',
+        'automatic_blocked_by_id' => 'Responsável pelo bloqueio',
+        'automatic_blocked_at' => 'Decisão de bloqueio em',
+        'decided_by' => 'Decidido por',
+        'decided_at' => 'Decidido em',
+        'decision_reason' => 'Motivo da decisão',
         'allow_credit' => 'Fiado liberado',
         'area' => 'Área',
         'amount' => 'Valor',

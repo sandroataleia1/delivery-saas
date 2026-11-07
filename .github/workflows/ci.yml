@@ -86,10 +86,10 @@ jobs:
       - run: php scripts/testing/provision-disposable-database.php
       - run: php scripts/testing/assert-disposable-database.php
       - run: vendor/bin/phpunit -c phpunit.mariadb.xml
-      - name: Concurrency integrity and known AUD-020 behavior
+      - name: Concurrency integrity, QR receipts and table lock ordering
         shell: bash
         run: |
           set -o pipefail
           php tests/Concurrency/run.php | tee .testing/concurrency.jsonl
-          echo 'C9 reports AUD-020 separately; exit 0 proves integrity, not absence of deadlocks.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'C9 now requires zero deadlocks and zero lock timeouts, plus financial and stock integrity.' >> "$GITHUB_STEP_SUMMARY"
           cat .testing/concurrency.jsonl >> "$GITHUB_STEP_SUMMARY"
