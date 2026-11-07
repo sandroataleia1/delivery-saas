@@ -1,0 +1,56 @@
+SOURCE: phase2-delivery-red.txt
+{"result":"failed","tests":3,"passed":1,"assertions":8,"duration_ms":1406,"failed":2}
+Tests\Feature\DeliveryCancellationSafetyTest::test_delivered_unsettled_order_cannot_be_cancelled_or_change_financial_and_stock_data: Session is missing expected key [errors].
+Tests\Feature\DeliveryCancellationSafetyTest::test_action_checks_persisted_delivery_state_instead_of_stale_object: Cancelamento deve reler o estado entregue.
+
+SOURCE: phase2-delivery-sqlite.txt
+{"result":"passed","tests":31,"passed":31,"assertions":188,"duration_ms":2740}
+
+SOURCE: phase2-linked-red.txt
+{"result":"failed","tests":6,"passed":2,"assertions":30,"duration_ms":1656,"failed":4}
+Tests\Feature\LinkedBillSafetyTest::test_linked_bill_cannot_be_edited_directly with data set "sale": Expected response status code [403] but received 200.
+Tests\Feature\LinkedBillSafetyTest::test_linked_bill_cannot_be_edited_directly with data set "stock entry": Expected response status code [403] but received 200.
+Tests\Feature\LinkedBillSafetyTest::test_linked_bill_cannot_be_cancelled_directly with data set "sale": Session is missing expected key [errors].
+Tests\Feature\LinkedBillSafetyTest::test_linked_bill_cannot_be_cancelled_directly with data set "stock entry": Session is missing expected key [errors].
+
+SOURCE: phase2-linked-sqlite.txt
+{"result":"passed","tests":51,"passed":51,"assertions":286,"duration_ms":4149}
+
+SOURCE: phase2-settlements-red.txt
+{"result":"failed","tests":15,"passed":6,"assertions":44,"duration_ms":1518,"failed":9}
+Tests\Feature\BillSettlementTest::test_eighty_is_settled_by_one_then_thirty_then_forty_nine: Failed asserting that two strings are identical.
+Tests\Feature\BillSettlementTest::test_invalid_receipt_creates_no_financial_effect with data set "over balance": Session is missing expected key [errors].
+Tests\Feature\BillSettlementTest::test_discount_requires_separate_permission: Expected response status code [403] but received 302.
+Tests\Feature\BillSettlementTest::test_authorized_discount_is_distinct_from_received_money: Failed asserting that null is identical to '10.00'.
+Tests\Feature\BillSettlementTest::test_discount_requires_reason_and_must_complete_settlement: Session is missing expected key [errors].
+Tests\Feature\BillSettlementTest::test_partial_cash_receipts_only_move_actual_amount_and_excess_is_atomic: Failed asserting that two strings are identical.
+Tests\Feature\BillSettlementTest::test_selected_settlement_is_reversed_without_erasing_other_receipts: Session has unexpected errors:
+
+Tests\Feature\BillSettlementTest::test_partial_history_prevents_direct_cancellation_and_principal_edit: Failed asserting that two strings are identical.
+Tests\Feature\BillSettlementTest::test_reversal_requires_selection_when_several_settlements_exist: Session has unexpected errors:
+
+
+SOURCE: phase2-settlements-green.txt
+{"result":"passed","tests":15,"passed":15,"assertions":90,"duration_ms":1490}
+
+SOURCE: phase2-report-red.txt
+{"result":"failed","tests":5,"passed":0,"assertions":58,"duration_ms":2055,"failed":5}
+Tests\Feature\BillSettlementReportTest::test_partial_receipt_updates_balance_summary_flow_and_debtors: Property [summary.open] was marked as invalid using a closure.
+Tests\Feature\BillSettlementReportTest::test_reversal_is_negative_on_its_own_date_and_does_not_erase_original_receipt: Property [billsReceived] does not match the expected value.
+Tests\Feature\BillSettlementReportTest::test_partial_expense_is_counted_without_waiting_for_full_settlement: Property [statement.expenses] does not match the expected value.
+Tests\Feature\BillSettlementReportTest::test_credit_sale_discount_is_explicit_in_result_and_not_cash_income: Property [statement.credit_discounts] does not exist.
+Tests\Feature\BillSettlementReportTest::test_reports_and_settlement_selection_are_isolated_between_companies: Property [billsReceived] does not match the expected value.
+
+SOURCE: phase2-extra-red.txt
+{"result":"failed","tests":32,"passed":31,"assertions":198,"duration_ms":2418,"failed":1}
+Tests\Feature\LegacyBillSettlementTest::test_import_checks_cash_ownership_amount_and_direction_and_is_idempotent: Failed asserting that table [bill_settlements] matches expected entries count of 1. Entries found: 5.
+
+SOURCE: phase2-extra-green.txt
+{"result":"passed","tests":32,"passed":32,"assertions":209,"duration_ms":2526}
+
+SOURCE: phase2-review-red.txt
+{"result":"failed","tests":1,"passed":0,"assertions":10,"duration_ms":1676,"failed":1}
+Tests\Feature\BillSettlementTest::test_each_receipt_keeps_its_own_notes_visible_in_history: Property [bill.settlements.0.notes] does not exist.
+
+SOURCE: phase2-review-green.txt
+{"result":"passed","tests":1,"passed":1,"assertions":15,"duration_ms":868}

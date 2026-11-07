@@ -58,4 +58,14 @@ C1–C9 usam processos independentes e barreira: todos precisam informar prontid
 
 O Pint exclui apenas as evidências históricas em `docs/auditoria/evidencias`, preservadas byte a byte. Todo o PHP ativo, inclusive os novos testes e scripts, continua sujeito à formatação.
 
-Não estão cobertos: produção, carga, backup/restauração, impressoras, celulares físicos, e-mail real ou correção dos defeitos financeiros e operacionais reservados às fases posteriores.
+Na entrega da Fase 1, não estavam cobertos: produção, carga, backup/restauração, impressoras, celulares físicos, e-mail real ou correção dos defeitos financeiros e operacionais reservados às fases posteriores.
+
+## Complemento da Fase 2 — integridade financeira
+
+O mesmo harness agora executa F1–F5 em `tests/Concurrency/financial.php`, além de C1–C9: pagamentos parciais concorrentes, desconto autorizado único, estorno de baixa selecionada e baixa versus cancelamento de venda/entrada. F4/F5 alternam precedência após a barreira e exigem os dois desfechos sem inconsistência. Não executar o arquivo financeiro isoladamente: ele é incluído pelo orquestrador depois do guard e da preparação descartável.
+
+No Windows, os comandos continuam `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testing/Invoke-DisposableMariaDb.ps1 -Mode Suite` e `-Mode All`. No Linux, o job existente chama `php tests/Concurrency/run.php` após provisionamento e guard; a inclusão dos novos cenários é automática. Nenhum runner remoto foi executado.
+
+A suíte aplica a migration aditiva do histórico de baixas somente nos bancos de teste. Os testes de legado exercitam a rotina de importação sobre fixtures; não executar essa rotina manualmente contra banco real. Conta legada incoerente permanece bloqueada para reconciliação. Rollback com histórico populado é recusado. A implantação futura exige ensaio sanitizado, backup/restauração e interrupção de escritas financeiras.
+
+Resultados e limitações da Fase 2 estão no [relatório de execução](RELATORIO-FASE-2-2026-11-07.md). As evidências da Fase 1 continuam históricas e intactas; os novos resultados estão em `evidencias-fase-2/`.

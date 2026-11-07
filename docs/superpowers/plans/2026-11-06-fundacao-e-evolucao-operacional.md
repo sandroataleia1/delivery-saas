@@ -1,6 +1,6 @@
 # Fundação e evolução operacional — plano de implementação
 
-> Fase 1 autorizada expressamente pelo usuário e executada com `superpowers:executing-plans`. Resultado em [relatório da Fase 1](../../desenvolvimento/RELATORIO-FASE-1-2026-11-06.md). As fases seguintes continuam sem autorização.
+> Fases 1 e 2 autorizadas expressamente pelo usuário e executadas com `superpowers:executing-plans`. Resultados nos relatórios da [Fase 1](../../desenvolvimento/RELATORIO-FASE-1-2026-11-06.md) e [Fase 2](../../desenvolvimento/RELATORIO-FASE-2-2026-11-07.md). A Fase 3 e as posteriores continuam sem autorização.
 
 **Objetivo:** preparar uma base verificável para corrigir a auditoria, preservando o núcleo de pedidos, vendas, caixa, estoque e isolamento por empresa.
 
@@ -10,7 +10,7 @@
 
 **Especificação:** pedido de continuidade anexado nesta conversa, regras aprovadas das seções 3 e 4, e `docs/auditoria/RELATORIO-AUDITORIA-2026-11-06.md`. Em caso de divergência, prevalecem as novas regras do pedido.
 
-**Data:** 06/11/2026. **Estado:** Fase 1 concluída localmente; CI remoto e equivalência com produção pendentes. Aguardando revisão do usuário antes de qualquer nova fase.
+**Data do plano:** 06/11/2026. **Estado em 07/11/2026:** Fases 1 e 2 concluídas localmente; CI remoto e equivalência com produção pendentes. As seções de reconhecimento e execução da fundação abaixo preservam o contexto original. Aguardando revisão do usuário antes de qualquer nova fase.
 
 ## 1. Estado encontrado e limites da verificação
 
@@ -233,4 +233,4 @@ Os nomes novos são propostas a confirmar no plano de cada fase. Reutilizar comp
 
 Não modificar o escopo global para falhar sem contexto (AUD-024) na fundação: rotas públicas, seeders e comandos dependem hoje desse comportamento. Primeiro mapear consumidores e introduzir contexto explícito em uma mudança própria.
 
-**Próxima ação:** após autorização do usuário, executar somente a Fase 1 descrita na seção 6, apresentando evidências e pendências antes de avançar a outra fase.
+**Próxima ação:** revisão pelo usuário do relatório da Fase 2. Não iniciar a Fase 3 ou posteriores sem autorização expressa; preparar o plano específico antes de suas alterações de schema.

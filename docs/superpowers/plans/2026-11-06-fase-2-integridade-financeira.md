@@ -42,7 +42,7 @@ Interfaces a fechar antes de alterar schema: representação do legado divergent
 - [x] GREEN: histórico, saldo, desconto autorizado e auditoria na mesma transação; caixa movimenta somente dinheiro efetivo.
 - [x] Testar autorização, multiempresa, estornos, legado e relatórios/limite de crédito, incluindo baixa parcial em datas diferentes.
 - [x] Adequar interface financeira e testes anteriores somente onde a nova regra muda o contrato.
-- [ ] Rodar SQLite/MariaDB e registrar commit local.
+- [x] Rodar SQLite/MariaDB e registrar commit local.
 
 ## Tarefa 3 — contas vinculadas e reversão pela origem
 
@@ -53,16 +53,16 @@ Interface: operação direta recusa `sale_id`/`stock_entry_id`; caminho interno 
 - [x] RED: edição/cancelamento direto recusados; dinheiro/estoque/origem inalterados.
 - [x] GREEN: bloquear diretamente e preservar cancelamento legítimo pela venda/entrada.
 - [x] Testar origem com baixa parcial, concorrência baixa × cancelamento e necessidade de estorno antes da reversão.
-- [ ] Rodar regressões SQLite/MariaDB e registrar commit local.
+- [x] Rodar regressões SQLite/MariaDB e registrar commit local.
 
 ## Tarefa 4 — concorrência, revisão e entrega
 
 Arquivos: harness financeiro em `tests/Concurrency`, documentação e evidências novas da Fase 2.
 
 - [x] Processos independentes sincronizados disputam uma conta: soma dos pagamentos nunca excede saldo; conferir ledger, caixa e auditoria.
-- [ ] Executar suíte SQLite/MariaDB, concorrência financeira e C1–C9; registrar AUD-020 separadamente.
-- [ ] Pint, build sem sobreposição com testes HTTP, diff e revisão independente da branch.
-- [ ] Relatório com arquivos, migrations/schema, testes, reconciliação, riscos e commits; deixar branch limpa e local.
+- [x] Executar suíte SQLite/MariaDB, concorrência financeira e C1–C9; registrar AUD-020 separadamente.
+- [x] Pint, build sem sobreposição com testes HTTP, diff e revisão independente da branch.
+- [x] Relatório com arquivos, migrations/schema, testes, reconciliação, riscos e commits; deixar branch limpa e local.
 
 ## Progresso e decisões
 
@@ -103,3 +103,4 @@ Origem com baixa ativa, mesmo parcial, exige estorno selecionado antes de cancel
 - Revisão independente da branch pelo agente `phase2_final_review`: achado importante de observações salvas mas invisíveis no histórico. Final: fixed observações por baixa invisíveis — `test_each_receipt_keeps_its_own_notes_visible_in_history` RED (campo ausente) → GREEN (15 asserções); suíte final documentada no relatório.
 - Final: Ruling: a revisão independente não executou testes nem migração em dados operacionais — resultados de testes são comprovados pelo executor em ambientes descartáveis; aplicação a dados reais permanece fora da autorização — custo se errado: incompatibilidades de dados operacionais exigirão ensaio em cópia sanitizada e reconciliação antes da implantação.
 - Nenhum achado menor foi adiado. Encerramento por `superpowers:finishing-a-development-branch` mantém a branch local, opção já expressamente determinada pelo usuário; não apresentar menu de push/merge contrário à autorização.
+- Tarefas 2/3: commit local `cdf1927`; suíte final após a correção de revisão: SQLite 474 aprovados + 2 casos exclusivos de MariaDB ignorados (2.669 asserções); MariaDB 476/476 (2.673 asserções). Build e Pint passaram; dependências sem vulnerabilidades conhecidas nas verificações realizadas. Relatório e evidências em `docs/desenvolvimento/RELATORIO-FASE-2-2026-11-07.md`.
