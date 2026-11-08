@@ -76,6 +76,13 @@ class ReceiveMenuOrder
                 $item->forceFill(['company_id' => $company->id, 'menu_order_receipt_id' => $receipt->id, ...$snapshot])->save();
             }
 
+            if ($policy['effective_mode'] === 'automatic') {
+                $confirmed = (new ConfirmMenuOrder)->handleAutomatic($receipt);
+                $confirmed->wasRecentlyCreated = true;
+
+                return $confirmed;
+            }
+
             return $receipt;
         });
     }

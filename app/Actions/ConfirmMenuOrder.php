@@ -18,7 +18,20 @@ class ConfirmMenuOrder
     {
         Gate::authorize('tables.confirm');
 
-        return DB::transaction(function () use ($receipt) {
+        return $this->confirm($receipt, false);
+    }
+
+    public function handleAutomatic(MenuOrderReceipt $receipt): MenuOrderReceipt
+    {
+        abort_unless(($receipt->policy_snapshot['effective_mode'] ?? null) === 'automatic', 403);
+
+        return $this->confirm($receipt, true);
+    }
+
+    private function confirm(MenuOrderReceipt $receipt, bool $automatic): MenuOrderReceipt
+    {
+
+        return DB::transaction(function () use ($receipt, $automatic) {
             $order = TableOperationLock::order(TableOrder::findOrFail($receipt->table_order_id));
             $locked = MenuOrderReceipt::whereKey($receipt->id)->where('company_id', $order->company_id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'confirmed') {
@@ -40,7 +53,7 @@ class ConfirmMenuOrder
                     'user_id' => null, 'user_name' => PlaceMenuOrder::GUEST])->save();
                 (new DispatchProduction)->handle($orderItem);
             }
-            $locked->forceFill(['status' => 'confirmed', 'decided_at' => now(), 'decided_by_id' => Auth::id(), 'decided_by' => Auth::user()->name])->save();
+            $locked->forceFill(['status' => 'confirmed', 'decided_at' => now(), 'decided_by_id' => Auth::id(), 'decided_by' => $automatic ? 'Automático' : Auth::user()->name])->save();
 
             return $locked;
         });

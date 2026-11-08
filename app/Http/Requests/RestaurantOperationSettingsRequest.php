@@ -14,7 +14,7 @@ class RestaurantOperationSettingsRequest extends FormRequest
 
     public function rules(): array
     {
-        $rules = ['confirmation_mode' => ['sometimes', Rule::in(['manual', 'automatic'])],
+        $rules = ['automatic_enabled' => ['sometimes', 'boolean'], 'remote_risk_accepted' => ['exclude_unless:automatic_enabled,true', 'required', 'accepted'], 'confirmation_mode' => ['sometimes', Rule::in(['manual', 'automatic'])],
             'visual_alerts' => ['sometimes', 'boolean'], 'sound_alerts' => ['sometimes', 'boolean']];
         foreach (config('restaurant.ceilings') as $key => $max) {
             $rules[$key] = ['sometimes', str_contains($key, 'value') ? 'numeric' : 'integer', 'min:1', 'max:'.$max];
@@ -22,7 +22,7 @@ class RestaurantOperationSettingsRequest extends FormRequest
                 $rules[$key][] = 'decimal:0,2';
             }
         }
-        foreach (['company_id', 'automatic_blocked', 'automatic_block_reason', 'automatic_blocked_by_id', 'automatic_blocked_at', 'effective_mode', 'effective_reason'] as $key) {
+        foreach (['company_id', 'automatic_blocked', 'automatic_block_reason', 'automatic_blocked_by_id', 'automatic_blocked_at', 'effective_mode', 'effective_reason', 'automatic_accepted_at', 'automatic_accepted_by_id'] as $key) {
             $rules[$key] = ['prohibited'];
         }
 

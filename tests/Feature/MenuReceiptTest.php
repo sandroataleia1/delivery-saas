@@ -25,10 +25,11 @@ class MenuReceiptTest extends TestCase
     {
         [$company, $table, $product, $data] = $this->menu();
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
-        $admin = $this->adminOf($company);
+        $admin = $this->productionAdminOf($company);
         $this->actingAs($admin)->postJson(route('receipts.confirm', MenuOrderReceipt::sole()->id))->assertOk();
         $order = TableOrder::sole();
         $this->openCash($admin);
+        $this->deliverProduction($order);
         $this->post('/mesas/comandas/'.$order->id.'/fechar', ['client_uuid' => (string) Str::uuid(), 'expected_subtotal' => '20', 'charge_service' => false, 'payments' => [['method' => 'pix', 'amount' => '20']]])->assertSessionHasNoErrors();
         $this->assertNotSame($table->service_context, $table->fresh()->service_context);
         $product->forceFill(['active' => false, 'sale_price' => '99'])->save();
@@ -43,7 +44,7 @@ class MenuReceiptTest extends TestCase
     {
         [$company, $table, $product, $data] = $this->menu();
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
-        $admin = $this->adminOf($company);
+        $admin = $this->productionAdminOf($company);
         $this->actingAs($admin);
         $order = TableOrder::sole();
         app(AddOrderItems::class)->handle($order, [['product_id' => $product->id, 'quantity' => 1]], (string) Str::uuid());
@@ -65,7 +66,7 @@ class MenuReceiptTest extends TestCase
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
         $receipt = MenuOrderReceipt::sole();
         $product->forceFill(['active' => false])->save();
-        $this->actingAs($this->adminOf($company))->postJson(route('receipts.confirm', $receipt))->assertUnprocessable();
+        $this->actingAs($this->productionAdminOf($company))->postJson(route('receipts.confirm', $receipt))->assertUnprocessable();
         $this->postJson(route('receipts.reject', $receipt), ['reason' => ' '])->assertUnprocessable();
         $this->assertSame('pending', $receipt->fresh()->status);
         $this->postJson(route('receipts.reject', $receipt), ['reason' => 'Produto indisponível'])->assertOk();
@@ -95,7 +96,7 @@ class MenuReceiptTest extends TestCase
         [$company, $table, $product, $data] = $this->menu();
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
         $snapshot = MenuOrderReceipt::sole()->policy_snapshot;
-        $this->actingAs($this->adminOf($company))->putJson('/empresa/operacao', ['confirmation_mode' => 'automatic', 'max_order_value' => 100])->assertOk();
+        $this->actingAs($this->productionAdminOf($company))->putJson('/empresa/operacao', ['confirmation_mode' => 'automatic', 'max_order_value' => 100])->assertOk();
         $this->assertSame($snapshot, MenuOrderReceipt::sole()->policy_snapshot);
         $this->withHeader('X-Menu-Receipt-Key', str_repeat('b', 64))->getJson('/m/'.$table->qr_token.'/envios/'.$data['client_uuid'])->assertNotFound();
         $this->postJson('/m/'.$table->qr_token, [...$data, 'tracking_key' => str_repeat('b', 64)])->assertNotFound();
@@ -121,7 +122,7 @@ class MenuReceiptTest extends TestCase
     {
         [$company, $table, $product, $data] = $this->menu();
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
-        $admin = $this->adminOf($company);
+        $admin = $this->productionAdminOf($company);
         $this->actingAs($admin)->get('/mesas')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('tables.0.order.pending_count', 1)->has('tables.0.order.pending_ids', 1)->has('operation.sound_alerts'));
         $this->get('/mesas/comandas/'.TableOrder::sole()->id)->assertInertia(fn (AssertableInertia $page) => $page
@@ -174,7 +175,7 @@ class MenuReceiptTest extends TestCase
         [$company, $table, $product, $data] = $this->menu();
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
         $receipt = MenuOrderReceipt::sole();
-        $admin = $this->adminOf($company);
+        $admin = $this->productionAdminOf($company);
         $product->forceFill(['sale_price' => '99'])->save();
         $this->actingAs($admin)->postJson('/mesas/recebimentos/'.$receipt->id.'/confirmar')->assertOk();
         $this->postJson('/mesas/recebimentos/'.$receipt->id.'/confirmar')->assertOk();
@@ -210,7 +211,7 @@ class MenuReceiptTest extends TestCase
         $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
         $receipt = MenuOrderReceipt::sole();
         $this->actingAs($this->userWith(['tables.operate'], $company))->postJson('/mesas/recebimentos/'.$receipt->id.'/confirmar')->assertForbidden();
-        $this->actingAs($this->adminOf())->postJson('/mesas/recebimentos/'.$receipt->id.'/confirmar')->assertNotFound();
+        $this->actingAs($this->productionAdminOf())->postJson('/mesas/recebimentos/'.$receipt->id.'/confirmar')->assertNotFound();
         $this->assertSame('pending', $receipt->fresh()->status);
         $this->assertDatabaseCount('table_order_items', 0);
     }
@@ -218,7 +219,7 @@ class MenuReceiptTest extends TestCase
     public function test_foreign_logged_in_employee_is_anonymous_in_public_menu(): void
     {
         [$company, $table, $product, $data] = $this->menu();
-        $this->actingAs($this->adminOf())->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+        $this->actingAs($this->productionAdminOf())->postJson('/m/'.$table->qr_token, $data)->assertCreated();
         $this->assertDatabaseHas('menu_order_receipts', ['company_id' => $company->id]);
         $this->assertDatabaseHas('audit_logs', ['auditable_type' => 'MenuOrderReceipt', 'company_id' => $company->id, 'user_id' => null]);
     }

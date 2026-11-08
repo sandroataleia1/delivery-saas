@@ -17,7 +17,7 @@ class RestaurantOperationSettings extends Model
     {
         return ['max_order_value' => 'decimal:2', 'max_pending_value' => 'decimal:2',
             'visual_alerts' => 'boolean', 'sound_alerts' => 'boolean', 'automatic_blocked' => 'boolean',
-            'automatic_blocked_at' => 'datetime'];
+            'automatic_enabled' => 'boolean', 'automatic_accepted_at' => 'datetime', 'automatic_blocked_at' => 'datetime'];
     }
 
     public function auditLabel(): string
