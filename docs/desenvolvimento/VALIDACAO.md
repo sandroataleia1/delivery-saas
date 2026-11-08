@@ -89,3 +89,13 @@ As evidências da entrega ficam em `evidencias-fase-3/`; relatório próprio reg
 Regressões do cliente: `node --test tests/Frontend/*.test.mjs` (Windows: caminho explícito `tests/Frontend/MenuRecovery.test.mjs`). Usa o script real do componente, Vue instalado e transporte/storage controlados. Exercita reenvio, recarga, respostas atrasadas e abas; não exige pacotes adicionais nem equivale a E2E em navegador. O build deve rodar separado dos testes HTTP para não invalidar o manifest durante a suíte.
 
 O journal do cliente guarda cada UUID em uma chave independente e sincroniza abas antes de permitir um novo envio. Apenas os 20 recebimentos conhecidos mais recentes são apresentados, além de todos os envios incertos. Os registros locais de recuperação são conservados; perda/limpeza/quota do armazenamento exige atendimento da equipe. Não são backup do pedido: o registro do servidor permanece sendo a fonte da verdade. Áudio depende de gesto e suporte do navegador; validar em hardware real antes do piloto.
+
+## Complemento da Fase 4 — produção por item e setor
+
+O harness inclui `tests/Concurrency/production.php` (P1–P5) após o guard: lançamentos iguais, transições com a mesma versão, entregar × cancelar × fechar, confirmar × esgotar e reconciliações do mesmo legado. Todos os cenários anteriores (C1–C9, F1–F5, R1–R5) continuam no mesmo orquestrador, e C9 mantém o critério de zero deadlocks 1213 e zero timeouts 1205.
+
+Execução completa no Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testing/Invoke-DisposableMariaDb.ps1 -Mode All` (suíte + concorrência numa instância MariaDB temporária, removida ao final). SQLite: `php artisan test --compact`. Cliente: `node --test tests/Frontend/MenuRecovery.test.mjs`. Rodar o build separado dos testes HTTP.
+
+As migrations `2026_11_08_095904` e `2026_11_08_101140` são aditivas e recusam rollback com histórico. Itens ativos anteriores ficam como legado aguardando reconciliação; fechamento, acerto e produção dessas origens ficam bloqueados até a classificação. Antes de implantar: ensaiar com cópia sanitizada, interromper escritas, testar restauração, configurar setor padrão e perfil da cozinha (`production.operate`/`production.manage`) e reconciliar as comandas e entregas abertas. Não executar as migrations manualmente contra dados operacionais.
+
+O automático só vale após ativação explícita com aceite de risco e setor padrão ativo; a preferência da Fase 3 permanece manual. Evidências em `evidencias-fase-4/`; as evidências das fases anteriores permanecem intactas.
