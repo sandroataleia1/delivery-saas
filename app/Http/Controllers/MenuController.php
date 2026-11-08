@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\DiningTable;
 use App\Models\MenuOrderReceipt;
 use App\Models\Product;
+use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
@@ -21,14 +22,16 @@ class MenuController extends Controller
     public function show(string $token, RestaurantOperationPolicy $policy): Response
     {
         $table = $this->table($token);
+        $products = Product::withoutGlobalScopes()->where('company_id', $table->company_id)->where('active', true)->where('sellable', true)
+            ->orderBy('name')->get(['id', 'name', 'description', 'sale_price', 'unit', 'sold_out', 'category_id']);
 
         return Inertia::render('menu/Show', [
             'token' => $token, 'company' => Company::findOrFail($table->company_id)->trade_name,
             'table' => $table->number, 'serviceContext' => $table->service_context, 'order' => null,
             'limits' => array_intersect_key($policy->resolve(Company::findOrFail($table->company_id)), array_flip(['max_lines', 'max_line_units', 'max_order_units', 'max_order_value'])),
             'categories' => Category::withoutGlobalScopes()->where('company_id', $table->company_id)->orderBy('name')->get(['id', 'name']),
-            'products' => Product::withoutGlobalScopes()->where('company_id', $table->company_id)->where('active', true)->where('sellable', true)
-                ->orderBy('name')->get(['id', 'name', 'description', 'sale_price', 'unit', 'sold_out', 'category_id']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
         ]);
     }
 
@@ -65,7 +68,7 @@ class MenuController extends Controller
                 'rejected' => 'Pedido rejeitado pela equipe, sem cobrança.',
                 default => $receipt->order->status === 'cancelled' ? 'Atendimento cancelado.' : 'Confirmado e encaminhado à produção.',
             },
-            'items' => $receipt->items->map(fn ($item) => [...$item->only('product_name', 'quantity', 'unit_price', 'total', 'notes'),
+            'items' => $receipt->items->map(fn ($item) => [...$item->only('product_name', 'options_label', 'quantity', 'unit_price', 'total', 'notes'),
                 'production' => $item->orderItem?->production?->only('status', 'version', 'delivered_at', 'cancelled_at'),
                 'cancelled' => $item->orderItem?->cancelled_at !== null])->all()];
     }

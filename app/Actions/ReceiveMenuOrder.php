@@ -9,6 +9,7 @@ use App\Models\MenuOrderReceipt;
 use App\Models\MenuOrderReceiptItem;
 use App\Models\Product;
 use App\Models\TableOrder;
+use App\Support\ItemComposer;
 use App\Support\RestaurantOperationPolicy;
 use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\DB;
@@ -17,13 +18,15 @@ use Illuminate\Validation\ValidationException;
 
 class ReceiveMenuOrder
 {
-    public function __construct(private OpenTable $openTable, private RestaurantOperationPolicy $policy) {}
+    public function __construct(private OpenTable $openTable, private RestaurantOperationPolicy $policy, private ItemComposer $composer) {}
 
     public function handle(DiningTable $table, array $data): MenuOrderReceipt
     {
         $data = Validator::make($data, StoreMenuOrderRequest::payloadRules())->validate();
-        $lines = array_map(fn ($line) => ['product_id' => (int) $line['product_id'], 'quantity' => (int) $line['quantity'],
-            'notes' => trim($line['notes'] ?? '') ?: null], $data['items']);
+        $lines = array_map(fn ($line) => [
+            'product_id' => (int) $line['product_id'], 'quantity' => (int) $line['quantity'],
+            'notes' => trim($line['notes'] ?? '') ?: null, ...$this->normalizedSelection($line),
+        ], array_values($data['items']));
         $hash = hash('sha256', json_encode([$table->id, $data['service_context'], $lines], JSON_THROW_ON_ERROR));
 
         return DB::transaction(function () use ($table, $data, $lines, $hash) {
@@ -47,16 +50,22 @@ class ReceiveMenuOrder
             }
             $products = Product::withoutGlobalScopes()->where('company_id', $company->id)->where('active', true)->where('sellable', true)->where('sold_out', false)
                 ->whereIn('id', array_column($lines, 'product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            foreach ($lines as $index => $line) {
+                if (! $products->has($line['product_id'])) {
+                    throw ValidationException::withMessages(["items.$index.product_id" => 'Produto indisponível neste cardápio.']);
+                }
+            }
+            $composed = $this->composer->composeMany($company->id, $lines);
             $snapshots = [];
             $total = '0.00';
             foreach ($lines as $index => $line) {
                 $product = $products->get($line['product_id']);
-                if (! $product) {
-                    throw ValidationException::withMessages(["items.$index.product_id" => 'Produto indisponível neste cardápio.']);
-                }
-                $lineTotal = bcmul((string) $line['quantity'], $product->sale_price, 2);
+                $unitPrice = $composed[$index]['unit_price'];
+                $lineTotal = bcmul((string) $line['quantity'], $unitPrice, 2);
                 $total = bcadd($total, $lineTotal, 2);
-                $snapshots[] = [...$line, 'product_name' => $product->name, 'unit' => $product->unit, 'unit_price' => $product->sale_price, 'total' => $lineTotal];
+                $snapshots[] = ['product_id' => $line['product_id'], 'quantity' => $line['quantity'], 'notes' => $line['notes'],
+                    'product_name' => $product->name, 'unit' => $product->unit, 'unit_price' => $unitPrice,
+                    'options' => $composed[$index]['options'], 'options_label' => $composed[$index]['options_label'], 'total' => $lineTotal];
             }
             $order = TableOrder::withoutGlobalScopes()->where('company_id', $company->id)->where('open_table_id', $locked->id)->lockForUpdate()->first();
             $pending = $order ? MenuOrderReceipt::withoutGlobalScopes()->where('company_id', $company->id)->where('table_order_id', $order->id)->where('status', 'pending')->get(['units', 'total']) : collect();
@@ -85,5 +94,31 @@ class ReceiveMenuOrder
 
             return $receipt;
         });
+    }
+
+    /**
+     * Seleção normalizada (ids ordenados) para o content_hash. Linhas sem composição não ganham chaves.
+     *
+     * @param  array<string, mixed>  $line
+     * @return array<string, mixed>
+     */
+    private function normalizedSelection(array $line): array
+    {
+        $selection = [];
+        if (! empty($line['size_id'])) {
+            $selection['size_id'] = (int) $line['size_id'];
+        }
+        if (! empty($line['flavor_ids'])) {
+            $flavorIds = array_map('intval', $line['flavor_ids']);
+            sort($flavorIds);
+            $selection['flavor_ids'] = $flavorIds;
+        }
+        if (! empty($line['options'])) {
+            $options = array_map(fn ($option) => ['option_id' => (int) $option['option_id'], 'quantity' => (int) ($option['quantity'] ?? 1)], $line['options']);
+            usort($options, fn ($a, $b) => [$a['option_id'], $a['quantity']] <=> [$b['option_id'], $b['quantity']]);
+            $selection['options'] = $options;
+        }
+
+        return $selection;
     }
 }

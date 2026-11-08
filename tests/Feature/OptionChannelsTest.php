@@ -9,6 +9,8 @@ use App\Actions\SavePizzaSetup;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\DiningTable;
+use App\Models\MenuOrderReceipt;
+use App\Models\MenuOrderReceiptItem;
 use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Product;
@@ -240,5 +242,71 @@ class OptionChannelsTest extends TestCase
         $this->assertSame('highest', $composition[$this->pizza->id]['pizza']['pricing']);
         $this->assertCount(2, $composition[$this->pizza->id]['pizza']['sizes']);
         $this->assertSame('49.90', $composition[$this->pizza->id]['pizza']['flavors'][0]['prices'][$this->grande]);
+    }
+
+    /** @return array{0: DiningTable, 1: array<string, mixed>} */
+    private function qrPayload(array $items): array
+    {
+        $this->admin->company->forceFill(['qr_menu_enabled' => true])->save();
+        $table = DiningTable::factory()->create(['company_id' => $this->admin->company_id]);
+
+        return [$table, ['service_context' => $table->service_context, 'client_uuid' => (string) Str::uuid(),
+            'tracking_key' => str_repeat('a', 64), 'items' => $items]];
+    }
+
+    public function test_qr_receipt_with_two_compositions_of_same_product(): void
+    {
+        $this->setUpCatalog();
+        [$table, $data] = $this->qrPayload([$this->halfAndHalf(), [...$this->halfAndHalf(), 'flavor_ids' => [$this->flavorIds[0]]]]);
+
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated()->assertJsonPath('receipt.total', '109.80');
+
+        $items = MenuOrderReceiptItem::orderBy('id')->get();
+        $this->assertCount(2, $items);
+        $this->assertSame(['59.90', '49.90'], $items->pluck('unit_price')->all());
+        $this->assertNotSame($items[0]->options_label, $items[1]->options_label);
+    }
+
+    public function test_confirm_refuses_when_option_paused_after_receipt(): void
+    {
+        $this->setUpCatalog();
+        [$table, $data] = $this->qrPayload([['product_id' => $this->burger->id, 'quantity' => 1, 'options' => [['option_id' => $this->bacon->id]]]]);
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+        $this->bacon->forceFill(['paused' => true])->save();
+
+        $this->actingAs($this->admin)->postJson(route('receipts.confirm', MenuOrderReceipt::sole()->id))->assertUnprocessable()
+            ->assertJsonValidationErrors(['receipt' => 'Um produto ficou indisponível. Resolva ou rejeite o pedido.']);
+
+        $this->assertSame('pending', MenuOrderReceipt::sole()->status);
+        $this->assertDatabaseCount('table_order_items', 0);
+    }
+
+    public function test_confirm_copies_snapshot_to_table_item(): void
+    {
+        $this->setUpCatalog();
+        [$table, $data] = $this->qrPayload([['product_id' => $this->burger->id, 'quantity' => 2, 'options' => [['option_id' => $this->bacon->id]]]]);
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+
+        $this->actingAs($this->admin)->postJson(route('receipts.confirm', MenuOrderReceipt::sole()->id))->assertOk();
+
+        $received = MenuOrderReceiptItem::sole();
+        $item = TableOrderItem::sole();
+        $this->assertSame('33.00', $item->unit_price);
+        $this->assertSame('66.00', $item->total);
+        $this->assertSame('+1 Bacon', $item->options_label);
+        $this->assertSame($received->options, $item->options);
+    }
+
+    public function test_qr_replay_with_different_options_is_conflict(): void
+    {
+        $this->setUpCatalog();
+        [$table, $data] = $this->qrPayload([$this->halfAndHalf()]);
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+
+        $this->postJson('/m/'.$table->qr_token, $data)->assertOk();
+        $changed = $data;
+        $changed['items'][0]['flavor_ids'] = [$this->flavorIds[0]];
+        $this->postJson('/m/'.$table->qr_token, $changed)->assertStatus(409);
+        $this->assertDatabaseCount('menu_order_receipts', 1);
     }
 }

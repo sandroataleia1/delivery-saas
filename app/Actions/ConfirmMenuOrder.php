@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\MenuOrderReceipt;
+use App\Models\Option;
 use App\Models\Product;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
@@ -42,14 +43,20 @@ class ConfirmMenuOrder
             }
             $lines = $locked->items()->get();
             $products = Product::whereIn('id', $lines->pluck('product_id'))->where('active', true)->where('sellable', true)->where('sold_out', false)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $optionIds = $lines->flatMap(fn ($line) => [
+                ...array_column($line->options['flavors'] ?? [], 'id'),
+                ...array_column($line->options['extras'] ?? [], 'id'),
+            ])->unique()->sort()->values();
+            $options = $optionIds->isEmpty() ? collect() : Option::whereIn('id', $optionIds)->where('active', true)->where('paused', false)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             foreach ($lines as $line) {
-                if (! $products->has($line->product_id)) {
+                $lineOptionIds = [...array_column($line->options['flavors'] ?? [], 'id'), ...array_column($line->options['extras'] ?? [], 'id')];
+                if (! $products->has($line->product_id) || collect($lineOptionIds)->contains(fn ($id) => ! $options->has($id))) {
                     throw ValidationException::withMessages(['receipt' => 'Um produto ficou indisponível. Resolva ou rejeite o pedido.']);
                 }
                 $orderItem = new TableOrderItem;
                 $orderItem->forceFill(['company_id' => $order->company_id, 'table_order_id' => $order->id,
                     'menu_order_receipt_item_id' => $line->id, 'client_uuid' => $locked->client_uuid,
-                    ...$line->only('product_id', 'product_name', 'unit', 'quantity', 'unit_price', 'total', 'notes'),
+                    ...$line->only('product_id', 'product_name', 'unit', 'quantity', 'unit_price', 'options', 'options_label', 'total', 'notes'),
                     'user_id' => null, 'user_name' => PlaceMenuOrder::GUEST])->save();
                 (new DispatchProduction)->handle($orderItem);
             }
