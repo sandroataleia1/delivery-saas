@@ -63,6 +63,9 @@ watch([cart, checkout], () => {
     pendingUuid = null;
 }, { deep: true });
 
+/** Erros de linha usam o índice do envio; ao mudar a sacola eles deixam de apontar para a linha certa. */
+watch(cart, () => http.clearErrors(), { deep: true });
+
 function add(product) {
     if (product.sold_out) {
         return;
