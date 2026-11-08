@@ -16,6 +16,7 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MenuOrderReceiptController;
+use App\Http\Controllers\OnlineStoreController;
 use App\Http\Controllers\OptionController;
 use App\Http\Controllers\PizzaController;
 use App\Http\Controllers\ProductController;
@@ -254,6 +255,8 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         Route::middleware('can:company.manage')->group(function () {
             Route::get('empresa', [CompanyController::class, 'edit'])->name('company.edit');
             Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');
+            Route::get('loja-online/configuracao', [OnlineStoreController::class, 'edit'])->name('online.settings');
+            Route::put('loja-online/configuracao', [OnlineStoreController::class, 'update'])->name('online.settings.update');
             Route::put('empresa/operacao', [RestaurantOperationSettingsController::class, 'update'])->name('company.operation');
         });
     });

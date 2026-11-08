@@ -6,6 +6,7 @@ use App\Models\Concerns\Auditable;
 use App\Models\Concerns\BelongsToCompany;
 use App\Support\Decimal;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DeliveryOrder extends Model
@@ -43,6 +44,11 @@ class DeliveryOrder extends Model
     public function items(): HasMany
     {
         return $this->hasMany(DeliveryOrderItem::class)->orderBy('id');
+    }
+
+    public function onlineOrder(): BelongsTo
+    {
+        return $this->belongsTo(OnlineOrder::class);
     }
 
     public function total(): string
