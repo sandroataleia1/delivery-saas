@@ -55,7 +55,7 @@ class SendWhatsAppMessage implements ShouldQueue
             $settings = WhatsAppSetting::withoutGlobalScopes()->where('company_id', $message->company_id)->first();
 
             if ($settings === null || ! $settings->enabled || blank($settings->instance_name) || ! $client->configured()) {
-                $this->finish($message, WhatsAppMessage::FAILED, 'WhatsApp desligado');
+                $this->finish($message->id, WhatsAppMessage::FAILED, 'WhatsApp desligado');
 
                 return;
             }
@@ -68,37 +68,41 @@ class SendWhatsAppMessage implements ShouldQueue
                 'last_error' => null,
                 'updated_at' => now(),
             ]);
-            $settings->forceFill(['state' => 'open', 'state_checked_at' => now()])->saveQuietly();
+            $this->markConnectionOpen($settings);
         } catch (EvolutionException $e) {
-            $this->handleFailure($message, $settings, $client, $e->getMessage());
+            $this->handleFailure($settings, $client, $e->getMessage());
         } catch (Throwable $e) {
             report($e);
-            $this->handleFailure($message, $settings, $client, 'Erro interno no envio');
+            $this->handleFailure($settings, $client, 'Erro interno no envio');
         }
     }
 
-    private function finish(WhatsAppMessage $message, string $status, string $error): void
+    /** Só age sobre linha ainda em `sending`; devolve se alguma linha mudou. */
+    private function finish(int $id, string $status, string $error): bool
     {
-        WhatsAppMessage::withoutGlobalScopes()->whereKey($message->id)->update([
-            'status' => $status,
-            'last_error' => mb_substr($error, 0, 500),
-            'updated_at' => now(),
-        ]);
+        return WhatsAppMessage::withoutGlobalScopes()
+            ->whereKey($id)
+            ->where('status', WhatsAppMessage::SENDING)
+            ->update([
+                'status' => $status,
+                'last_error' => mb_substr($error, 0, 500),
+                'updated_at' => now(),
+            ]) === 1;
     }
 
-    private function handleFailure(?WhatsAppMessage $message, ?WhatsAppSetting $settings, EvolutionClient $client, string $error): void
+    private function handleFailure(?WhatsAppSetting $settings, EvolutionClient $client, string $error): void
     {
         try {
             $attempts = (int) WhatsAppMessage::withoutGlobalScopes()->whereKey($this->messageId)->value('attempts');
             $exhausted = $attempts >= WhatsAppMessage::MAX_ATTEMPTS;
 
-            $this->finish(
-                $message ?? new WhatsAppMessage(['id' => $this->messageId]),
+            $changed = $this->finish(
+                $this->messageId,
                 $exhausted ? WhatsAppMessage::FAILED : WhatsAppMessage::PENDING,
                 $error,
             );
 
-            if (! $exhausted) {
+            if ($changed && ! $exhausted) {
                 $this->release(self::BACKOFF[min(max($attempts, 1), count(self::BACKOFF)) - 1]);
             }
         } catch (Throwable $e) {
@@ -106,6 +110,15 @@ class SendWhatsAppMessage implements ShouldQueue
         }
 
         $this->refreshConnectionState($settings, $client);
+    }
+
+    private function markConnectionOpen(WhatsAppSetting $settings): void
+    {
+        try {
+            $settings->forceFill(['state' => 'open', 'state_checked_at' => now()])->save();
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     private function refreshConnectionState(?WhatsAppSetting $settings, EvolutionClient $client): void

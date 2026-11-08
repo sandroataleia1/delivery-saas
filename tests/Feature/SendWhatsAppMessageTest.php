@@ -142,6 +142,21 @@ class SendWhatsAppMessageTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_settings_failure_after_successful_send_never_requeues(): void
+    {
+        Http::fake(['*/message/sendText/inst-a' => Http::response(['key' => []], 201)]);
+        $message = $this->message();
+        WhatsAppSetting::saving(fn () => throw new \RuntimeException('boom'));
+
+        $job = $this->runJob($message);
+
+        $this->assertSame(WhatsAppMessage::SENT, $this->fresh($message)->status);
+        $job->assertNotReleased();
+
+        $this->runJob($message);
+        Http::assertSentCount(1);
+    }
+
     public function test_failure_releases_with_backoff_then_fails_after_max_attempts(): void
     {
         Http::fake([
