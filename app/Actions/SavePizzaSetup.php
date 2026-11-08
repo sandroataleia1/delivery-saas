@@ -199,10 +199,11 @@ class SavePizzaSetup
         $existing = OptionPrice::where('option_id', $option->id)->where('pizza_size_id', $size->id)->first();
         $price = Decimal::money($price);
 
-        // A tabela não tem chave primária: atualiza pela chave composta.
-        $updated = OptionPrice::where('option_id', $option->id)->where('pizza_size_id', $size->id)->update(['price' => $price]);
-
-        if ($updated === 0) {
+        // A tabela não tem chave primária: atualiza pela chave composta. Decide pela linha lida, não pelo
+        // número de linhas afetadas, que no MariaDB é zero quando o preço não muda.
+        if ($existing !== null) {
+            OptionPrice::where('option_id', $option->id)->where('pizza_size_id', $size->id)->update(['price' => $price]);
+        } else {
             OptionPrice::create([
                 'company_id' => $option->company_id,
                 'option_id' => $option->id,
