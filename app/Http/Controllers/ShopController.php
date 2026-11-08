@@ -7,15 +7,20 @@ use App\Http\Requests\StoreOnlineOrderRequest;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\DeliveryZone;
+use App\Models\OnlineOrder;
 use App\Models\OnlineStore;
 use App\Models\Product;
+use App\Support\OnlineOrderProgress;
 use App\Support\ProductComposition;
 use App\Support\StoreSchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /** Loja online pública: sem login, sempre filtrando pela empresa dona do slug. */
 class ShopController extends Controller
@@ -71,10 +76,47 @@ class ShopController extends Controller
             hidden: ['audit_actor' => PlaceOnlineOrder::GUEST],
         );
 
-        // A rota nomeada do acompanhamento chega na Task 9; o caminho é montado à mão por enquanto.
         return response()->json([
             'number' => (int) $order->number,
-            'tracking_url' => url("/loja/{$store->slug}/pedido/{$token}"),
+            'tracking_url' => route('shop.track', [$store->slug, $token]),
         ], $order->wasRecentlyCreated ? 201 : 200)->header('Cache-Control', 'no-store, private');
+    }
+
+    /** Página de acompanhamento pelo link secreto. Segue valendo mesmo com a loja pausada ou desativada. */
+    public function track(Request $request, string $slug, string $token): SymfonyResponse
+    {
+        $response = Inertia::render('shop/Track', [...$this->trackingPayload($slug, $token), 'slug' => $slug, 'token' => $token])->toResponse($request);
+        $response->headers->set('Cache-Control', 'no-store, private');
+
+        return $response;
+    }
+
+    /** Estado atual para o polling da página. */
+    public function status(string $slug, string $token): JsonResponse
+    {
+        return response()->json($this->trackingPayload($slug, $token))->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * Pedido pelo slug e pelo hash do token: 404 para formato inválido, token desconhecido ou pedido de outra loja.
+     *
+     * @return array{store: array{name: string, whatsapp: ?string}, customer_first_name: string, progress: array<string, mixed>}
+     */
+    private function trackingPayload(string $slug, string $token): array
+    {
+        abort_unless(preg_match('/\A[A-Za-z0-9]{48}\z/', $token) === 1, 404);
+
+        $store = OnlineStore::withoutGlobalScopes()->where('slug', $slug)->first();
+        $hash = hash('sha256', $token);
+        $order = $store ? OnlineOrder::withoutGlobalScopes()->where('company_id', $store->company_id)->where('tracking_token_hash', $hash)->first() : null;
+        abort_unless($order && hash_equals((string) $order->tracking_token_hash, $hash), 404);
+
+        $company = Company::whereKey($store->company_id)->first();
+
+        return [
+            'store' => ['name' => (string) ($company?->trade_name ?? ''), 'whatsapp' => $store->whatsapp],
+            'customer_first_name' => Str::before(trim((string) $order->customer_name), ' '),
+            'progress' => OnlineOrderProgress::for($order),
+        ];
     }
 }

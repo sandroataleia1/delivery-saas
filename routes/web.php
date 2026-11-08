@@ -46,6 +46,8 @@ Route::middleware('public.page')->group(function () {
 Route::middleware('public.page')->group(function () {
     Route::get('loja/{slug}', [ShopController::class, 'show'])->name('shop.show');
     Route::post('loja/{slug}/pedidos', [ShopController::class, 'store'])->middleware('throttle:online')->name('shop.store');
+    Route::get('loja/{slug}/pedido/{token}', [ShopController::class, 'track'])->middleware('throttle:online-status')->name('shop.track');
+    Route::get('loja/{slug}/pedido/{token}/status', [ShopController::class, 'status'])->middleware('throttle:online-status')->name('shop.status');
 });
 
 Route::middleware('guest')->group(function () {
