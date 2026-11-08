@@ -52,14 +52,14 @@ onUnmounted(() => { clearInterval(timer); audio?.close(); });
         <p v-for="(error, key) in form.errors" :key="key" class="text-danger mb-3" role="alert">{{ error }}</p>
         <section v-if="notices.length" class="mb-5 space-y-3" aria-label="Cancelamentos aguardando ciência">
             <article v-for="notice in notices" :key="notice.id" class="rounded-xl border-2 border-red-400 bg-red-50 p-4 text-red-950">
-                <h2 class="font-bold">Cancelado — {{ notice.item.quantity }} {{ notice.item.unit }} {{ notice.item.product_name }}</h2>
+                <h2 class="font-bold">Cancelado — {{ notice.item.quantity }} {{ notice.item.unit }} {{ notice.item.product_name }}<span v-if="notice.item.options_label" class="text-muted block text-sm font-normal">{{ notice.item.options_label }}</span></h2>
                 <p>{{ notice.item.origin_label }} · {{ notice.item.sector_name }}</p><p class="mt-1">{{ notice.reason }}</p>
                 <button v-if="can('production.operate')" class="btn btn-secondary mt-2" @click="router.post(route('production.acknowledge', notice.id), {}, { preserveScroll: true })">Registrar ciência</button>
             </article>
         </section>
         <section v-if="legacy.length" class="card mb-5 border-amber-300 p-4">
             <h2 class="font-bold">Legado aguardando conferência</h2><p class="text-muted text-sm">Impressão não comprova preparo ou entrega. Fechamento e acerto ficam bloqueados.</p>
-            <div v-for="work in legacy" :key="work.id" class="mt-3 flex flex-wrap items-center gap-3"><span>{{ work.origin_label }} · {{ work.quantity }} {{ work.unit }} {{ work.product_name }}</span><button v-if="can('production.manage')" class="btn btn-secondary" @click="selected = work">Classificar estágio observado</button></div>
+            <div v-for="work in legacy" :key="work.id" class="mt-3 flex flex-wrap items-center gap-3"><span>{{ work.origin_label }} · {{ work.quantity }} {{ work.unit }} {{ work.product_name }}<template v-if="work.options_label"> ({{ work.options_label }})</template></span><button v-if="can('production.manage')" class="btn btn-secondary" @click="selected = work">Classificar estágio observado</button></div>
         </section>
         <form v-if="selected" class="card mb-5 space-y-3 p-4" @submit.prevent="reconcile">
             <h2 class="font-bold">Conferência de {{ selected.product_name }}</h2>
@@ -74,7 +74,7 @@ onUnmounted(() => { clearInterval(timer); audio?.close(); });
                 <p v-if="!lines(column.state).length" class="text-muted p-3 text-sm">Nenhum item nesta etapa.</p>
                 <article v-for="work in lines(column.state)" :key="work.id" class="card mb-3 space-y-3 p-4">
                     <div class="flex flex-wrap justify-between gap-2 text-sm"><span class="font-bold">{{ work.origin_label }}</span><span :class="minutes(work) >= operation.late_after_minutes ? 'text-danger font-bold' : 'text-muted'">{{ minutes(work) }} min</span></div>
-                    <p class="text-xl font-bold">{{ work.quantity }} {{ work.unit }} {{ work.product_name }}</p><p class="text-muted text-sm">{{ work.sector_name }}</p>
+                    <p class="text-xl font-bold">{{ work.quantity }} {{ work.unit }} {{ work.product_name }}</p><p v-if="work.options_label" class="text-muted text-sm">{{ work.options_label }}</p><p class="text-muted text-sm">{{ work.sector_name }}</p>
                     <p v-if="work.notes" class="rounded-lg bg-amber-50 p-2 font-semibold text-amber-950">{{ work.notes }}</p>
                     <button v-if="column.state !== 'ready' && can('production.operate')" class="btn btn-primary w-full" :disabled="form.processing || stale" @click="transition(work, column.state === 'waiting' ? 'preparing' : 'ready')">{{ column.state === 'waiting' ? 'Iniciar preparo' : 'Marcar pronto' }}</button>
                     <button v-if="column.state === 'ready' && work.table_order_item_id && can('production.deliver')" class="btn btn-primary w-full" :disabled="form.processing || stale" @click="transition(work, 'delivered')">Registrar entrega à mesa</button>

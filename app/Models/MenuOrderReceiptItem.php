@@ -15,7 +15,7 @@ class MenuOrderReceiptItem extends Model
 
     protected function casts(): array
     {
-        return ['unit_price' => 'decimal:2', 'total' => 'decimal:2'];
+        return ['options' => 'array', 'unit_price' => 'decimal:2', 'total' => 'decimal:2'];
     }
 
     public function orderItem(): HasOne

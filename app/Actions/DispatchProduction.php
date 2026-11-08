@@ -37,7 +37,7 @@ class DispatchProduction
         }
         $work = new ProductionWork;
         $work->forceFill(['company_id' => $item->company_id, $foreign => $item->id, 'production_sector_id' => $sector->id,
-            'sector_name' => $sector->name, ...$item->only('product_name', 'unit', 'quantity', 'notes'),
+            'sector_name' => $sector->name, ...$item->only('product_name', 'unit', 'quantity', 'notes', 'options', 'options_label'),
             'origin_label' => $table ? 'Mesa '.DiningTable::withoutGlobalScopes()->where('company_id', $item->company_id)->findOrFail($parent->dining_table_id)->number.' / comanda '.$parent->number : 'Entrega '.$parent->number,
             'status' => 'waiting', 'version' => 0, 'legacy' => false])->save();
         $event = new ProductionEvent;

@@ -26,9 +26,9 @@ class ProductionController extends Controller
         $notices = ProductionEvent::where('to_state', 'cancelled')->whereNull('acknowledged_at')->whereIn('production_work_id', ProductionWork::when($filter['sector'] ?? null, fn ($q, $id) => $q->where('production_sector_id', $id))->select('id'))->orderBy('id')->get();
         $cancelled = ProductionWork::whereIn('id', $notices->pluck('production_work_id'))->get()->keyBy('id');
 
-        return Inertia::render('production/Index', ['operation' => array_intersect_key((new RestaurantOperationPolicy)->resolve($request->user()->company), array_flip(['sound_alerts', 'late_after_minutes'])), 'works' => $works->map(fn ($w) => $w->only('id', 'production_sector_id', 'sector_name', 'product_name', 'unit', 'quantity', 'notes', 'origin_label', 'status', 'version', 'legacy', 'reconciled_at', 'created_at', 'table_order_item_id')),
+        return Inertia::render('production/Index', ['operation' => array_intersect_key((new RestaurantOperationPolicy)->resolve($request->user()->company), array_flip(['sound_alerts', 'late_after_minutes'])), 'works' => $works->map(fn ($w) => $w->only('id', 'production_sector_id', 'sector_name', 'product_name', 'options_label', 'unit', 'quantity', 'notes', 'origin_label', 'status', 'version', 'legacy', 'reconciled_at', 'created_at', 'table_order_item_id')),
             'notices' => $notices->map(fn ($e) => ['id' => $e->id, 'reason' => $e->reason, 'created_at' => $e->created_at,
-                'item' => $cancelled[$e->production_work_id]->only('product_name', 'quantity', 'unit', 'sector_name', 'origin_label')]),
+                'item' => $cancelled[$e->production_work_id]->only('product_name', 'options_label', 'quantity', 'unit', 'sector_name', 'origin_label')]),
             'sectors' => ProductionSector::orderBy('name')->get(['id', 'name', 'active']), 'filters' => $filter]);
     }
 

@@ -15,7 +15,7 @@ class ProductionWork extends Model
 
     protected function casts(): array
     {
-        return ['quantity' => 'decimal:3', 'version' => 'integer', 'legacy' => 'boolean', 'delivered_at' => 'datetime', 'cancelled_at' => 'datetime', 'reconciled_at' => 'datetime'];
+        return ['options' => 'array', 'quantity' => 'decimal:3', 'version' => 'integer', 'legacy' => 'boolean', 'delivered_at' => 'datetime', 'cancelled_at' => 'datetime', 'reconciled_at' => 'datetime'];
     }
 
     public function tableItem(): BelongsTo
