@@ -83,7 +83,3 @@ Arquivos: harness `tests/Concurrency/receipts.php`, orquestrador/C3, novos teste
 - Relatório final: [RELATORIO-FASE-3-2026-11-08.md](../../desenvolvimento/RELATORIO-FASE-3-2026-11-08.md). Tarefas e revisão concluídas no alcance local autorizado.
 
 - Cobertura complementar do mesmo achado de revisão: recuperação pelo evento de outra aba libera a propriedade do rascunho antigo antes de novas edições. RED/GREEN da quarta regressão; cliente 4/4 e build novamente aprovado. Código backend e harness não sofreram alteração após a rodada MariaDB completa.
-
-- Encerramento em 08/11/2026: SQLite 498/500 aprovados + 2 skips de trigger (2.908 asserções); MariaDB descartável 500/500 (2.912); cliente 3/3; C1–C9, F1–F5 e R1–R5, 19 cenários aprovados, C9 sem 1213/1205/estados inválidos. Pint, build, validação/plataforma Composer e auditorias aprovados; zero vulnerabilidades conhecidas de produção. Evidências normalizadas com SHA-256 no relatório.
-- Integração: manter branch local `phase3/qr-receiving`, conforme instrução vigente de não configurar remoto/push/merge/deploy. Não apresentar novo fluxo como pronto para produção; navegador/áudio reais, runner remoto e ensaio de implantação permanecem não verificados. Fase 4 não iniciada.
-- Relatório final: [RELATORIO-FASE-3-2026-11-08.md](../../desenvolvimento/RELATORIO-FASE-3-2026-11-08.md). Tarefas e revisão concluídas no alcance local autorizado.
