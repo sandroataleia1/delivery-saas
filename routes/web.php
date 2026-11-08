@@ -26,6 +26,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RestaurantOperationSettingsController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\SupplierController;
@@ -38,6 +39,11 @@ Route::middleware('public.page')->group(function () {
     Route::get('m/{token}', [MenuController::class, 'show'])->name('menu.show');
     Route::get('m/{token}/envios/{uuid}', [MenuController::class, 'track'])->whereUuid('uuid')->middleware('throttle:menu-tracking')->name('menu.track');
     Route::post('m/{token}', [MenuController::class, 'store'])->middleware('throttle:menu')->name('menu.store');
+});
+
+// Loja online: pública, acessada pelo link da loja.
+Route::middleware('public.page')->group(function () {
+    Route::post('loja/{slug}/pedidos', [ShopController::class, 'store'])->middleware('throttle:online')->name('shop.store');
 });
 
 Route::middleware('guest')->group(function () {

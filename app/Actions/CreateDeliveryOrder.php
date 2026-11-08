@@ -56,7 +56,7 @@ class CreateDeliveryOrder
             $address = $isDelivery ? $data['address'] : null;
 
             if ($address) {
-                $this->rememberAddress($customer, $address);
+                $customer->rememberAddress($address);
             }
 
             $order = new DeliveryOrder;
@@ -89,19 +89,5 @@ class CreateDeliveryOrder
 
             return $order;
         });
-    }
-
-    private function rememberAddress(Customer $customer, array $address): void
-    {
-        $known = $customer->addresses()
-            ->where('street', $address['street'])
-            ->where('number', $address['number'])
-            ->exists();
-
-        if (! $known) {
-            $saved = $customer->addresses()->make($address);
-            $saved->company_id = $customer->company_id;
-            $saved->save();
-        }
     }
 }

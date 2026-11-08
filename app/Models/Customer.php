@@ -37,6 +37,25 @@ class Customer extends Model
         return $this->hasMany(Bill::class);
     }
 
+    /**
+     * Guarda o endereço usado no pedido, sem duplicar rua e número já conhecidos.
+     *
+     * @param  array{street: string, number: string, complement?: ?string, district?: ?string, reference?: ?string}  $address
+     */
+    public function rememberAddress(array $address): void
+    {
+        $known = $this->addresses()
+            ->where('street', $address['street'])
+            ->where('number', $address['number'])
+            ->exists();
+
+        if (! $known) {
+            $saved = $this->addresses()->make($address);
+            $saved->company_id = $this->company_id;
+            $saved->save();
+        }
+    }
+
     /** Quanto o cliente deve em fiado hoje. */
     public function openCredit(): string
     {
