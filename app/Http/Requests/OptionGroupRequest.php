@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class OptionGroupRequest extends FormRequest
 {
@@ -31,7 +32,6 @@ class OptionGroupRequest extends FormRequest
                 'bail',
                 'required',
                 'integer',
-                'distinct',
                 Rule::exists('products', 'id')->where('company_id', $companyId)->where('track_stock', true),
             ],
             'options.*.recipe.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'],
@@ -55,5 +55,25 @@ class OptionGroupRequest extends FormRequest
             'options.*.recipe.*.ingredient_id' => 'insumo',
             'options.*.recipe.*.quantity' => 'quantidade',
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            foreach ((array) $this->input('options') as $index => $option) {
+                $items = $option['recipe'] ?? null;
+
+                if (! is_array($items)) {
+                    continue;
+                }
+
+                $ids = array_column(array_filter($items, 'is_array'), 'ingredient_id');
+
+                foreach (array_keys(array_filter(array_count_values(array_filter($ids, 'is_scalar')), fn ($count) => $count > 1)) as $duplicated) {
+                    $position = array_keys($ids, $duplicated, false)[1];
+                    $validator->errors()->add("options.$index.recipe.$position.ingredient_id", 'O insumo está repetido na ficha.');
+                }
+            }
+        }];
     }
 }

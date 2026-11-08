@@ -63,9 +63,19 @@ class SavePizzaSetup
 
             foreach ($data['size_prices'] ?? [] as $optionId => $prices) {
                 $option = Option::findOrFail($optionId);
+                $submitted = [];
 
                 foreach ($prices as $key => $price) {
-                    $this->savePrice($option, $sizes[$this->resolveKey($key, $sizes)], $price, $changes);
+                    $submitted[$this->resolveKey($key, $sizes)] = $price;
+                }
+
+                // Em branco ou ausente: remove a sobreposição e a opção volta ao preço padrão.
+                foreach ($sizes as $key => $size) {
+                    if (($submitted[$key] ?? null) === null) {
+                        $this->clearPrice($option, $size, $changes);
+                    } else {
+                        $this->savePrice($option, $size, $submitted[$key], $changes);
+                    }
                 }
             }
 
@@ -133,6 +143,7 @@ class SavePizzaSetup
         $group->save();
 
         $group->products()->syncWithoutDetaching([$product->id => ['company_id' => $product->company_id, 'position' => 0]]);
+        $group->products()->updateExistingPivot($product->id, ['position' => 0]);
 
         return $group;
     }
@@ -167,6 +178,19 @@ class SavePizzaSetup
         }
 
         return [];
+    }
+
+    /** @param array<string, array{0: array<int, string>, 1: array<int, string>}> $changes */
+    private function clearPrice(Option $option, PizzaSize $size, array &$changes): void
+    {
+        $existing = OptionPrice::where('option_id', $option->id)->where('pizza_size_id', $size->id)->first();
+
+        if ($existing === null) {
+            return;
+        }
+
+        OptionPrice::where('option_id', $option->id)->where('pizza_size_id', $size->id)->delete();
+        $this->noteChange($changes, "Preço {$option->name} / {$size->name}", [Decimal::currency($existing->price)], []);
     }
 
     /** @param array<string, array{0: array<int, string>, 1: array<int, string>}> $changes */

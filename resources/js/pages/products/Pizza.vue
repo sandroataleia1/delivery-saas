@@ -98,7 +98,7 @@ function submit() {
                 recipes: remap(flavor.recipes, recipePayload),
             })),
             size_prices: Object.fromEntries(
-                Object.entries(data.size_prices).map(([optionId, prices]) => [optionId, remap(filled(prices))]).filter(([, prices]) => Object.keys(prices).length > 0),
+                Object.entries(data.size_prices).map(([optionId, prices]) => [optionId, remap(prices, (value) => (value === '' ? null : value))]),
             ),
         };
     });

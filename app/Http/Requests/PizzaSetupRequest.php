@@ -19,7 +19,6 @@ class PizzaSetupRequest extends FormRequest
             'bail',
             'required',
             'integer',
-            'distinct',
             Rule::exists('products', 'id')->where('company_id', $companyId)->where('track_stock', true),
         ];
         $quantity = ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999'];
@@ -48,7 +47,7 @@ class PizzaSetupRequest extends FormRequest
             'flavors.*.recipes.*.*.quantity' => $quantity,
             'size_prices' => ['nullable', 'array'],
             'size_prices.*' => ['array'],
-            'size_prices.*.*' => ['required', ...$price],
+            'size_prices.*.*' => ['nullable', ...$price],
         ];
     }
 
@@ -75,6 +74,8 @@ class PizzaSetupRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator) {
+            $this->rejectRepeatedIngredients($validator);
+
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
@@ -137,5 +138,34 @@ class PizzaSetupRequest extends FormRequest
                 }
             }
         }];
+    }
+
+    /** Repetição é conferida dentro de cada ficha: insumos iguais em fichas diferentes são válidos. */
+    private function rejectRepeatedIngredients(Validator $validator): void
+    {
+        $lists = [];
+
+        foreach ((array) $this->input('sizes') as $index => $size) {
+            $lists["sizes.$index.recipe"] = $size['recipe'] ?? null;
+        }
+
+        foreach ((array) $this->input('flavors') as $index => $flavor) {
+            foreach ((array) ($flavor['recipes'] ?? []) as $key => $items) {
+                $lists["flavors.$index.recipes.$key"] = $items;
+            }
+        }
+
+        foreach ($lists as $path => $items) {
+            if (! is_array($items)) {
+                continue;
+            }
+
+            $ids = array_column(array_filter($items, 'is_array'), 'ingredient_id');
+
+            foreach (array_keys(array_filter(array_count_values(array_filter($ids, 'is_scalar')), fn ($count) => $count > 1)) as $duplicated) {
+                $position = array_keys($ids, $duplicated, false)[1];
+                $validator->errors()->add("$path.$position.ingredient_id", 'O insumo está repetido na ficha.');
+            }
+        }
     }
 }

@@ -238,6 +238,96 @@ class OptionSetupTest extends TestCase
             ->assertSessionHasErrors('product_ids.0');
     }
 
+    public function test_same_ingredient_is_valid_across_different_recipes(): void
+    {
+        $payload = $this->pizzaPayload();
+        $payload['sizes'][0]['recipe'] = [['ingredient_id' => $this->flour->id, 'quantity' => '0.200']];
+        $payload['sizes'][1]['recipe'] = [['ingredient_id' => $this->flour->id, 'quantity' => '0.300']];
+        $payload['flavors'][0]['recipes'] = [
+            'n0' => [['ingredient_id' => $this->pepperoni->id, 'quantity' => '0.100']],
+            'n1' => [['ingredient_id' => $this->pepperoni->id, 'quantity' => '0.150']],
+        ];
+
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $payload)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(4, OptionRecipeItem::count());
+
+        $group = $this->groupPayload();
+        $group['options'][1]['recipe'] = [['ingredient_id' => $this->cheese->id, 'quantity' => '0.010']];
+
+        $this->actingAs($this->admin)->post(route('options.store'), $group)->assertSessionHasNoErrors();
+        $this->assertSame(2, OptionRecipeItem::where('ingredient_id', $this->cheese->id)->count());
+    }
+
+    public function test_repeated_ingredient_inside_one_recipe_is_rejected(): void
+    {
+        $item = ['ingredient_id' => $this->flour->id, 'quantity' => '0.100'];
+
+        $payload = $this->pizzaPayload();
+        $payload['sizes'][1]['recipe'] = [$item, $item];
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $payload)
+            ->assertSessionHasErrors('sizes.1.recipe.1.ingredient_id');
+
+        $payload = $this->pizzaPayload();
+        $payload['flavors'][0]['recipes'] = ['n1' => [$item, $item]];
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $payload)
+            ->assertSessionHasErrors('flavors.0.recipes.n1.1.ingredient_id');
+
+        $group = $this->groupPayload();
+        $group['options'][0]['recipe'] = [$item, $item];
+        $this->actingAs($this->admin)
+            ->post(route('options.store'), $group)
+            ->assertSessionHasErrors('options.0.recipe.1.ingredient_id');
+    }
+
+    public function test_group_position_is_order_within_the_product_and_stable_on_resave(): void
+    {
+        $this->actingAs($this->admin)->put(route('products.pizza.update', $this->pizza), $this->pizzaPayload());
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload(['name' => 'Adicionais']));
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload(['name' => 'Bordas']));
+
+        $order = fn () => $this->pizza->optionGroups()->get()->pluck('name')->all();
+        $this->assertSame(['Sabores de Pizza', 'Adicionais', 'Bordas'], $order());
+
+        $first = OptionGroup::where('name', 'Adicionais')->sole();
+        $this->actingAs($this->admin)->put(route('options.update', $first), $this->groupPayload(['name' => 'Adicionais', 'options' => [
+            ['id' => $first->options()->first()->id, 'name' => 'Bacon', 'price' => '5.00', 'active' => true, 'recipe' => []],
+        ]]))->assertSessionHasNoErrors();
+
+        $this->assertSame(['Sabores de Pizza', 'Adicionais', 'Bordas'], $order());
+    }
+
+    public function test_blank_size_price_removes_the_override(): void
+    {
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());
+        $bacon = Option::where('name', 'Bacon')->sole();
+
+        $payload = $this->pizzaPayload();
+        $payload['size_prices'] = [$bacon->id => ['n0' => '5.00', 'n1' => '7.00']];
+        $this->actingAs($this->admin)->put(route('products.pizza.update', $this->pizza), $payload)->assertSessionHasNoErrors();
+        $this->assertSame(2, OptionPrice::where('option_id', $bacon->id)->count());
+
+        $sizes = $this->pizza->pizzaSizes()->get();
+        $payload = $this->pizzaPayload();
+        $payload['sizes'][0]['id'] = $sizes[0]->id;
+        $payload['sizes'][1]['id'] = $sizes[1]->id;
+        $flavors = $this->pizza->optionGroups()->where('kind', 'flavor')->sole()->options;
+        $payload['flavors'][0]['id'] = $flavors[0]->id;
+        $payload['flavors'][1]['id'] = $flavors[1]->id;
+        $payload['flavors'][0]['prices'] = [$sizes[0]->id => '39.90', $sizes[1]->id => '49.90'];
+        $payload['flavors'][1]['prices'] = [$sizes[0]->id => '44.90', $sizes[1]->id => '59.90'];
+        $payload['flavors'][0]['recipes'] = [];
+        $payload['size_prices'] = [$bacon->id => [$sizes[0]->id => '', $sizes[1]->id => '7.00']];
+
+        $this->actingAs($this->admin)->put(route('products.pizza.update', $this->pizza), $payload)->assertSessionHasNoErrors();
+
+        $this->assertSame([$sizes[1]->id], OptionPrice::where('option_id', $bacon->id)->pluck('pizza_size_id')->all());
+    }
+
     public function test_option_pages_render_for_manager(): void
     {
         $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());

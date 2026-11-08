@@ -33,11 +33,7 @@ class SaveOptionGroup
             $group->company_id = $companyId;
             $group->save();
 
-            $group->products()->sync(
-                collect($data['product_ids'])->values()->mapWithKeys(
-                    fn (int $productId, int $position) => [$productId => ['company_id' => $companyId, 'position' => $position]]
-                )->all()
-            );
+            $group->products()->sync($this->links($group, $data['product_ids'], $companyId));
 
             $keptIds = [];
             $changes = [];
@@ -78,5 +74,25 @@ class SaveOptionGroup
 
             return $group;
         });
+    }
+
+    /**
+     * Posição do grupo dentro de cada produto: mantém a existente e põe os novos vínculos
+     * depois dos atuais (a posição 0 é do grupo de sabores da pizza).
+     *
+     * @param  array<int, int>  $productIds
+     * @return array<int, array{company_id: int, position: int}>
+     */
+    private function links(OptionGroup $group, array $productIds, int $companyId): array
+    {
+        $links = [];
+
+        foreach ($productIds as $productId) {
+            $current = DB::table('product_option_group')->where('product_id', $productId)->where('option_group_id', $group->id)->value('position');
+            $position = $current ?? ((int) DB::table('product_option_group')->where('product_id', $productId)->max('position')) + 1;
+            $links[$productId] = ['company_id' => $companyId, 'position' => (int) $position];
+        }
+
+        return $links;
     }
 }
