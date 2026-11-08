@@ -28,7 +28,7 @@ class CreateDeliveryOrder
                 return $existing;
             }
 
-            $products = Product::findMany(collect($data['items'])->pluck('product_id'))->keyBy('id');
+            $products = Product::where('company_id', $user->company_id)->whereIn('id', collect($data['items'])->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
             $lines = collect($data['items'])->map(function (array $item) use ($products, $user) {
                 $product = $products[$item['product_id']];
@@ -75,7 +75,9 @@ class CreateDeliveryOrder
                 'user_name' => $user->name,
             ])->save();
 
-            $order->items()->createMany($lines->all());
+            foreach ($order->items()->createMany($lines->all()) as $item) {
+                (new DispatchProduction)->handle($item);
+            }
 
             return $order;
         });

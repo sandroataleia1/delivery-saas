@@ -31,7 +31,7 @@ class AddOrderItems
                 return;
             }
 
-            $products = Product::findMany(collect($items)->pluck('product_id'))->keyBy('id');
+            $products = Product::where('company_id', $locked->company_id)->whereIn('id', collect($items)->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $user = $guestName ? null : Auth::user();
 
             foreach ($items as $item) {
@@ -52,6 +52,7 @@ class AddOrderItems
                     'user_id' => $user?->id,
                     'user_name' => $guestName ?? $user->name,
                 ])->save();
+                (new DispatchProduction)->handle($orderItem);
             }
         });
     }

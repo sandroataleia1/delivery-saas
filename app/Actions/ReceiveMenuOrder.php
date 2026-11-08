@@ -45,7 +45,7 @@ class ReceiveMenuOrder
             if (count($lines) > $policy['max_lines'] || $units > $policy['max_order_units'] || max(array_column($lines, 'quantity')) > $policy['max_line_units']) {
                 throw ValidationException::withMessages(['items' => 'O pedido ultrapassa o limite de quantidades da mesa.']);
             }
-            $products = Product::withoutGlobalScopes()->where('company_id', $company->id)->where('active', true)->where('sellable', true)
+            $products = Product::withoutGlobalScopes()->where('company_id', $company->id)->where('active', true)->where('sellable', true)->where('sold_out', false)
                 ->whereIn('id', array_column($lines, 'product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $snapshots = [];
             $total = '0.00';

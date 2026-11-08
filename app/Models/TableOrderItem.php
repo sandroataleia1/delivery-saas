@@ -7,10 +7,16 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Support\Decimal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TableOrderItem extends Model
 {
     use Auditable, BelongsToCompany;
+
+    public function production(): HasOne
+    {
+        return $this->hasOne(ProductionWork::class);
+    }
 
     protected function casts(): array
     {
