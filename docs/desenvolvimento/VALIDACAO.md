@@ -69,3 +69,23 @@ No Windows, os comandos continuam `powershell -NoProfile -ExecutionPolicy Bypass
 A suíte aplica a migration aditiva do histórico de baixas somente nos bancos de teste. Os testes de legado exercitam a rotina de importação sobre fixtures; não executar essa rotina manualmente contra banco real. Conta legada incoerente permanece bloqueada para reconciliação. Rollback com histórico populado é recusado. A implantação futura exige ensaio sanitizado, backup/restauração e interrupção de escritas financeiras.
 
 Resultados e limitações da Fase 2 estão no [relatório de execução](RELATORIO-FASE-2-2026-11-07.md). As evidências da Fase 1 continuam históricas e intactas; os novos resultados estão em `evidencias-fase-2/`.
+
+
+## Complemento da Fase 3 — recebimento seguro do QR
+
+O harness inclui `tests/Concurrency/receipts.php` (R1–R5) após o guard: replay da mesma chave, confirmar versus rejeitar, limite acumulado, receber versus fechar e receber versus transferir. C3 exige agora uma comanda, 20 recebimentos pendentes e nenhum item cobrado; configura explicitamente teto de 20 pendentes para esse cenário. Os limites padrão da aplicação continuam 5 pedidos pendentes.
+
+A disciplina de locks passou a ser Company → mesas ordenadas → comanda → recebimentos/itens. C9 conserva 30 rodadas e 120 workers com sobreposição forçada; nesta fase seu código de saída exige também **zero deadlocks 1213 e zero timeouts 1205**. A descrição histórica das fases anteriores acima não representa esse novo critério. O CI chama o mesmo orquestrador; execução remota continua não realizada.
+
+A migration `2026_11_07_100005` é aditiva, preenche contexto nas mesas existentes e concede `tables.confirm` a perfis que já operavam mesas, independentemente do nome. O contexto é controle de obsolescência, não autenticação. Não marca itens antigos como preparados/entregues. Rollback com recebimentos é recusado. Antes de implantação: ensaiar atualização com cópia sanitizada, interromper escritas, testar restauração e validar comandas abertas. Não executar migration manualmente contra dados operacionais nesta entrega.
+
+O browser precisa de contexto, UUID e chave privada por envio. Requisições antigas sem esses campos recebem validação e precisam recarregar o cardápio. A chave fica no aparelho e só seu hash vai ao servidor; não é parâmetro de URL. Perder armazenamento local perde o acompanhamento privado; a equipe continua tendo o registro. Resposta incerta preserva payload/identificadores para reenvio. Não apagar esse registro para tentar novamente sem conferir com a equipe.
+
+A preferência automática é apenas registrada: modo efetivo permanece manual até existir encaminhamento funcional em fase futura. Aprovação não comprova preparo, impressão ou entrega. O QR continua anônimo; confirmação manual e limites reduzem, mas não eliminam, pedidos remotos. O proxy/HTTPS de produção ainda não foi configurado.
+
+As evidências da entrega ficam em `evidencias-fase-3/`; relatório próprio registra revisões, resultados, limitações e commits. As evidências das fases anteriores permanecem intactas.
+
+
+Regressões do cliente: `node --test tests/Frontend/*.test.mjs` (Windows: caminho explícito `tests/Frontend/MenuRecovery.test.mjs`). Usa o script real do componente, Vue instalado e transporte/storage controlados. Exercita reenvio, recarga, respostas atrasadas e abas; não exige pacotes adicionais nem equivale a E2E em navegador. O build deve rodar separado dos testes HTTP para não invalidar o manifest durante a suíte.
+
+O journal do cliente guarda cada UUID em uma chave independente e sincroniza abas antes de permitir um novo envio. Apenas os 20 recebimentos conhecidos mais recentes são apresentados, além de todos os envios incertos. Os registros locais de recuperação são conservados; perda/limpeza/quota do armazenamento exige atendimento da equipe. Não são backup do pedido: o registro do servidor permanece sendo a fonte da verdade. Áudio depende de gesto e suporte do navegador; validar em hardware real antes do piloto.

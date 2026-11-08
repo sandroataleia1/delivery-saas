@@ -58,10 +58,10 @@ Interface: snapshot de recebimento próprio, rascunho com payload/chave estávei
 
 Arquivos: harness `tests/Concurrency/receipts.php`, orquestrador/C3, novos testes de concorrência, evidências/relatório da Fase 3.
 
-- [ ] Barreira/processos: mesma chave, duas chaves na mesa livre, limite acumulado, confirmar × rejeitar, receber × encerrar/transferir. Conferir dinheiro/estoque/auditoria e ausência de órfãos.
-- [ ] C1–C9 e F1–F5; C3 agora exige recebimentos pendentes e zero itens cobrados. AUD-020 só muda de status com evidência específica.
-- [ ] Suítes completas SQLite/MariaDB, Pint, build e auditorias sem atualizar dependências. Revisão independente única da branch e correções importantes RED/GREEN.
-- [ ] Relatório com arquivos/schema, commits, resultados reais, riscos e limitações. Branch limpa e local. Fase 4 aguardando autorização.
+- [x] Barreira/processos: mesma chave, duas chaves na mesa livre, limite acumulado, confirmar × rejeitar, receber × encerrar/transferir. Conferir dinheiro/estoque/auditoria e ausência de órfãos.
+- [x] C1–C9 e F1–F5; C3 agora exige recebimentos pendentes e zero itens cobrados. AUD-020 só muda de status com evidência específica.
+- [x] Suítes completas SQLite/MariaDB, Pint, build e auditorias sem atualizar dependências. Revisão independente única da branch e correções importantes RED/GREEN.
+- [x] Relatório com arquivos/schema, commits, resultados reais, riscos e limitações. Branch limpa e local. Fase 4 aguardando autorização.
 
 ## Ledger
 
@@ -77,3 +77,13 @@ Arquivos: harness `tests/Concurrency/receipts.php`, orquestrador/C3, novos teste
 - Revisão independente única da branch `01511dd`: dois achados importantes no cliente, sem achado crítico backend. Resposta antiga do acompanhamento apagava rascunho/regredia estado; abas substituíam o journal compartilhado e podiam perder UUID/chave de envio ambíguo. Ambos reproduzidos com o script real do componente e Vue instalado, sem navegador/pacotes novos.
 - Correção única da revisão (08/11): geração de resposta e vínculo do carrinho ao próprio UUID; registro local independente por UUID; sincronização antes de novo envio e evento `storage`; recuperação explícita de envio descoberto em outra aba; estado confirmado/rejeitado não regride para pendente. Testes Node RED (duas falhas demonstradas) → GREEN 3/3 e build aprovado; incluídos no CI.
 - Ruling: adicionar testes Node nativos em `tests/Frontend` — o comportamento de respostas fora de ordem e múltiplas abas não é provado pelo PHPUnit/build — nenhum pacote ou lockfile novo; limites: simulação de transporte/storage, não execução em celular/navegador real.
+
+- Encerramento em 08/11/2026: SQLite 498/500 aprovados + 2 skips de trigger (2.908 asserções); MariaDB descartável 500/500 (2.912); cliente 4/4; C1–C9, F1–F5 e R1–R5, 19 cenários aprovados, C9 sem 1213/1205/estados inválidos. Pint, build, validação/plataforma Composer e auditorias aprovados; zero vulnerabilidades conhecidas de produção. Evidências normalizadas com SHA-256 no relatório.
+- Integração: manter branch local `phase3/qr-receiving`, conforme instrução vigente de não configurar remoto/push/merge/deploy. Não apresentar novo fluxo como pronto para produção; navegador/áudio reais, runner remoto e ensaio de implantação permanecem não verificados. Fase 4 não iniciada.
+- Relatório final: [RELATORIO-FASE-3-2026-11-08.md](../../desenvolvimento/RELATORIO-FASE-3-2026-11-08.md). Tarefas e revisão concluídas no alcance local autorizado.
+
+- Cobertura complementar do mesmo achado de revisão: recuperação pelo evento de outra aba libera a propriedade do rascunho antigo antes de novas edições. RED/GREEN da quarta regressão; cliente 4/4 e build novamente aprovado. Código backend e harness não sofreram alteração após a rodada MariaDB completa.
+
+- Encerramento em 08/11/2026: SQLite 498/500 aprovados + 2 skips de trigger (2.908 asserções); MariaDB descartável 500/500 (2.912); cliente 3/3; C1–C9, F1–F5 e R1–R5, 19 cenários aprovados, C9 sem 1213/1205/estados inválidos. Pint, build, validação/plataforma Composer e auditorias aprovados; zero vulnerabilidades conhecidas de produção. Evidências normalizadas com SHA-256 no relatório.
+- Integração: manter branch local `phase3/qr-receiving`, conforme instrução vigente de não configurar remoto/push/merge/deploy. Não apresentar novo fluxo como pronto para produção; navegador/áudio reais, runner remoto e ensaio de implantação permanecem não verificados. Fase 4 não iniciada.
+- Relatório final: [RELATORIO-FASE-3-2026-11-08.md](../../desenvolvimento/RELATORIO-FASE-3-2026-11-08.md). Tarefas e revisão concluídas no alcance local autorizado.
