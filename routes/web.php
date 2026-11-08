@@ -252,6 +252,11 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
 
         Route::middleware('can:audit.view')->get('auditoria', [AuditController::class, 'index'])->name('audit.index');
 
+        Route::middleware('can:online_orders.accept')->group(function () {
+            Route::post('loja-online/pausa', [OnlineStoreController::class, 'pause'])->name('online.pause');
+            Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
+        });
+
         Route::middleware('can:company.manage')->group(function () {
             Route::get('empresa', [CompanyController::class, 'edit'])->name('company.edit');
             Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');

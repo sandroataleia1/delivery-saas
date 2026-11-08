@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -24,6 +24,20 @@ const form = useForm({
     hours: (props.store?.hours ?? []).map((shift) => ({ ...shift })),
 });
 
+const pauseReason = ref('');
+const pausing = ref(false);
+const pause = () => router.post(route('online.pause'), { reason: pauseReason.value }, {
+    preserveScroll: true,
+    onStart: () => { pausing.value = true; },
+    onSuccess: () => { pauseReason.value = ''; },
+    onFinish: () => { pausing.value = false; },
+});
+const resume = () => router.delete(route('online.resume'), {
+    preserveScroll: true,
+    onStart: () => { pausing.value = true; },
+    onFinish: () => { pausing.value = false; },
+});
+
 const days = computed(() => weekdays.map((name, weekday) => ({
     name,
     weekday,
@@ -39,6 +53,23 @@ const hoursError = computed(() => form.errors.hours
 <template>
     <AppLayout title="Loja online">
         <PageHeader title="Loja online" />
+
+        <div v-if="store" class="card mb-4 max-w-2xl space-y-3 p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-bold">Situação agora</h2>
+                    <p class="text-sm font-semibold">{{ store.label }}</p>
+                    <p v-if="store.paused" class="text-muted text-sm">
+                        Pausada por {{ store.paused_by_name }}<span v-if="store.paused_reason"> · {{ store.paused_reason }}</span>
+                    </p>
+                </div>
+                <button v-if="store.paused" type="button" class="btn btn-primary" :disabled="pausing" @click="resume">Reabrir</button>
+            </div>
+            <form v-if="!store.paused" class="flex flex-wrap items-center gap-2" @submit.prevent="pause">
+                <input v-model="pauseReason" class="input flex-1" maxlength="200" placeholder="Motivo (opcional)" aria-label="Motivo da pausa" />
+                <button type="submit" class="btn" :disabled="pausing">Pausar loja</button>
+            </form>
+        </div>
 
         <form class="max-w-2xl space-y-4" @submit.prevent="form.put(route('online.settings.update'))">
             <div class="card space-y-4 p-5">
