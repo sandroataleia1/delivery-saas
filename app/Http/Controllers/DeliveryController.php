@@ -70,7 +70,7 @@ class DeliveryController extends Controller
     public function create(): Response
     {
         return Inertia::render('deliveries/Form', [
-            'products' => Product::query()->where('active', true)->where('sellable', true)->orderBy('name')
+            'products' => Product::query()->where('active', true)->where('sellable', true)->where('sold_out', false)->orderBy('name')
                 ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'zones' => DeliveryZone::orderBy('name')->get(['id', 'name', 'fee']),

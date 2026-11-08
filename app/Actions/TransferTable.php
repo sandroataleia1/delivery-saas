@@ -3,8 +3,10 @@
 namespace App\Actions;
 
 use App\Models\DiningTable;
+use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Support\Audit;
+use App\Support\ProductionGuard;
 use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -34,6 +36,10 @@ class TransferTable
 
             $locked->forceFill(['dining_table_id' => $target->id, 'open_table_id' => $target->id])->saveQuietly();
 
+            foreach (ProductionWork::where('company_id', $locked->company_id)->whereIn('table_order_item_id', $locked->items()->pluck('id'))->orderBy('id')->lockForUpdate()->get() as $work) {
+                $work->forceFill(['origin_label' => 'Mesa '.$target->number.' / comanda '.$locked->number, 'version' => $work->version + 1])->save();
+                ProductionGuard::event($work, $work->status, 'transferred', 'Mesa '.$from.' para '.$target->number);
+            }
             Audit::record('table_transferred', $locked, "Comanda #{$locked->number} transferida da mesa $from para a mesa {$target->number}");
         });
     }

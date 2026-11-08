@@ -10,11 +10,12 @@ import { usePermissions } from '@/lib/can';
 
 defineProps({
     categories: { type: Array, required: true },
+    sectors: { type: Array, default: () => [] },
 });
 
 const { can } = usePermissions();
 
-const form = useForm({ name: '' });
+const form = useForm({ name: '', production_sector_id: null });
 const editing = ref(null);
 const target = ref(null);
 const deleteForm = useForm({});
@@ -22,6 +23,7 @@ const deleteForm = useForm({});
 function startEdit(category) {
     editing.value = category;
     form.name = category.name;
+    form.production_sector_id = category.production_sector_id;
     form.clearErrors();
 }
 
@@ -29,6 +31,7 @@ function stopEdit() {
     editing.value = null;
     // Depois de um envio com sucesso, reset() volta ao último valor enviado: é preciso limpar à mão.
     form.name = '';
+    form.production_sector_id = null;
     form.clearErrors();
 }
 
@@ -58,6 +61,10 @@ function destroy() {
             <label for="category-name" class="mb-1.5 block text-sm font-semibold">
                 {{ editing ? `Editar ${editing.name}` : 'Nova categoria' }}
             </label>
+            <label class="mb-3 block text-sm">Setor de produção
+                <select v-model="form.production_sector_id" class="input"><option :value="null">Padrão da empresa</option><option v-for="sector in sectors" :key="sector.id" :value="sector.id">{{ sector.name }}</option></select>
+            </label>
+            <p v-if="form.errors.production_sector_id" class="text-danger" role="alert">{{ form.errors.production_sector_id }}</p>
             <div class="flex gap-2">
                 <input id="category-name" v-model="form.name" class="input" maxlength="60" required />
                 <button type="submit" class="btn btn-primary" :disabled="form.processing">

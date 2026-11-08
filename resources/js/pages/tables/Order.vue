@@ -85,6 +85,8 @@ function launch() {
         });
 }
 
+const deliveryForm = useForm({ expected_version: 0, target: 'delivered' });
+function deliverItem(item) { deliveryForm.expected_version = item.production.version; deliveryForm.post(route('production.transition', item.production.id), { preserveScroll: true }); }
 const kitchenForm = useForm({});
 const ticket = ref(props.ticketBatch);
 
@@ -244,6 +246,8 @@ function close() {
                                 {{ formatQuantity(item.quantity) }} × {{ item.product_name }}
                             </p>
                             <p v-if="item.notes" class="text-warn text-xs">{{ item.notes }}</p>
+                            <p v-if="item.production && !item.cancelled" class="text-muted text-xs">{{ item.production.delivered_at ? 'Entregue' : item.production.legacy && !item.production.reconciled_at ? 'Legado: precisa de conferência' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</p>
+                            <button v-if="!item.cancelled && item.production?.status === 'ready' && !item.production.delivered_at && can('production.deliver')" class="btn btn-secondary mt-1" :disabled="deliveryForm.processing" @click="deliverItem(item)">Registrar entrega</button>
                             <p v-if="item.cancelled" class="text-danger text-xs">Cancelado: {{ item.cancel_reason }}</p>
                             <p v-else class="text-muted text-xs">{{ item.sent ? 'Na cozinha' : 'Não enviado' }} · {{ item.user }}</p>
                         </div>
@@ -270,7 +274,7 @@ function close() {
                     <div class="grid grid-cols-2 gap-2">
                         <button type="button" class="btn btn-secondary" :disabled="order.pending_kitchen === 0 || kitchenForm.processing" @click="sendToKitchen">
                             <ChefHat :size="16" />
-                            Cozinha{{ order.pending_kitchen ? ` (${order.pending_kitchen})` : '' }}
+                            Impressão manual{{ order.pending_kitchen ? ` (${order.pending_kitchen})` : '' }}
                         </button>
                         <button type="button" class="btn btn-secondary" :disabled="freeTables.length === 0" @click="startTransfer">
                             <ArrowRightLeft :size="16" />

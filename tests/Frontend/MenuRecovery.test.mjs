@@ -80,3 +80,14 @@ test('recovery in another tab clears only the old draft before editing resumes',
     await first.poll();
     assert.equal(first.cart.value[0]?.product_id, 2);
 });
+
+test('a stale tracking response cannot regress delivered production from another tab', async () => {
+    const env = environment();
+    const original = record(); original.uncertain = false;
+    original.receipt = { status: 'confirmed', items: [{ production: { status: 'ready', version: 3, delivered_at: '2026-11-08T12:00:00Z' } }] };
+    env.values.set('menu-receipts:table:existing', JSON.stringify(original));
+    const page = env.tab({ get: async () => ({ receipt: { status: 'confirmed', items: [{ production: { status: 'waiting', version: 0 } }] } }) });
+    page.start(); await page.poll();
+    assert.equal(page.journal.value[0].receipt.items[0].production.version, 3);
+    assert.ok(page.journal.value[0].receipt.items[0].production.delivered_at);
+});

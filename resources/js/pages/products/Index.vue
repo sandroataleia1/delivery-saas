@@ -1,4 +1,5 @@
 <script setup>
+import { router as availabilityRouter } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Pencil, Plus, Power, Tags } from '@lucide/vue';
@@ -93,7 +94,8 @@ function toggleStatus() {
                 <tbody>
                     <tr v-for="product in products.data" :key="product.id">
                         <td>
-                            <p class="font-semibold">{{ product.name }}</p>
+                            <p class="font-semibold">{{ product.name }}
+                            <button v-if="can('products.manage') && product.sellable" type="button" class="text-brand mt-1 block text-xs underline" @click="availabilityRouter.patch(route('products.availability', product.id), { sold_out: !product.sold_out }, { preserveScroll: true })">{{ product.sold_out ? 'Esgotado · tornar disponível' : 'Marcar esgotado no restaurante' }}</button></p>
                             <p class="text-muted text-xs">{{ product.barcode ?? product.sku ?? product.unit }}</p>
                             <span v-if="product.has_recipe" class="badge bg-brand-soft text-brand-strong mt-0.5">Ficha técnica</span>
                             <span v-if="!product.sellable" class="badge bg-canvas text-muted mt-0.5">Insumo</span>

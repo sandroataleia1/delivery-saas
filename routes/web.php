@@ -17,6 +17,8 @@ use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MenuOrderReceiptController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\ProductionSectorController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RestaurantOperationSettingsController;
 use App\Http\Controllers\RoleController;
@@ -61,6 +63,17 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+        Route::middleware('can:production.configure')->group(function () {
+            Route::get('producao/setores', [ProductionSectorController::class, 'index'])->name('production.sectors');
+            Route::post('producao/setores', [ProductionSectorController::class, 'store'])->name('production.sectors.store');
+            Route::put('producao/setores/{sector}', [ProductionSectorController::class, 'update'])->name('production.sectors.update');
+            Route::delete('producao/setores/{sector}', [ProductionSectorController::class, 'destroy'])->name('production.sectors.destroy');
+        });
+        Route::patch('produtos/{product}/esgotado', [ProductController::class, 'availability'])->middleware('can:products.manage')->name('products.availability');
+        Route::get('producao', [ProductionController::class, 'index'])->middleware('can:production.view')->name('production.index');
+        Route::post('producao/{work}/etapa', [ProductionController::class, 'transition'])->name('production.transition');
+        Route::post('producao/{work}/reconciliar', [ProductionController::class, 'reconcile'])->middleware('can:production.manage')->name('production.reconcile');
+        Route::post('producao/avisos/{event}/ciencia', [ProductionController::class, 'acknowledge'])->middleware('can:production.operate')->name('production.acknowledge');
 
         Route::middleware('can:tables.operate')->group(function () {
             Route::get('mesas', [DiningTableController::class, 'index'])->name('tables.index');

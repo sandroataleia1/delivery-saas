@@ -43,7 +43,7 @@ class TableOrderController extends Controller
             return redirect()->route('tables.index')->with('error', 'Esta comanda já foi fechada.');
         }
 
-        $order->load(['diningTable', 'items']);
+        $order->load(['diningTable', 'items.production']);
 
         return Inertia::render('tables/Order', [
             'order' => [
@@ -57,6 +57,7 @@ class TableOrderController extends Controller
                 'pending_kitchen' => $order->items->whereNull('cancelled_at')->whereNull('kitchen_batch')->count(),
                 'items' => $order->items->map(fn (TableOrderItem $item) => [
                     'id' => $item->id,
+                    'production' => $item->production?->only('id', 'status', 'version', 'delivered_at', 'legacy', 'reconciled_at'),
                     'product_name' => $item->product_name,
                     'unit' => $item->unit,
                     'quantity' => $item->quantity,
@@ -71,9 +72,9 @@ class TableOrderController extends Controller
             ],
             'products' => Product::query()
                 ->where('active', true)
-                ->where('sellable', true)
+                ->where('sellable', true)->where('sold_out', false)
                 ->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+                ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'paymentMethods' => config('sales.payment_methods'),
             'serviceFeePercent' => $request->user()->company->service_fee_percent,
@@ -100,7 +101,7 @@ class TableOrderController extends Controller
                 'bail',
                 'required',
                 'integer',
-                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
+                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true)->where('sold_out', false),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
             'items.*.notes' => ['nullable', 'string', 'max:120'],

@@ -27,6 +27,7 @@ const form = useForm({
     cost_price: props.product?.cost_price ?? '',
     track_stock: props.product?.track_stock ?? true,
     sellable: props.product?.sellable ?? true,
+    sold_out: props.product?.sold_out ?? false,
     min_stock: props.product?.min_stock ?? '',
     initial_stock: '',
     recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
@@ -151,6 +152,7 @@ function submit() {
                 </div>
             </div>
 
+            <label class="card flex gap-3 p-4"><input v-model="form.sold_out" type="checkbox" /><span>Esgotado no restaurante (mesa, QR e delivery). Não altera saldo nem vendas diretas no PDV.</span></label>
             <RecipeEditor v-if="!form.track_stock" :form="form" />
 
             <div class="flex gap-2">

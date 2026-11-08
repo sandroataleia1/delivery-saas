@@ -23,6 +23,7 @@ class ProductRequest extends FormRequest
             'barcode' => ['nullable', 'string', 'max:20', $unique('barcode')],
             'unit' => ['required', Rule::in(array_keys(config('stock.units')))],
             'sellable' => ['sometimes', 'boolean'],
+            'sold_out' => ['sometimes', 'boolean'],
             'sale_price' => ['exclude_if:sellable,false', 'required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999'],
             'cost_price' => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:9999999'],
             'track_stock' => ['required', 'boolean'],

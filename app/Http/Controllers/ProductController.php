@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\MarkProductSoldOut;
 use App\Actions\MoveStock;
 use App\Actions\SyncRecipe;
 use App\Http\Requests\ProductRequest;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\Product;
 use App\Models\RecipeItem;
 use App\Models\StockMovement;
@@ -53,7 +55,7 @@ class ProductController extends Controller
                 'track_stock' => $product->track_stock,
                 'sellable' => $product->sellable,
                 'stock_quantity' => $canSeeCost ? $product->stock_quantity : null,
-                'active' => $product->active,
+                'active' => $product->active, 'sold_out' => $product->sold_out,
             ]);
 
         return Inertia::render('products/Index', [
@@ -129,7 +131,7 @@ class ProductController extends Controller
             ...$this->formProps(),
             'product' => $product->only(
                 'id', 'name', 'description', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
-                'cost_price', 'track_stock', 'sellable', 'min_stock', 'stock_quantity',
+                'cost_price', 'track_stock', 'sellable', 'sold_out', 'min_stock', 'stock_quantity',
             ) + [
                 'recipe' => $product->recipeItems
                     ->sortBy('ingredient.name')
@@ -159,6 +161,7 @@ class ProductController extends Controller
         }
 
         DB::transaction(function () use ($product, $data, $syncRecipe) {
+            Company::whereKey($product->company_id)->lockForUpdate()->firstOrFail();
             $product->save();
             $syncRecipe->handle($product, $data['recipe']);
         });
@@ -166,10 +169,23 @@ class ProductController extends Controller
         return redirect()->route('products.index')->with('success', 'Produto atualizado.');
     }
 
+    public function availability(Request $request, Product $product, MarkProductSoldOut $action): \Symfony\Component\HttpFoundation\Response
+    {
+        $data = $request->validate(['sold_out' => ['required', 'boolean']]);
+        $action->handle($product, (bool) $data['sold_out']);
+
+        return $request->expectsJson() ? response()->json(['saved' => true]) : back()->with('success', 'Disponibilidade atualizada.');
+    }
+
     public function toggleStatus(Product $product): RedirectResponse
     {
-        $product->active = ! $product->active;
-        $product->save();
+        DB::transaction(function () use ($product) {
+            Company::whereKey($product->company_id)->lockForUpdate()->firstOrFail();
+            $locked = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $locked->active = ! $locked->active;
+            $locked->save();
+        });
+        $product->refresh();
 
         return back()->with('success', $product->active ? 'Produto ativado.' : 'Produto inativado.');
     }

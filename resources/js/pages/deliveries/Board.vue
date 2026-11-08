@@ -92,7 +92,9 @@ function dispatch() {
                         <p class="text-muted truncate text-xs">{{ order.district ?? 'Retirada no balcão' }}</p>
                         <p class="mt-1 font-bold tabular-nums">{{ formatMoney(order.total) }}</p>
                         <p class="text-muted text-xs">{{ order.payment }}<template v-if="order.courier"> · {{ order.courier }}</template></p>
-                        <button v-if="order.next_status" type="button" class="btn btn-secondary mt-2 w-full" :disabled="form.processing" @click="advance(order)">
+                        <Link v-if="['received', 'preparing'].includes(order.status) && can('production.view')" :href="route('production.index')" class="btn btn-secondary mt-2 w-full">Ver preparo por item</Link>
+                        <p v-else-if="['received', 'preparing'].includes(order.status)" class="text-muted mt-2">Aguarda atualização da produção.</p>
+                        <button v-else-if="order.next_status" type="button" class="btn btn-secondary mt-2 w-full" :disabled="form.processing" @click="advance(order)">
                             {{ order.next_status === 'out_for_delivery' ? 'Despachar' : order.next_label }}
                         </button>
                         <Link v-else :href="route('deliveries.show', order.id)" class="btn btn-primary mt-2 w-full">Acertar</Link>

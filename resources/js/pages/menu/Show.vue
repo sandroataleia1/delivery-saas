@@ -46,7 +46,8 @@ function mergeRecord(saved, incoming) {
     if (saved.receipt && saved.receipt.status !== 'pending' && receipt?.status === 'pending') receipt = saved.receipt;
     if (receipt && saved.receipt) {
         receipt = { ...receipt, attendance_cancelled: receipt.attendance_cancelled || saved.receipt.attendance_cancelled,
-            items: receipt.items?.map((item, index) => ({ ...item, cancelled: item.cancelled || saved.receipt.items?.[index]?.cancelled })) };
+            items: receipt.items?.map((item, index) => ({ ...item, cancelled: item.cancelled || saved.receipt.items?.[index]?.cancelled,
+                production: (saved.receipt.items?.[index]?.production?.version ?? -1) > (item.production?.version ?? -1) ? saved.receipt.items[index].production : item.production })) };
     }
     const validationFailed = saved.validation_failed || incoming.validation_failed;
     return { ...incoming, receipt, validation_failed: validationFailed, uncertain: !receipt && !validationFailed && (saved.uncertain || incoming.uncertain) };
@@ -81,7 +82,7 @@ function storageChanged(event) {
     }
 }
 function change(product, delta) {
-    if (frozen.value) return;
+    if (frozen.value || (delta > 0 && product.sold_out)) return;
     const line = cart.value.find(item => item.product_id === product.id);
     if (delta > 0 && (count.value >= props.limits.max_order_units || (line?.quantity ?? 0) >= props.limits.max_line_units || (!line && cart.value.length >= props.limits.max_lines))) {
         error.value = 'Limite de itens atingido. Confira seu pedido.'; return;
@@ -190,16 +191,16 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
             <ul class="space-y-2">
                 <li v-for="product in visible" :key="product.id" class="card flex items-center gap-3 p-3">
                     <div class="min-w-0 flex-1">
-                        <p class="font-semibold">{{ product.name }}</p>
+                        <p class="font-semibold">{{ product.name }}</p><p v-if="product.sold_out" class="text-danger text-sm font-bold">Esgotado</p>
                         <p v-if="product.description" class="text-muted text-sm">{{ product.description }}</p>
                         <p class="text-brand-strong mt-1 font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</p>
                     </div>
                     <div v-if="quantityOf(product)" class="flex items-center gap-2">
                         <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${product.name}`" :disabled="frozen" @click="change(product, -1)"><Minus :size="16" /></button>
                         <span class="w-5 text-center font-bold tabular-nums">{{ quantityOf(product) }}</span>
-                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" :disabled="frozen" @click="change(product, 1)"><Plus :size="16" /></button>
+                        <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" :disabled="frozen || product.sold_out" @click="change(product, 1)"><Plus :size="16" /></button>
                     </div>
-                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="frozen" @click="change(product, 1)"><Plus :size="18" /></button>
+                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="frozen || product.sold_out" @click="change(product, 1)"><Plus :size="18" /></button>
                 </li>
             </ul>
         </main>
@@ -241,7 +242,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                 <template v-else>
                     <article v-for="record in [...journal].reverse()" :key="record.payload.client_uuid" class="border-line mb-3 rounded-lg border p-3 text-sm">
                         <p class="font-bold" role="status">{{ record.receipt?.message ?? 'Aguardando resposta do envio. Não faça outro pedido com os mesmos itens.' }}</p>
-                        <ul><li v-for="(item, index) in record.receipt?.items ?? record.cart" :key="index" :class="{ 'line-through': item.cancelled }">{{ formatQuantity(item.quantity) }} × {{ item.product_name ?? item.name }} <span v-if="item.notes">· {{ item.notes }}</span></li></ul>
+                        <ul><li v-for="(item, index) in record.receipt?.items ?? record.cart" :key="index" :class="{ 'line-through': item.cancelled }">{{ formatQuantity(item.quantity) }} × {{ item.product_name ?? item.name }} <span v-if="item.notes">· {{ item.notes }}</span><span v-if="item.production" class="text-muted block text-sm">{{ item.production.cancelled_at ? 'Cancelado' : item.production.delivered_at ? 'Entregue' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</span></li></ul>
                         <p v-if="record.receipt" class="mt-2 font-semibold">Valor deste envio: {{ formatMoney(record.receipt.total) }}</p>
                     </article>
                     <p class="text-muted text-sm">Estes são apenas os envios deste aparelho. Para conferir ou fechar a conta completa, chame um atendente. Rejeitados e cancelados não são cobrados.</p>

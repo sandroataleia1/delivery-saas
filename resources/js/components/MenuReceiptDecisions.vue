@@ -25,7 +25,7 @@ function decide(receipt, reject = false) {
                 <button type="button" class="btn btn-primary" :disabled="form.processing" @click="decide(receipt)">Confirmar</button>
                 <button type="button" class="btn btn-secondary" :disabled="form.processing" @click="decide(receipt, true)">Rejeitar</button>
             </div>
-            <p v-if="receipt.status === 'confirmed'" class="text-muted">Encaminhamento manual pelo botão Cozinha; preparo não é confirmado nesta tela.</p>
+            <p v-if="receipt.status === 'confirmed'" class="text-muted">Encaminhado ao painel de produção. O preparo é atualizado por item.</p>
         </article>
     </section>
 </template>
