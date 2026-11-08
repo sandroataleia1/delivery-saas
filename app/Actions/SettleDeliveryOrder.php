@@ -47,6 +47,8 @@ class SettleDeliveryOrder
                         'product_id' => $item->product_id,
                         'quantity' => $item->quantity,
                         'fixed_price' => $item->unit_price,
+                        'options_snapshot' => $item->options,
+                        'options_label' => $item->options_label,
                     ])
                     ->all(),
                 'payments' => $data['payments'],

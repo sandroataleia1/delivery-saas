@@ -13,6 +13,7 @@ use App\Models\StockMovement;
 use App\Support\Audit;
 use App\Support\Decimal;
 use App\Support\ItemComposer;
+use App\Support\OptionStock;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,7 @@ class RegisterSale
         private ConsumeProduct $consumeProduct,
         private CreateBills $createBills,
         private ItemComposer $composer,
+        private OptionStock $optionStock,
     ) {}
 
     /**
@@ -56,7 +58,7 @@ class RegisterSale
             }
 
             $items = collect($data['items'])->map(fn (array $item, int $index) => [...$item, 'original_index' => $index])->sortBy('product_id')->values();
-            $products = $this->lockProducts($items->pluck('product_id'));
+            $products = $this->lockProducts($items->pluck('product_id'), $this->lockedSnapshots($items));
 
             // Compõe na ordem original do pedido, para o erro sair no índice que o cliente enviou.
             $composed = $this->composer->composeMany(
@@ -71,6 +73,7 @@ class RegisterSale
                 $quantity = (string) $item['quantity'];
                 $selection = $composed[$item['original_index']] ?? null;
                 $price = $item['fixed_price'] ?? $selection['unit_price'];
+                $snapshot = $selection['options'] ?? $item['options_snapshot'] ?? null;
 
                 return [
                     'company_id' => $product->company_id,
@@ -79,8 +82,8 @@ class RegisterSale
                     'unit' => $product->unit,
                     'quantity' => $quantity,
                     'unit_price' => $price,
-                    'unit_cost' => $selection['cost'] ?? $product->effectiveCost(),
-                    'options' => $selection['options'] ?? $item['options_snapshot'] ?? null,
+                    'unit_cost' => $selection['cost'] ?? ($snapshot === null ? $product->effectiveCost() : $this->optionStock->cost($product, $snapshot)),
+                    'options' => $snapshot,
                     'options_label' => $selection['options_label'] ?? $item['options_label'] ?? null,
                     'total' => Decimal::money(bcmul($quantity, $price, 5)),
                 ];
@@ -135,7 +138,7 @@ class RegisterSale
             );
 
             foreach ($lines as $line) {
-                $this->consumeProduct->handle($products[$line['product_id']], $line['quantity'], sale: $sale);
+                $this->consumeProduct->handle($products[$line['product_id']], $line['quantity'], sale: $sale, options: $line['options']);
             }
 
             if ($credit) {
@@ -176,10 +179,25 @@ class RegisterSale
         }
     }
 
-    /** Trava produtos e insumos de uma vez, em ordem, para vendas simultâneas não se bloquearem. */
-    private function lockProducts(Collection $productIds): Collection
+    /**
+     * Composição de cada linha antes de existir o snapshot: o do pedido (valor fixo) ou os ids enviados,
+     * suficientes para saber quais insumos travar.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function lockedSnapshots(Collection $items): array
     {
-        $ingredientIds = RecipeItem::whereIn('product_id', $productIds)->pluck('ingredient_id');
+        return $items->map(fn (array $item) => isset($item['fixed_price']) ? ($item['options_snapshot'] ?? null) : [
+            'size' => isset($item['size_id']) ? ['id' => (int) $item['size_id']] : null,
+            'flavors' => array_map(fn ($id) => ['id' => (int) $id], $item['flavor_ids'] ?? []),
+            'extras' => array_map(fn (array $row) => ['id' => (int) ($row['option_id'] ?? 0)], $item['options'] ?? []),
+        ])->filter()->values()->all();
+    }
+
+    /** Trava produtos e insumos de uma vez, em ordem, para vendas simultâneas não se bloquearem. */
+    private function lockProducts(Collection $productIds, array $snapshots): Collection
+    {
+        $ingredientIds = RecipeItem::whereIn('product_id', $productIds)->pluck('ingredient_id')->merge($this->optionStock->ingredientIds($snapshots));
 
         Product::query()->whereKey($productIds->merge($ingredientIds)->unique()->all())->orderBy('id')->lockForUpdate()->get();
 
