@@ -60,6 +60,7 @@ function syncJournal() {
     const active = records.filter(record => !record.validation_failed || record.receipt).sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0));
     const known = active.filter(record => !record.uncertain).slice(-20);
     journal.value = [...active.filter(record => record.uncertain), ...known];
+    if (active.some(record => record.payload.client_uuid === draftReceiptUuid && record.receipt)) clearOwnDraft(draftReceiptUuid);
 }
 function persist(record) {
     try {

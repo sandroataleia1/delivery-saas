@@ -11,12 +11,13 @@ function environment() {
     return { values, tab({ post, get = async () => null } = {}) {
         let calls = 0;
         let mounted;
+        const listeners = new Map();
         const form = { processing: false, errors: {}, payload: null, transform(callback) { this.payload = callback(); return this; }, post(...args) { return post(this.payload, ...args); }, cancel() {} };
         const tracking = { processing: false, get, cancel() {} };
         // Run the actual component script, replacing only transport, storage and lifecycle boundaries.
         const factory = new Function('computed', 'ref', 'defineProps', 'onMounted', 'onUnmounted', 'useHttp', 'route', 'localStorage', 'newUuid', 'crypto', 'window', 'setInterval', 'clearInterval', script + ';return {send,poll,journal,cart,change,error};');
-        const page = factory(computed, ref, () => ({ token: 'table', serviceContext: 'context', categories: [], products: [], limits: { max_order_units: 50, max_line_units: 10, max_lines: 20 } }), callback => mounted = callback, () => {}, () => calls++ === 0 ? form : tracking, (name, ...args) => '/' + name + '/' + args.flat().join('/'), storage, () => `uuid-${++uuid}`, globalThis.crypto, { addEventListener() {}, removeEventListener() {} }, () => 0, () => {});
-        return { ...page, start: () => mounted(), form };
+        const page = factory(computed, ref, () => ({ token: 'table', serviceContext: 'context', categories: [], products: [], limits: { max_order_units: 50, max_line_units: 10, max_lines: 20 } }), callback => mounted = callback, () => {}, () => calls++ === 0 ? form : tracking, (name, ...args) => '/' + name + '/' + args.flat().join('/'), storage, () => `uuid-${++uuid}`, globalThis.crypto, { addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener: name => listeners.delete(name) }, () => 0, () => {});
+        return { ...page, start: () => mounted(), storageEvent: key => listeners.get('storage')?.({ key }), form };
     } };
 }
 const cart = product => [{ product_id: product, quantity: 1, notes: '', sale_price: '10.00' }];
@@ -64,4 +65,18 @@ test('network retry keeps UUID, key, context and content across reload', async (
     assert.deepEqual(recovered, firstPayload);
     assert.equal(reload.journal.value[0].uncertain, false);
     assert.equal(reload.cart.value.length, 0, 'only the recovered submission draft is cleared');
+});
+
+
+test('recovery in another tab clears only the old draft before editing resumes', async () => {
+    const env = environment();
+    const first = env.tab({ post: async () => { throw new Error('lost'); }, get: async () => ({ receipt: { status: 'pending' } }) });
+    first.start(); first.cart.value = cart(1); await first.send();
+    const second = env.tab({ post: async () => ({ receipt: { status: 'pending' } }) });
+    second.cart.value = cart(2); await second.send(); await second.send();
+    first.storageEvent('menu-receipts:table:uuid-1');
+    assert.equal(first.cart.value.length, 0, 'resolved original draft is cleared before new edits');
+    first.change({ id: 2, name: 'New product', sale_price: '10.00' }, 1);
+    await first.poll();
+    assert.equal(first.cart.value[0]?.product_id, 2);
 });
