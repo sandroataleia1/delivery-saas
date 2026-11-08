@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Support\BrazilPhone;
 use App\Support\Decimal;
 use App\Support\ItemComposer;
+use App\Support\ItemSelection;
 use App\Support\StoreSchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -56,12 +57,12 @@ class PlaceOnlineOrder
 
         $lines = array_map(fn (array $line): array => [
             'product_id' => (int) $line['product_id'], 'quantity' => (int) $line['quantity'],
-            'notes' => trim($line['notes'] ?? '') ?: null, ...$this->normalizedSelection($line),
+            'notes' => trim($line['notes'] ?? '') ?: null, ...ItemSelection::normalized($line),
         ], array_values($data['items']));
         $hash = hash('sha256', json_encode([$companyId, $data['type'], $name, $phone, $address, $lines, $data['payment_method'], $changeFor, $notes], JSON_THROW_ON_ERROR));
         $rawSelections = array_map(fn (array $line): array => [
             'product_id' => (int) $line['product_id'], 'quantity' => (int) $line['quantity'],
-            'notes' => trim($line['notes'] ?? '') ?: null, ...$this->rawSelection($line),
+            'notes' => trim($line['notes'] ?? '') ?: null, ...ItemSelection::raw($line),
         ], array_values($data['items']));
 
         return DB::transaction(function () use ($store, $companyId, $data, $isDelivery, $phone, $name, $address, $changeFor, $notes, $lines, $rawSelections, $hash): array {
@@ -187,47 +188,5 @@ class PlaceOnlineOrder
         $customer->forceFill(['company_id' => $companyId, 'name' => $name, 'phone' => $phone])->save();
 
         return $customer;
-    }
-
-    /**
-     * Seleção na ordem escolhida pelo cliente, usada só para compor o rótulo.
-     *
-     * @param  array<string, mixed>  $line
-     * @return array<string, mixed>
-     */
-    private function rawSelection(array $line): array
-    {
-        $selection = $this->normalizedSelection($line);
-        if (! empty($line['flavor_ids'])) {
-            $selection['flavor_ids'] = array_map('intval', $line['flavor_ids']);
-        }
-
-        return $selection;
-    }
-
-    /**
-     * Seleção normalizada (ids ordenados) para o content_hash. Linhas sem composição não ganham chaves.
-     *
-     * @param  array<string, mixed>  $line
-     * @return array<string, mixed>
-     */
-    private function normalizedSelection(array $line): array
-    {
-        $selection = [];
-        if (! empty($line['size_id'])) {
-            $selection['size_id'] = (int) $line['size_id'];
-        }
-        if (! empty($line['flavor_ids'])) {
-            $flavorIds = array_map('intval', $line['flavor_ids']);
-            sort($flavorIds);
-            $selection['flavor_ids'] = $flavorIds;
-        }
-        if (! empty($line['options'])) {
-            $options = array_map(fn (array $option): array => ['option_id' => (int) $option['option_id'], 'quantity' => (int) ($option['quantity'] ?? 1)], $line['options']);
-            usort($options, fn (array $a, array $b): int => [$a['option_id'], $a['quantity']] <=> [$b['option_id'], $b['quantity']]);
-            $selection['options'] = $options;
-        }
-
-        return $selection;
     }
 }
