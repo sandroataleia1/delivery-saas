@@ -2,6 +2,7 @@
 
 /** C1–C9: integridade sob concorrência, exclusivamente em instância descartável. */
 
+use App\Actions\AcceptOnlineOrder;
 use App\Actions\AddOrderItems;
 use App\Actions\CancelOrderItem;
 use App\Actions\CancelSale;
@@ -9,10 +10,12 @@ use App\Actions\CancelStockEntry;
 use App\Actions\CloseCashSession;
 use App\Actions\CloseTableOrder;
 use App\Actions\ConfirmMenuOrder;
+use App\Actions\ExpireOnlineOrders;
 use App\Actions\MarkProductSoldOut;
 use App\Actions\OpenCashSession;
 use App\Actions\OpenTable;
 use App\Actions\PlaceMenuOrder;
+use App\Actions\PlaceOnlineOrder;
 use App\Actions\ReconcileProduction;
 use App\Actions\RegisterSale;
 use App\Actions\RejectMenuOrder;
@@ -26,6 +29,8 @@ use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\DiningTable;
 use App\Models\MenuOrderReceipt;
+use App\Models\OnlineOrder;
+use App\Models\OnlineStore;
 use App\Models\Product;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
@@ -38,9 +43,11 @@ use App\Models\StockMovement;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -85,7 +92,7 @@ if (($argv[1] ?? '') === 'worker') {
     }
     $t = microtime(true);
     try {
-        match ($op) {
+        $result = match ($op) {
             'dispatchitems' => app(AddOrderItems::class)->handle(TableOrder::findOrFail($p['order']), [['product_id' => $p['product'], 'quantity' => '1']], $p['uuid']),
             'productionstage' => app(TransitionProduction::class)->handle(ProductionWork::findOrFail($p['work']), $p['version'], $p['target']),
             'cancelitem' => app(CancelOrderItem::class)->handle(TableOrderItem::findOrFail($p['item']), 'Cancelamento concorrente'),
@@ -103,8 +110,17 @@ if (($argv[1] ?? '') === 'worker') {
             'closecash' => app(CloseCashSession::class)->handle(CashSession::find($p['session']), '0', 'auditoria'),
             'opencash' => app(OpenCashSession::class)->handle(User::find($p['user']), '0'),
             'cancel' => app(CancelSale::class)->handle(Sale::find($p['sale']), 'auditoria'),
+            'placeonline' => Context::scope(fn () => app(PlaceOnlineOrder::class)->handle(OnlineStore::withoutGlobalScopes()->findOrFail($p['store']), $p['data']), hidden: ['audit_actor' => PlaceOnlineOrder::GUEST]),
+            'acceptonline' => app(AcceptOnlineOrder::class)->handle(OnlineOrder::findOrFail($p['order'])),
+            'expireonline' => Context::scope(fn () => app(ExpireOnlineOrders::class)->expireOne($p['order'], $p['company'], CarbonImmutable::parse($p['now'])), hidden: ['audit_actor' => ExpireOnlineOrders::ACTOR]),
         };
-        echo json_encode(['ok' => true, 'started_at' => $t, 'ms' => round((microtime(true) - $t) * 1000)]);
+        // O token não sai do processo: só o hash, para conferir que todos os reenvios receberam o mesmo link.
+        $extra = match ($op) {
+            'placeonline' => ['token_hash' => hash('sha256', $result['token'])],
+            'expireonline' => ['expired' => $result],
+            default => [],
+        };
+        echo json_encode(['ok' => true, 'started_at' => $t, 'ms' => round((microtime(true) - $t) * 1000), ...$extra]);
     } catch (Throwable $e) {
         echo json_encode(['ok' => false, 'ms' => round((microtime(true) - $t) * 1000), 'class' => class_basename($e), 'code' => ConcurrencyFailure::driverCode($e), 'msg' => Str::limit(str_replace(["\n", "\r"], ' ', $e->getMessage()), 110)]);
     }
@@ -307,6 +323,7 @@ report('C8 fechar caixa com 15 vendas simultâneas', $r, [
 require __DIR__.'/financial.php';
 require __DIR__.'/receipts.php';
 require __DIR__.'/production.php';
+require __DIR__.'/online.php';
 
 // C9: fechar x transferir a mesma comanda (ordem de lock invertida), 30 rodadas.
 $deadlocks = 0;
