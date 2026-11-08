@@ -29,7 +29,12 @@ class ReceiveMenuOrder
         ], array_values($data['items']));
         $hash = hash('sha256', json_encode([$table->id, $data['service_context'], $lines], JSON_THROW_ON_ERROR));
 
-        return DB::transaction(function () use ($table, $data, $lines, $hash) {
+        $rawSelections = array_map(fn ($line) => [
+            'product_id' => (int) $line['product_id'], 'quantity' => (int) $line['quantity'],
+            'notes' => trim($line['notes'] ?? '') ?: null, ...$this->rawSelection($line),
+        ], array_values($data['items']));
+
+        return DB::transaction(function () use ($table, $data, $lines, $rawSelections, $hash) {
             $locked = TableOperationLock::table($table);
             $company = Company::whereKey($locked->company_id)->firstOrFail();
             abort_unless($company->active && $company->qr_menu_enabled && $locked->active, 404);
@@ -55,7 +60,7 @@ class ReceiveMenuOrder
                     throw ValidationException::withMessages(["items.$index.product_id" => 'Produto indisponível neste cardápio.']);
                 }
             }
-            $composed = $this->composer->composeMany($company->id, $lines);
+            $composed = $this->composer->composeMany($company->id, $rawSelections);
             $snapshots = [];
             $total = '0.00';
             foreach ($lines as $index => $line) {
@@ -94,6 +99,22 @@ class ReceiveMenuOrder
 
             return $receipt;
         });
+    }
+
+    /**
+     * Seleção na ordem escolhida pelo cliente, usada só para compor o rótulo.
+     *
+     * @param  array<string, mixed>  $line
+     * @return array<string, mixed>
+     */
+    private function rawSelection(array $line): array
+    {
+        $selection = $this->normalizedSelection($line);
+        if (! empty($line['flavor_ids'])) {
+            $selection['flavor_ids'] = array_map('intval', $line['flavor_ids']);
+        }
+
+        return $selection;
     }
 
     /**

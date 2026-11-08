@@ -220,7 +220,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                         <p class="font-semibold">{{ product.name }}</p><p v-if="product.sold_out" class="text-danger text-sm font-bold">Esgotado</p>
                         <p v-if="product.description" class="text-muted text-sm">{{ product.description }}</p>
                         <p v-if="isComposed(product) && quantityOf(product)" class="text-muted text-sm">{{ quantityOf(product) }} no pedido</p>
-                        <p class="text-brand-strong mt-1 font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</p>
+                        <p class="text-brand-strong mt-1 font-bold tabular-nums">{{ isComposed(product) ? `a partir de ${formatMoney(composition[product.id].from_price)}` : formatMoney(product.sale_price) }}</p>
                     </div>
                     <div v-if="quantityOf(product) && !isComposed(product)" class="flex items-center gap-2">
                         <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${product.name}`" :disabled="frozen" @click="change(product, -1)"><Minus :size="16" /></button>

@@ -164,7 +164,7 @@ function createCustomer() {
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'order' }" aria-label="Cardápio">
-                <ProductGrid :products="products" :categories="categories" @add="add" />
+                <ProductGrid :products="products" :composition="composition" :categories="categories" @add="add" />
             </section>
 
             <aside class="border-line bg-surface w-full shrink-0 space-y-4 overflow-y-auto border-l p-4 lg:w-[28rem]" :class="{ 'max-lg:hidden': view === 'menu' }" aria-label="Pedido">

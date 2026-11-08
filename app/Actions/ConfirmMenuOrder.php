@@ -50,8 +50,13 @@ class ConfirmMenuOrder
             $options = $optionIds->isEmpty() ? collect() : Option::whereIn('id', $optionIds)->where('active', true)->where('paused', false)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             foreach ($lines as $line) {
                 $lineOptionIds = [...array_column($line->options['flavors'] ?? [], 'id'), ...array_column($line->options['extras'] ?? [], 'id')];
-                if (! $products->has($line->product_id) || collect($lineOptionIds)->contains(fn ($id) => ! $options->has($id))) {
+                if (! $products->has($line->product_id)) {
                     throw ValidationException::withMessages(['receipt' => 'Um produto ficou indisponível. Resolva ou rejeite o pedido.']);
+                }
+                $missingOptionId = collect($lineOptionIds)->first(fn ($id) => ! $options->has($id));
+                if ($missingOptionId !== null) {
+                    $name = collect([...($line->options['flavors'] ?? []), ...($line->options['extras'] ?? [])])->firstWhere('id', $missingOptionId)['name'] ?? null;
+                    throw ValidationException::withMessages(['receipt' => 'A opção '.($name ?? 'selecionada').' ficou indisponível. Resolva ou rejeite o pedido.']);
                 }
                 $orderItem = new TableOrderItem;
                 $orderItem->forceFill(['company_id' => $order->company_id, 'table_order_id' => $order->id,

@@ -223,7 +223,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'cart' }" aria-label="Produtos">
-                <ProductGrid ref="grid" :products="products" :categories="categories" placeholder="Nome ou código de barras (F2)" @add="addProduct" />
+                <ProductGrid ref="grid" :products="products" :composition="composition" :categories="categories" placeholder="Nome ou código de barras (F2)" @add="addProduct" />
 
                 <button v-if="itemCount > 0" type="button" class="btn btn-primary m-3 shrink-0 lg:hidden" @click="view = 'cart'">
                     Ver carrinho ({{ itemCount }}) · {{ formatMoney(fromCents(totalCents)) }}

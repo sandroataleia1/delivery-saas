@@ -237,7 +237,7 @@ function close() {
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'order' }" aria-label="Cardápio">
-                <ProductGrid :products="products" :categories="categories" @add="addDraft" />
+                <ProductGrid :products="products" :composition="composition" :categories="categories" @add="addDraft" />
 
                 <div v-if="draftCount" class="border-line bg-surface max-h-[45%] shrink-0 overflow-y-auto border-t p-3">
                     <h2 class="mb-2 text-sm font-bold">A lançar</h2>

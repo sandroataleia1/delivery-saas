@@ -41,6 +41,7 @@ class ProductComposition
             }
 
             $result[$product->id] = [
+                'from_price' => self::fromPrice($product, $extras, $flavorGroup),
                 'pizza' => $product->isPizza() ? [
                     'pricing' => $product->pizza_pricing,
                     'sizes' => $product->pizzaSizes->where('active', true)->map(fn (PizzaSize $size) => [
@@ -61,6 +62,40 @@ class ProductComposition
         }
 
         return $result;
+    }
+
+    /**
+     * Menor preço possível sem opcionais: pizza = sabor mais barato num tamanho ativo; demais = preço do produto
+     * mais as opções mais baratas de cada grupo obrigatório.
+     *
+     * @param  Collection<int, OptionGroup>  $extras
+     */
+    private static function fromPrice(Product $product, Collection $extras, ?OptionGroup $flavorGroup): string
+    {
+        if ($product->isPizza()) {
+            $sizeIds = $product->pizzaSizes->where('active', true)->pluck('id')->all();
+            $lowest = null;
+            foreach ($flavorGroup?->options->where('active', true)->where('paused', false) ?? [] as $flavor) {
+                foreach ($flavor->prices as $price) {
+                    if (in_array($price->pizza_size_id, $sizeIds, true) && ($lowest === null || bccomp($price->price, $lowest, 2) < 0)) {
+                        $lowest = $price->price;
+                    }
+                }
+            }
+
+            return bcadd($lowest ?? '0', '0', 2);
+        }
+
+        $total = bcadd((string) $product->sale_price, '0', 2);
+        foreach ($extras->where('min_choices', '>', 0) as $group) {
+            $cheapest = $group->options->where('active', true)->where('paused', false)->pluck('price')
+                ->sort(fn ($a, $b) => bccomp($a, $b, 2))->take($group->min_choices);
+            foreach ($cheapest as $price) {
+                $total = bcadd($total, $price, 2);
+            }
+        }
+
+        return $total;
     }
 
     /** @return array{id: int, name: string, price: string, paused: bool, prices: array<int, string>} */

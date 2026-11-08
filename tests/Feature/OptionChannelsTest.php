@@ -275,7 +275,7 @@ class OptionChannelsTest extends TestCase
         $this->bacon->forceFill(['paused' => true])->save();
 
         $this->actingAs($this->admin)->postJson(route('receipts.confirm', MenuOrderReceipt::sole()->id))->assertUnprocessable()
-            ->assertJsonValidationErrors(['receipt' => 'Um produto ficou indisponível. Resolva ou rejeite o pedido.']);
+            ->assertJsonValidationErrors(['receipt' => 'A opção Bacon ficou indisponível. Resolva ou rejeite o pedido.']);
 
         $this->assertSame('pending', MenuOrderReceipt::sole()->status);
         $this->assertDatabaseCount('table_order_items', 0);
@@ -307,6 +307,48 @@ class OptionChannelsTest extends TestCase
         $changed = $data;
         $changed['items'][0]['flavor_ids'] = [$this->flavorIds[0]];
         $this->postJson('/m/'.$table->qr_token, $changed)->assertStatus(409);
+        $this->assertDatabaseCount('menu_order_receipts', 1);
+    }
+
+    public function test_composition_from_price_ignores_sale_price_for_pizza_and_adds_required_groups(): void
+    {
+        $this->setUpCatalog();
+        $this->pizza->forceFill(['sale_price' => '0'])->save();
+        $cheapest = Option::find($this->flavorIds[0]);
+        $cheapest->forceFill(['paused' => true])->save();
+
+        $required = new OptionGroup(['name' => 'Molho', 'kind' => 'extra', 'min_choices' => 1, 'max_choices' => 2, 'allows_quantity' => false, 'active' => true]);
+        $required->company_id = $this->admin->company_id;
+        $required->save();
+        $required->products()->attach($this->burger->id, ['company_id' => $this->admin->company_id, 'position' => 1]);
+        foreach (['3.00', '2.00', '9.00'] as $position => $price) {
+            $option = new Option(['name' => 'Molho '.$price, 'price' => $price, 'active' => true, 'position' => $position]);
+            $option->company_id = $this->admin->company_id;
+            $option->option_group_id = $required->id;
+            $option->save();
+        }
+
+        $composition = ProductComposition::forProducts(collect([$this->burger, $this->pizza]));
+
+        $this->assertSame('44.90', $composition[$this->pizza->id]['from_price']);
+        $this->assertSame('30.00', $composition[$this->burger->id]['from_price']);
+    }
+
+    public function test_qr_labels_follow_the_guests_flavor_order_and_replay_with_reordered_flavors_is_not_conflict(): void
+    {
+        $this->setUpCatalog();
+        [$higher, $lower] = [max($this->flavorIds), min($this->flavorIds)];
+        $names = Option::whereIn('id', [$higher, $lower])->pluck('name', 'id');
+        [$table, $data] = $this->qrPayload([[...$this->halfAndHalf(), 'flavor_ids' => [$higher, $lower]]]);
+
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+
+        $label = MenuOrderReceiptItem::sole()->options_label;
+        $this->assertLessThan(strpos($label, $names[$lower]), strpos($label, $names[$higher]));
+
+        $reordered = $data;
+        $reordered['items'][0]['flavor_ids'] = [$lower, $higher];
+        $this->postJson('/m/'.$table->qr_token, $reordered)->assertOk();
         $this->assertDatabaseCount('menu_order_receipts', 1);
     }
 }
