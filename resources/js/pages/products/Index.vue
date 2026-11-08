@@ -57,6 +57,7 @@ function toggleStatus() {
                 <Tags :size="16" />
                 Categorias
             </Link>
+            <Link v-if="can('products.manage')" :href="route('options.index')" class="btn btn-secondary">Opções</Link>
             <Link v-if="can('products.manage')" :href="route('products.create')" class="btn btn-primary">
                 <Plus :size="16" />
                 Novo produto

@@ -16,6 +16,8 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MenuOrderReceiptController;
+use App\Http\Controllers\OptionController;
+use App\Http\Controllers\PizzaController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProductionSectorController;
@@ -194,6 +196,13 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('produtos/{product}/editar', [ProductController::class, 'edit'])->name('products.edit');
             Route::put('produtos/{product}', [ProductController::class, 'update'])->name('products.update');
             Route::patch('produtos/{product}/status', [ProductController::class, 'toggleStatus'])->name('products.status');
+
+            Route::get('produtos/opcoes', [OptionController::class, 'index'])->name('options.index');
+            Route::post('produtos/opcoes', [OptionController::class, 'store'])->name('options.store');
+            Route::put('produtos/opcoes/{group}', [OptionController::class, 'update'])->name('options.update');
+            Route::patch('opcoes/{option}/pausa', [OptionController::class, 'pause'])->name('options.pause');
+            Route::get('produtos/{product}/pizza', [PizzaController::class, 'edit'])->name('products.pizza.edit');
+            Route::put('produtos/{product}/pizza', [PizzaController::class, 'update'])->name('products.pizza.update');
 
             Route::post('categorias', [CategoryController::class, 'store'])->name('categories.store');
             Route::put('categorias/{category}', [CategoryController::class, 'update'])->name('categories.update');

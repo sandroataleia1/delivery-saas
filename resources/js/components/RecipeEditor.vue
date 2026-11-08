@@ -9,6 +9,11 @@ import { Trash2 } from '@lucide/vue';
 
 const props = defineProps({
     form: { type: Object, required: true },
+    title: { type: String, default: 'Ficha técnica' },
+    description: { type: String, default: 'Insumos usados em uma unidade do produto. Cada venda baixa essas quantidades do estoque.' },
+    emptyText: { type: String, default: 'Sem ficha técnica, a venda deste produto não baixa estoque.' },
+    // Fichas de opções e tamanhos não têm preço de venda próprio: sem custo, margem e porções.
+    summary: { type: Boolean, default: true },
 });
 
 const lineCost = (item) => Number(item.quantity || 0) * Number(item.cost_price || 0);
@@ -50,15 +55,15 @@ function addIngredient(product) {
 <template>
     <div class="card space-y-4 p-5">
         <div>
-            <h2 class="font-bold">Ficha técnica</h2>
-            <p class="text-muted mt-1 text-sm">Insumos usados em uma unidade do produto. Cada venda baixa essas quantidades do estoque.</p>
+            <h2 class="font-bold">{{ title }}</h2>
+            <p class="text-muted mt-1 text-sm">{{ description }}</p>
         </div>
 
         <ProductPicker placeholder="Buscar insumo por nome ou código de barras" label="Buscar insumo" @select="addIngredient" />
 
         <p v-if="form.errors.recipe" class="text-danger text-sm" role="alert">{{ form.errors.recipe }}</p>
 
-        <EmptyState v-if="form.recipe.length === 0" title="Nenhum insumo adicionado" text="Sem ficha técnica, a venda deste produto não baixa estoque." />
+        <EmptyState v-if="form.recipe.length === 0" title="Nenhum insumo adicionado" :text="emptyText" />
 
         <ul v-else class="divide-line divide-y">
             <li
@@ -90,7 +95,7 @@ function addIngredient(product) {
             </li>
         </ul>
 
-        <dl v-if="form.recipe.length > 0" class="border-line grid grid-cols-2 gap-3 border-t pt-4 text-sm lg:grid-cols-4">
+        <dl v-if="summary && form.recipe.length > 0" class="border-line grid grid-cols-2 gap-3 border-t pt-4 text-sm lg:grid-cols-4">
             <div>
                 <dt class="text-muted">Custo da ficha</dt>
                 <dd class="font-bold tabular-nums">{{ formatMoney(cost) }}</dd>

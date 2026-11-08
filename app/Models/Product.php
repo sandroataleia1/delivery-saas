@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
@@ -47,6 +48,23 @@ class Product extends Model
     public function recipeItems(): HasMany
     {
         return $this->hasMany(RecipeItem::class);
+    }
+
+    public function optionGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(OptionGroup::class, 'product_option_group')
+            ->withPivot('position')
+            ->orderByPivot('position');
+    }
+
+    public function pizzaSizes(): HasMany
+    {
+        return $this->hasMany(PizzaSize::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function isPizza(): bool
+    {
+        return $this->pizza_pricing !== null;
     }
 
     /** Custo atual dos insumos. Exige recipeItems.ingredient carregado. */

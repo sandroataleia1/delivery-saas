@@ -55,7 +55,12 @@ function submit() {
 
 <template>
     <AppLayout :title="editing ? 'Editar produto' : 'Novo produto'">
-        <PageHeader :title="editing ? 'Editar produto' : 'Novo produto'" />
+        <PageHeader :title="editing ? 'Editar produto' : 'Novo produto'">
+            <template v-if="editing">
+                <Link :href="route('options.index')" class="btn btn-secondary">Opções</Link>
+                <Link :href="route('products.pizza.edit', product.id)" class="btn btn-secondary">Pizza</Link>
+            </template>
+        </PageHeader>
 
         <form class="max-w-xl space-y-4" @submit.prevent="submit">
             <div class="card space-y-4 p-5">

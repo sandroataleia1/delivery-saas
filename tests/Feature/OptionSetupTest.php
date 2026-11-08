@@ -1,0 +1,248 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\AuditLog;
+use App\Models\Option;
+use App\Models\OptionGroup;
+use App\Models\OptionPrice;
+use App\Models\OptionRecipeItem;
+use App\Models\PizzaSize;
+use App\Models\Product;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class OptionSetupTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $admin;
+
+    private Product $cheese;
+
+    private Product $flour;
+
+    private Product $pepperoni;
+
+    private Product $pizza;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->admin = $this->adminOf();
+        $this->cheese = $this->product(['name' => 'Queijo', 'unit' => 'KG']);
+        $this->flour = $this->product(['name' => 'Farinha', 'unit' => 'KG']);
+        $this->pepperoni = $this->product(['name' => 'Calabresa', 'unit' => 'KG']);
+        $this->pizza = $this->product(['name' => 'Pizza', 'track_stock' => false, 'sale_price' => '40']);
+    }
+
+    private function product(array $attributes = []): Product
+    {
+        return Product::factory()->create(['company_id' => $this->admin->company_id, ...$attributes]);
+    }
+
+    private function groupPayload(array $overrides = []): array
+    {
+        return [
+            'name' => 'Adicionais',
+            'min_choices' => 0,
+            'max_choices' => 3,
+            'allows_quantity' => true,
+            'active' => true,
+            'product_ids' => [$this->pizza->id],
+            'options' => [
+                ['name' => 'Bacon', 'price' => '4.50', 'active' => true, 'recipe' => [
+                    ['ingredient_id' => $this->cheese->id, 'quantity' => '0.030'],
+                ]],
+                ['name' => 'Ovo', 'price' => '2.00', 'active' => true, 'recipe' => []],
+            ],
+            ...$overrides,
+        ];
+    }
+
+    private function pizzaPayload(array $overrides = []): array
+    {
+        return [
+            'pizza_pricing' => 'highest',
+            'sizes' => [
+                ['name' => 'Broto', 'slices' => 4, 'max_flavors' => 1, 'active' => true, 'recipe' => []],
+                ['name' => 'Grande', 'slices' => 8, 'max_flavors' => 2, 'active' => true, 'recipe' => [
+                    ['ingredient_id' => $this->flour->id, 'quantity' => '0.300'],
+                ]],
+            ],
+            'flavors' => [
+                [
+                    'name' => 'Calabresa', 'active' => true,
+                    'prices' => ['n0' => '39.90', 'n1' => '49.90'],
+                    'recipes' => ['n1' => [['ingredient_id' => $this->pepperoni->id, 'quantity' => '0.150']]],
+                ],
+                [
+                    'name' => 'Quatro queijos', 'active' => true,
+                    'prices' => ['n0' => '44.90', 'n1' => '59.90'],
+                    'recipes' => [],
+                ],
+            ],
+            ...$overrides,
+        ];
+    }
+
+    public function test_admin_creates_extra_group_with_options_recipe_and_products(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('options.store'), $this->groupPayload())
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $group = OptionGroup::sole();
+        $this->assertSame('extra', $group->kind);
+        $this->assertSame(2, Option::count());
+        $this->assertSame(1, OptionRecipeItem::count());
+        $this->assertSame('0.030', OptionRecipeItem::sole()->quantity);
+        $this->assertDatabaseHas('product_option_group', ['product_id' => $this->pizza->id, 'option_group_id' => $group->id, 'company_id' => $this->admin->company_id]);
+        $this->assertTrue($this->pizza->optionGroups()->whereKey($group->id)->exists());
+        $this->assertTrue(AuditLog::where('auditable_type', 'OptionGroup')->where('event', 'created')->exists());
+    }
+
+    public function test_group_rejects_min_greater_than_max_and_foreign_ingredient(): void
+    {
+        $foreign = Product::factory()->create();
+
+        $payload = $this->groupPayload(['min_choices' => 3, 'max_choices' => 1]);
+        $payload['options'][0]['recipe'][0]['ingredient_id'] = $foreign->id;
+
+        $this->actingAs($this->admin)
+            ->post(route('options.store'), $payload)
+            ->assertSessionHasErrors(['max_choices', 'options.0.recipe.0.ingredient_id']);
+
+        $this->assertSame(0, OptionGroup::count());
+    }
+
+    public function test_admin_updates_group_keeping_option_ids_and_deactivating_omitted(): void
+    {
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());
+        $group = OptionGroup::sole();
+        [$bacon, $egg] = Option::orderBy('id')->get();
+
+        $payload = $this->groupPayload(['product_ids' => []]);
+        $payload['options'] = [['id' => $bacon->id, 'name' => 'Bacon crocante', 'price' => '5.00', 'active' => true, 'recipe' => []]];
+
+        $this->actingAs($this->admin)
+            ->put(route('options.update', $group), $payload)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Bacon crocante', $bacon->fresh()->name);
+        $this->assertFalse($egg->fresh()->active);
+        $this->assertSame(0, OptionRecipeItem::count());
+        $this->assertSame(0, $this->pizza->optionGroups()->count());
+    }
+
+    public function test_admin_configures_pizza_sizes_flavors_prices_and_recipes(): void
+    {
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $this->pizzaPayload())
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertSame('highest', $this->pizza->fresh()->pizza_pricing);
+        $this->assertTrue($this->pizza->fresh()->isPizza());
+
+        $sizes = $this->pizza->pizzaSizes()->with('recipeItems')->get();
+        $this->assertSame(['Broto', 'Grande'], $sizes->pluck('name')->all());
+        $this->assertSame([1, 2], $sizes->pluck('max_flavors')->all());
+
+        $group = $this->pizza->optionGroups()->where('kind', 'flavor')->with('options.recipeItems')->sole();
+        $this->assertSame(2, $group->options->count());
+        $this->assertSame(4, OptionPrice::count());
+
+        $calabresa = $group->options->firstWhere('name', 'Calabresa');
+        $grande = $sizes->firstWhere('name', 'Grande');
+        $this->assertSame('49.90', OptionPrice::where('option_id', $calabresa->id)->where('pizza_size_id', $grande->id)->value('price'));
+
+        $this->assertSame('0.300', $grande->recipeItems->sole()->quantity);
+        $this->assertNull($grande->recipeItems->sole()->option_id);
+        $flavorRecipe = $calabresa->recipeItems->sole();
+        $this->assertSame($grande->id, $flavorRecipe->pizza_size_id);
+        $this->assertSame('0.150', $flavorRecipe->quantity);
+    }
+
+    public function test_pizza_update_keeps_ids_and_drops_nothing_when_resubmitted(): void
+    {
+        $this->actingAs($this->admin)->put(route('products.pizza.update', $this->pizza), $this->pizzaPayload());
+        $sizes = $this->pizza->pizzaSizes;
+        $flavors = $this->pizza->optionGroups()->where('kind', 'flavor')->sole()->options;
+
+        $payload = $this->pizzaPayload();
+        $payload['sizes'][0]['id'] = $sizes[0]->id;
+        $payload['sizes'][1]['id'] = $sizes[1]->id;
+        $payload['flavors'][0]['id'] = $flavors[0]->id;
+        $payload['flavors'][0]['prices'] = [$sizes[0]->id => '41.00', $sizes[1]->id => '51.00'];
+        $payload['flavors'][0]['recipes'] = [];
+        unset($payload['flavors'][1]);
+
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $payload)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, PizzaSize::count());
+        $this->assertSame(1, Option::where('active', true)->count());
+        $this->assertSame('41.00', OptionPrice::where('option_id', $flavors[0]->id)->where('pizza_size_id', $sizes[0]->id)->value('price'));
+        $this->assertSame(0, $flavors[0]->recipeItems()->count());
+    }
+
+    public function test_flavor_needs_price_for_every_active_size(): void
+    {
+        $payload = $this->pizzaPayload();
+        unset($payload['flavors'][0]['prices']['n0']);
+
+        $this->actingAs($this->admin)
+            ->put(route('products.pizza.update', $this->pizza), $payload)
+            ->assertSessionHasErrors('flavors.0.prices');
+
+        $this->assertSame(0, PizzaSize::count());
+        $this->assertNull($this->pizza->fresh()->pizza_pricing);
+    }
+
+    public function test_pause_option_requires_products_manage(): void
+    {
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());
+        $option = Option::orderBy('id')->first();
+
+        $viewer = $this->userWith(['products.view'], $this->admin->company);
+        $this->actingAs($viewer)->patch(route('options.pause', $option), ['paused' => true])->assertForbidden();
+        $this->assertFalse($option->fresh()->paused);
+
+        $this->actingAs($this->admin)->patch(route('options.pause', $option), ['paused' => true])->assertRedirect();
+        $this->assertTrue($option->fresh()->paused);
+    }
+
+    public function test_option_setup_is_isolated_by_company(): void
+    {
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());
+        $group = OptionGroup::sole();
+        $option = Option::first();
+
+        $other = $this->adminOf();
+        $this->actingAs($other)->put(route('options.update', $group), $this->groupPayload(['product_ids' => []]))->assertNotFound();
+        $this->actingAs($other)->patch(route('options.pause', $option), ['paused' => true])->assertNotFound();
+        $this->actingAs($other)->put(route('products.pizza.update', $this->pizza), $this->pizzaPayload())->assertNotFound();
+    }
+
+    public function test_extra_group_rejects_foreign_product(): void
+    {
+        $foreign = Product::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('options.store'), $this->groupPayload(['product_ids' => [$foreign->id]]))
+            ->assertSessionHasErrors('product_ids.0');
+    }
+
+    public function test_option_pages_render_for_manager(): void
+    {
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload());
+
+        $this->actingAs($this->admin)->get(route('options.index'))->assertOk();
+        $this->actingAs($this->admin)->get(route('products.pizza.edit', $this->pizza))->assertOk();
+    }
+}
