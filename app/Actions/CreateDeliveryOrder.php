@@ -7,12 +7,15 @@ use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
 use App\Support\Decimal;
+use App\Support\ItemComposer;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /** Registra o pedido com os preços atuais, que valem até o acerto. */
 class CreateDeliveryOrder
 {
+    public function __construct(private ItemComposer $composer) {}
+
     public function handle(array $data): DeliveryOrder
     {
         return DB::transaction(function () use ($data) {
@@ -30,8 +33,11 @@ class CreateDeliveryOrder
 
             $products = Product::where('company_id', $user->company_id)->whereIn('id', collect($data['items'])->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
-            $lines = collect($data['items'])->map(function (array $item) use ($products, $user) {
+            $composed = $this->composer->composeMany($user->company_id, array_values($data['items']));
+
+            $lines = collect($data['items'])->values()->map(function (array $item, int $index) use ($products, $user, $composed) {
                 $product = $products[$item['product_id']];
+                $price = $composed[$index]['unit_price'];
 
                 return [
                     'company_id' => $user->company_id,
@@ -39,8 +45,10 @@ class CreateDeliveryOrder
                     'product_name' => $product->name,
                     'unit' => $product->unit,
                     'quantity' => $item['quantity'],
-                    'unit_price' => $product->sale_price,
-                    'total' => Decimal::money(bcmul((string) $item['quantity'], $product->sale_price, 5)),
+                    'unit_price' => $price,
+                    'options' => $composed[$index]['options'],
+                    'options_label' => $composed[$index]['options_label'],
+                    'total' => Decimal::money(bcmul((string) $item['quantity'], $price, 5)),
                     'notes' => $item['notes'] ?? null,
                 ];
             });

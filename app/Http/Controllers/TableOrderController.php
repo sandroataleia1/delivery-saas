@@ -10,11 +10,13 @@ use App\Actions\OpenTable;
 use App\Actions\SendToKitchen;
 use App\Actions\TransferTable;
 use App\Http\Requests\CloseTableOrderRequest;
+use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
 use App\Models\Product;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,8 @@ use Inertia\Response;
 
 class TableOrderController extends Controller
 {
+    use ValidatesComposition;
+
     public function open(Request $request, DiningTable $table, OpenTable $openTable): RedirectResponse
     {
         $data = $request->validate(
@@ -44,6 +48,12 @@ class TableOrderController extends Controller
         }
 
         $order->load(['diningTable', 'items.production']);
+
+        $products = Product::query()
+            ->where('active', true)
+            ->where('sellable', true)->where('sold_out', false)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']);
 
         return Inertia::render('tables/Order', [
             'order' => [
@@ -70,11 +80,8 @@ class TableOrderController extends Controller
                     'user' => $item->user_name,
                 ]),
             ],
-            'products' => Product::query()
-                ->where('active', true)
-                ->where('sellable', true)->where('sold_out', false)
-                ->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'paymentMethods' => config('sales.payment_methods'),
             'serviceFeePercent' => $request->user()->company->service_fee_percent,
@@ -105,6 +112,7 @@ class TableOrderController extends Controller
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
             'items.*.notes' => ['nullable', 'string', 'max:120'],
+            ...$this->compositionRules('items.*'),
         ], [], ['items' => 'itens', 'items.*.product_id' => 'produto', 'items.*.quantity' => 'quantidade', 'items.*.notes' => 'observação']);
 
         $addItems->handle($order, $data['items'], $data['client_uuid']);

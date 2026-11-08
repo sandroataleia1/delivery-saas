@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['company_id', 'product_id', 'product_name', 'unit', 'quantity', 'unit_price', 'total', 'notes'])]
+#[Fillable(['company_id', 'product_id', 'product_name', 'unit', 'quantity', 'unit_price', 'total', 'notes', 'options', 'options_label'])]
 class DeliveryOrderItem extends Model
 {
     use BelongsToCompany;

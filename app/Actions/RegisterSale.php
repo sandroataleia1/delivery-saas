@@ -12,6 +12,7 @@ use App\Models\Sale;
 use App\Models\StockMovement;
 use App\Support\Audit;
 use App\Support\Decimal;
+use App\Support\ItemComposer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ class RegisterSale
     public function __construct(
         private ConsumeProduct $consumeProduct,
         private CreateBills $createBills,
+        private ItemComposer $composer,
     ) {}
 
     /**
@@ -53,15 +55,22 @@ class RegisterSale
                 throw ValidationException::withMessages(['cash' => 'Seu caixa não está aberto. Abra o caixa para concluir a venda.']);
             }
 
-            $items = collect($data['items'])->sortBy('product_id')->values();
+            $items = collect($data['items'])->map(fn (array $item, int $index) => [...$item, 'original_index' => $index])->sortBy('product_id')->values();
             $products = $this->lockProducts($items->pluck('product_id'));
 
-            $this->ensurePricesAreCurrent($items->whereNull('fixed_price'), $products);
+            // Compõe na ordem original do pedido, para o erro sair no índice que o cliente enviou.
+            $composed = $this->composer->composeMany(
+                $user->company_id,
+                collect($data['items'])->filter(fn (array $item) => ! isset($item['fixed_price']))->all(),
+            );
 
-            $lines = $items->map(function (array $item) use ($products) {
+            $this->ensurePricesAreCurrent($items->whereNull('fixed_price'), $products, $composed);
+
+            $lines = $items->map(function (array $item) use ($products, $composed) {
                 $product = $products[$item['product_id']];
                 $quantity = (string) $item['quantity'];
-                $price = $item['fixed_price'] ?? $product->sale_price;
+                $selection = $composed[$item['original_index']] ?? null;
+                $price = $item['fixed_price'] ?? $selection['unit_price'];
 
                 return [
                     'company_id' => $product->company_id,
@@ -70,7 +79,9 @@ class RegisterSale
                     'unit' => $product->unit,
                     'quantity' => $quantity,
                     'unit_price' => $price,
-                    'unit_cost' => $product->effectiveCost(),
+                    'unit_cost' => $selection['cost'] ?? $product->effectiveCost(),
+                    'options' => $selection['options'] ?? $item['options_snapshot'] ?? null,
+                    'options_label' => $selection['options_label'] ?? $item['options_label'] ?? null,
                     'total' => Decimal::money(bcmul($quantity, $price, 5)),
                 ];
             });
@@ -178,14 +189,16 @@ class RegisterSale
             ->keyBy('id');
     }
 
-    private function ensurePricesAreCurrent(Collection $items, Collection $products): void
+    /** @param  array<int, array{unit_price: string}>  $composed  composição por índice original do item */
+    private function ensurePricesAreCurrent(Collection $items, Collection $products, array $composed): void
     {
         foreach ($items as $item) {
             $product = $products[$item['product_id']];
+            $current = $composed[$item['original_index']]['unit_price'];
 
-            if (bccomp((string) $item['expected_price'], $product->sale_price, 2) !== 0) {
+            if (bccomp((string) $item['expected_price'], $current, 2) !== 0) {
                 throw ValidationException::withMessages([
-                    'items' => "O preço de {$product->name} mudou para R$ ".Decimal::currency($product->sale_price).'. Confira o carrinho.',
+                    'items' => "O preço de {$product->name} mudou para R$ ".Decimal::currency($current).'. Confira o carrinho.',
                 ]);
             }
         }

@@ -14,6 +14,7 @@ use App\Models\DeliveryOrderItem;
 use App\Models\DeliveryZone;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\ProductComposition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -69,9 +70,12 @@ class DeliveryController extends Controller
 
     public function create(): Response
     {
+        $products = Product::query()->where('active', true)->where('sellable', true)->where('sold_out', false)->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']);
+
         return Inertia::render('deliveries/Form', [
-            'products' => Product::query()->where('active', true)->where('sellable', true)->where('sold_out', false)->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'zones' => DeliveryZone::orderBy('name')->get(['id', 'name', 'fee']),
             'paymentMethods' => config('sales.payment_methods'),

@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Support\ProductComposition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -33,13 +34,16 @@ class SaleController extends Controller
             return redirect()->route('cash.index')->with('error', 'Abra o caixa para começar a vender.');
         }
 
+        $products = Product::query()
+            ->where('active', true)
+            ->where('sellable', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']);
+
         return Inertia::render('sales/Pos', [
             'cashNumber' => $session->number,
-            'products' => Product::query()
-                ->where('active', true)
-                ->where('sellable', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'paymentMethods' => config('sales.payment_methods'),
             'completed' => session('completed_sale'),

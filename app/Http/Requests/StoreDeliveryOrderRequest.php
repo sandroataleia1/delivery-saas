@@ -2,17 +2,21 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\DeliveryOrder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreDeliveryOrderRequest extends FormRequest
 {
+    use ValidatesComposition;
+
     public function rules(): array
     {
         $companyId = $this->user()->company_id;
 
         return [
+            ...$this->compositionRules('items.*'),
             'client_uuid' => ['required', 'uuid'],
             'customer_id' => ['required', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'type' => ['required', Rule::in([DeliveryOrder::DELIVERY, DeliveryOrder::PICKUP])],
