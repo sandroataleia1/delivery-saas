@@ -18,7 +18,7 @@ function decide(receipt, reject = false) {
         <article v-for="receipt in receipts" :key="receipt.id" class="border-line rounded-lg border p-3 text-sm">
             <p class="font-bold">QR #{{ receipt.id }} · {{ { pending: 'Aguardando confirmação', confirmed: 'Confirmado', rejected: 'Rejeitado' }[receipt.status] }}</p>
             <p v-if="receipt.status === 'pending' && late(receipt)" class="text-danger font-bold">Pedido em atraso</p>
-            <ul><li v-for="item in receipt.items" :key="item.id">{{ item.quantity }} × {{ item.product_name }} <span v-if="item.notes">· {{ item.notes }}</span></li></ul>
+            <ul><li v-for="item in receipt.items" :key="item.id">{{ item.quantity }} × {{ item.product_name }} <span v-if="item.options_label" class="text-muted block text-sm">{{ item.options_label }}</span><span v-if="item.notes">· {{ item.notes }}</span></li></ul>
             <p class="font-semibold">{{ formatMoney(receipt.total) }}</p>
             <p v-if="receipt.decision_reason" class="text-muted">{{ receipt.decision_reason }}</p>
             <div v-if="receipt.status === 'pending' && can('tables.confirm')" class="mt-2 flex gap-2">

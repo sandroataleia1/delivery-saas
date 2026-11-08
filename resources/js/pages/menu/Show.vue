@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, useHttp } from '@inertiajs/vue3';
 import { Minus, Plus, Receipt, ShoppingBag, X } from '@lucide/vue';
+import ItemComposer from '@/components/ItemComposer.vue';
+import { payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid } from '@/lib/money';
 
@@ -10,6 +12,7 @@ const props = defineProps({
     table: { type: Number, required: true }, serviceContext: { type: String, required: true },
     categories: { type: Array, required: true }, products: { type: Array, required: true },
     limits: { type: Object, required: true },
+    composition: { type: Object, default: () => ({}) },
 });
 const category = ref(null);
 const cart = ref([]);
@@ -33,7 +36,9 @@ const categories = computed(() => props.categories.filter(item => props.products
 const visible = computed(() => props.products.filter(product => category.value === null || product.category_id === category.value));
 const count = computed(() => cart.value.reduce((sum, item) => sum + item.quantity, 0));
 const totalCents = computed(() => cart.value.reduce((sum, item) => sum + lineCents(item.quantity, item.sale_price), 0));
-const quantityOf = product => cart.value.find(item => item.product_id === product.id)?.quantity ?? 0;
+const quantityOf = product => cart.value.filter(item => item.product_id === product.id).reduce((sum, item) => sum + item.quantity, 0);
+const isComposed = product => Boolean(props.composition?.[product.id]);
+const composing = ref(null);
 const stale = computed(() => journal.value.length && clock.value - lastUpdated.value > 30000);
 function readRecord(raw) {
     const record = JSON.parse(raw);
@@ -83,12 +88,31 @@ function storageChanged(event) {
 }
 function change(product, delta) {
     if (frozen.value || (delta > 0 && product.sold_out)) return;
-    const line = cart.value.find(item => item.product_id === product.id);
+    if (isComposed(product)) { if (delta > 0) composing.value = product; return; }
+    const line = cart.value.find(item => item.product_id === product.id && !item.key);
     if (delta > 0 && (count.value >= props.limits.max_order_units || (line?.quantity ?? 0) >= props.limits.max_line_units || (!line && cart.value.length >= props.limits.max_lines))) {
         error.value = 'Limite de itens atingido. Confira seu pedido.'; return;
     }
     if (line) { line.quantity += delta; if (line.quantity <= 0) cart.value = cart.value.filter(item => item !== line); }
     else if (delta > 0) cart.value.push({ product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: 1, notes: '' });
+}
+function withinLimits(line) {
+    return count.value < props.limits.max_order_units && (line?.quantity ?? 0) < props.limits.max_line_units && (line || cart.value.length < props.limits.max_lines);
+}
+function addComposed({ selection, unitCents, label, notes }) {
+    const product = composing.value;
+    composing.value = null;
+    const key = selectionKey(product.id, selection);
+    const line = cart.value.find(item => item.key === key && item.notes === notes);
+    if (!withinLimits(line)) { error.value = 'Limite de itens atingido. Confira seu pedido.'; return; }
+    if (line) line.quantity += 1;
+    else cart.value.push({ product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity: 1, notes, key, label, fields: payloadFields(selection) });
+}
+function changeLine(line, delta) {
+    if (frozen.value) return;
+    if (delta > 0 && !withinLimits(line)) { error.value = 'Limite de itens atingido. Confira seu pedido.'; return; }
+    line.quantity += delta;
+    if (line.quantity <= 0) cart.value = cart.value.filter(item => item !== line);
 }
 async function send() {
     if (form.processing || !storageReady.value) return;
@@ -105,7 +129,7 @@ async function send() {
         if (!count.value) return;
         const key = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
         record = { payload: { client_uuid: newUuid(), service_context: props.serviceContext, tracking_key: key,
-            items: cart.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })) },
+            items: cart.value.map(({ product_id, quantity, notes, fields }) => ({ product_id, quantity, notes: notes || null, ...(fields ?? {}) })) },
             cart: JSON.parse(JSON.stringify(cart.value)), created_at: Date.now(), uncertain: true, receipt: null };
         draftReceiptUuid = record.payload.client_uuid;
     }
@@ -193,9 +217,10 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                     <div class="min-w-0 flex-1">
                         <p class="font-semibold">{{ product.name }}</p><p v-if="product.sold_out" class="text-danger text-sm font-bold">Esgotado</p>
                         <p v-if="product.description" class="text-muted text-sm">{{ product.description }}</p>
+                        <p v-if="isComposed(product) && quantityOf(product)" class="text-muted text-sm">{{ quantityOf(product) }} no pedido</p>
                         <p class="text-brand-strong mt-1 font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</p>
                     </div>
-                    <div v-if="quantityOf(product)" class="flex items-center gap-2">
+                    <div v-if="quantityOf(product) && !isComposed(product)" class="flex items-center gap-2">
                         <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${product.name}`" :disabled="frozen" @click="change(product, -1)"><Minus :size="16" /></button>
                         <span class="w-5 text-center font-bold tabular-nums">{{ quantityOf(product) }}</span>
                         <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" :disabled="frozen || product.sold_out" @click="change(product, 1)"><Plus :size="16" /></button>
@@ -216,6 +241,8 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
             </button>
         </div>
 
+        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" @add="addComposed" @cancel="composing = null" />
+
         <div v-if="sheet" class="fixed inset-0 z-30 bg-black/40" @click.self="sheet = null">
             <section class="bg-surface absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4">
                 <div class="mb-3 flex items-center justify-between">
@@ -225,10 +252,14 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
 
                 <template v-if="sheet === 'cart'">
                     <ul class="space-y-3">
-                        <li v-for="item in cart" :key="item.product_id">
+                        <li v-for="item in cart" :key="item.key ?? item.product_id">
                             <div class="flex justify-between gap-3 text-sm font-semibold">
-                                <span>{{ item.quantity }} × {{ item.name }}</span>
+                                <span>{{ item.quantity }} × {{ item.name }}<span v-if="item.label" class="text-muted block text-sm font-normal">{{ item.label }}</span></span>
                                 <span class="tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
+                            </div>
+                            <div v-if="item.key" class="mt-1 flex items-center gap-2">
+                                <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Diminuir ${item.name}`" :disabled="frozen" @click="changeLine(item, -1)"><Minus :size="16" /></button>
+                                <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${item.name}`" :disabled="frozen" @click="changeLine(item, 1)"><Plus :size="16" /></button>
                             </div>
                             <input v-model="item.notes" :disabled="frozen" class="input mt-1" maxlength="120" placeholder="Alguma observação?" :aria-label="`Observação de ${item.name}`" />
                         </li>
@@ -242,7 +273,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                 <template v-else>
                     <article v-for="record in [...journal].reverse()" :key="record.payload.client_uuid" class="border-line mb-3 rounded-lg border p-3 text-sm">
                         <p class="font-bold" role="status">{{ record.receipt?.message ?? 'Aguardando resposta do envio. Não faça outro pedido com os mesmos itens.' }}</p>
-                        <ul><li v-for="(item, index) in record.receipt?.items ?? record.cart" :key="index" :class="{ 'line-through': item.cancelled }">{{ formatQuantity(item.quantity) }} × {{ item.product_name ?? item.name }} <span v-if="item.notes">· {{ item.notes }}</span><span v-if="item.production" class="text-muted block text-sm">{{ item.production.cancelled_at ? 'Cancelado' : item.production.delivered_at ? 'Entregue' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</span></li></ul>
+                        <ul><li v-for="(item, index) in record.receipt?.items ?? record.cart" :key="index" :class="{ 'line-through': item.cancelled }">{{ formatQuantity(item.quantity) }} × {{ item.product_name ?? item.name }} <span v-if="item.options_label ?? item.label" class="text-muted block text-sm">{{ item.options_label ?? item.label }}</span><span v-if="item.notes">· {{ item.notes }}</span><span v-if="item.production" class="text-muted block text-sm">{{ item.production.cancelled_at ? 'Cancelado' : item.production.delivered_at ? 'Entregue' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</span></li></ul>
                         <p v-if="record.receipt" class="mt-2 font-semibold">Valor deste envio: {{ formatMoney(record.receipt.total) }}</p>
                     </article>
                     <p class="text-muted text-sm">Estes são apenas os envios deste aparelho. Para conferir ou fechar a conta completa, chame um atendente. Rejeitados e cancelados não são cobrados.</p>

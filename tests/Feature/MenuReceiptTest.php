@@ -126,7 +126,7 @@ class MenuReceiptTest extends TestCase
         $this->actingAs($admin)->get('/mesas')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('tables.0.order.pending_count', 1)->has('tables.0.order.pending_ids', 1)->has('operation.sound_alerts'));
         $this->get('/mesas/comandas/'.TableOrder::sole()->id)->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('receipts.0.status', 'pending')->where('receipts.0.items.0.product_name', $product->name)
+            ->where('receipts.0.status', 'pending')->where('receipts.0.items.0.product_name', $product->name)->where('receipts.0.items.0.options_label', null)
             ->missing('receipts.0.tracking_key_hash')->missing('receipts.0.content_hash'));
         $this->get('/empresa')->assertInertia(fn (AssertableInertia $page) => $page->where('operation.effective_mode', 'manual')->has('operationCeilings.max_lines'));
     }

@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, Minus, Plus, Receipt, Trash2, 
 import MenuReceiptAlerts from '@/components/MenuReceiptAlerts.vue';
 import MenuReceiptDecisions from '@/components/MenuReceiptDecisions.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import ItemComposer from '@/components/ItemComposer.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
@@ -12,6 +13,7 @@ import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import { usePermissions } from '@/lib/can';
+import { payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
@@ -20,6 +22,7 @@ const props = defineProps({
     operation: { type: Object, required: true },
     order: { type: Object, required: true },
     products: { type: Array, required: true },
+    composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
     serviceFeePercent: { type: String, required: true },
@@ -44,18 +47,51 @@ const draftCount = computed(() => drafts.value.length);
 const subtotalCents = computed(() => toCents(props.order.subtotal));
 const perPersonCents = computed(() => Math.ceil(totalCents.value / Math.max(props.order.people, 1)));
 
+const composing = ref(null);
+let draftSequence = 0;
+
 function addDraft(product, quantity = 1) {
-    const line = drafts.value.find((item) => item.product_id === product.id && !item.notes);
+    if (props.composition[product.id]) {
+        composing.value = { product, quantity };
+
+        return;
+    }
+
+    const line = drafts.value.find((item) => item.product_id === product.id && !item.key && !item.notes);
 
     if (line) {
         line.quantity = String(Number(line.quantity) + quantity);
     } else {
         drafts.value.push({
+            uid: ++draftSequence,
             product_id: product.id,
             name: product.name,
             sale_price: product.sale_price,
             quantity: String(quantity),
             notes: '',
+        });
+    }
+}
+
+function addComposed({ selection, unitCents, label, notes }) {
+    const { product, quantity } = composing.value;
+    const key = selectionKey(product.id, selection);
+    const line = drafts.value.find((item) => item.key === key && item.notes === notes);
+    composing.value = null;
+
+    if (line) {
+        line.quantity = String(Number(line.quantity) + quantity);
+    } else {
+        drafts.value.push({
+            uid: ++draftSequence,
+            product_id: product.id,
+            name: product.name,
+            sale_price: fromCents(unitCents),
+            quantity: String(quantity),
+            notes,
+            key,
+            selection,
+            label,
         });
     }
 }
@@ -74,7 +110,7 @@ function launch() {
     launchForm
         .transform(() => ({
             client_uuid: launchUuid.value,
-            items: drafts.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })),
+            items: drafts.value.map(({ product_id, quantity, notes, selection }) => ({ product_id, quantity, notes: notes || null, ...payloadFields(selection) })),
         }))
         .post(route('orders.items', props.order.id), {
             preserveScroll: true,
@@ -206,7 +242,7 @@ function close() {
                 <div v-if="draftCount" class="border-line bg-surface max-h-[45%] shrink-0 overflow-y-auto border-t p-3">
                     <h2 class="mb-2 text-sm font-bold">A lançar</h2>
                     <ul class="space-y-2">
-                        <li v-for="item in drafts" :key="`${item.product_id}-${item.name}`">
+                        <li v-for="item in drafts" :key="item.uid">
                             <div class="flex items-center gap-2">
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Diminuir ${item.name}`" @click="changeDraft(item, -1)">
                                     <Minus :size="14" />
@@ -215,7 +251,10 @@ function close() {
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Aumentar ${item.name}`" @click="changeDraft(item, 1)">
                                     <Plus :size="14" />
                                 </button>
-                                <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ item.name }}</span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold break-words">
+                                    {{ item.name }}
+                                    <span v-if="item.label" class="text-muted block text-xs font-normal">{{ item.label }}</span>
+                                </span>
                                 <span class="text-sm tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                             </div>
                             <input v-model="item.notes" class="input mt-1 min-h-9 py-1" maxlength="120" placeholder="Observação (sem cebola, ao ponto...)" :aria-label="`Observação de ${item.name}`" />
@@ -245,6 +284,7 @@ function close() {
                             <p class="text-sm font-semibold break-words" :class="{ 'line-through': item.cancelled }">
                                 {{ formatQuantity(item.quantity) }} × {{ item.product_name }}
                             </p>
+                            <p v-if="item.options_label" class="text-muted text-xs break-words">{{ item.options_label }}</p>
                             <p v-if="item.notes" class="text-warn text-xs">{{ item.notes }}</p>
                             <p v-if="item.production && !item.cancelled" class="text-muted text-xs">{{ item.production.delivered_at ? 'Entregue' : item.production.legacy && !item.production.reconciled_at ? 'Legado: precisa de conferência' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</p>
                             <button v-if="!item.cancelled && item.production?.status === 'ready' && !item.production.delivered_at && can('production.deliver')" class="btn btn-secondary mt-1" :disabled="deliveryForm.processing" @click="deliverItem(item)">Registrar entrega</button>
@@ -299,6 +339,8 @@ function close() {
                 </div>
             </aside>
         </div>
+
+        <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" @add="addComposed" @cancel="composing = null" />
 
         <ConfirmDialog
             :open="ticket !== null"

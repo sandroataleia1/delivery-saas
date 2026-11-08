@@ -139,6 +139,7 @@ function settle() {
                     <tr v-for="item in order.items" :key="item.id">
                         <td>
                             <p class="font-semibold">{{ item.product_name }}</p>
+                            <p v-if="item.options_label" class="text-muted text-xs">{{ item.options_label }}</p>
                             <p v-if="item.notes" class="text-warn text-xs">{{ item.notes }}</p>
                         </td>
                         <td class="text-right whitespace-nowrap tabular-nums">{{ formatQuantity(item.quantity, item.unit) }}</td>

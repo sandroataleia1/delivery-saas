@@ -69,6 +69,7 @@ class TableOrderController extends Controller
                     'id' => $item->id,
                     'production' => $item->production?->only('id', 'status', 'version', 'delivered_at', 'legacy', 'reconciled_at'),
                     'product_name' => $item->product_name,
+                    'options_label' => $item->options_label,
                     'unit' => $item->unit,
                     'quantity' => $item->quantity,
                     'unit_price' => $item->unit_price,
@@ -93,7 +94,7 @@ class TableOrderController extends Controller
             'ticketBatch' => session('ticket_batch'),
             'receipts' => $order->receipts()->with('items')->orderBy('id')->get()->map(fn ($receipt) => [
                 ...$receipt->only('id', 'status', 'total', 'created_at', 'decision_reason'),
-                'items' => $receipt->items->map(fn ($item) => $item->only('id', 'product_name', 'quantity', 'total', 'notes')),
+                'items' => $receipt->items->map(fn ($item) => $item->only('id', 'product_name', 'options_label', 'quantity', 'total', 'notes')),
             ]),
             'operation' => array_intersect_key(app(RestaurantOperationPolicy::class)->resolve($request->user()->company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
         ]);
@@ -138,7 +139,7 @@ class TableOrderController extends Controller
             'items' => $order->activeItems()
                 ->where('kitchen_batch', $batch)
                 ->get()
-                ->map(fn (TableOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'notes', 'user_name')),
+                ->map(fn (TableOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'notes', 'user_name')),
         ]);
     }
 

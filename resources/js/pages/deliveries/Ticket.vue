@@ -30,6 +30,7 @@ onMounted(() => window.print());
                     <span>{{ formatQuantity(item.quantity, item.unit) }} {{ item.product_name }}</span>
                     <span>{{ formatMoney(item.total) }}</span>
                 </p>
+                <p v-if="item.options_label">{{ item.options_label }}</p>
                 <p v-if="item.notes">&gt;&gt; {{ item.notes }}</p>
             </li>
         </ul>

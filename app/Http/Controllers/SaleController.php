@@ -172,7 +172,7 @@ class SaleController extends Controller
             'cancelled_by' => $sale->cancelled_by,
             'cancel_reason' => $sale->cancel_reason,
             'cost' => $withCost ? $cost : null,
-            'items' => $sale->items->map(fn (SaleItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'unit_price', 'total')),
+            'items' => $sale->items->map(fn (SaleItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'unit_price', 'total')),
             'payments' => $sale->payments->map(fn (SalePayment $payment) => [
                 'id' => $payment->id,
                 'label' => $methods[$payment->method],

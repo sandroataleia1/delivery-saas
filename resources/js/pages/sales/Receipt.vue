@@ -34,6 +34,7 @@ onMounted(() => window.print());
         <ul class="my-2 border-t border-dashed border-black pt-2">
             <li v-for="item in sale.items" :key="item.id" class="mb-1">
                 <p>{{ item.product_name }}</p>
+                <p v-if="item.options_label" class="text-xs">{{ item.options_label }}</p>
                 <p class="flex justify-between">
                     <span>{{ formatQuantity(item.quantity, item.unit) }} x {{ formatMoney(item.unit_price) }}</span>
                     <span>{{ formatMoney(item.total) }}</span>

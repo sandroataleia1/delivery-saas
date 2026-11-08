@@ -106,7 +106,7 @@ class DeliveryController extends Controller
                 'cancel_reason' => $delivery->cancel_reason,
                 'cancelled_by' => $delivery->cancelled_by,
                 'customer_id' => $delivery->customer_id,
-                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'unit_price', 'total', 'notes')),
+                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'unit_price', 'total', 'notes')),
             ],
             'couriers' => $this->couriers(),
             'paymentMethods' => config('sales.payment_methods'),
@@ -127,7 +127,7 @@ class DeliveryController extends Controller
                 'delivery_fee' => $delivery->delivery_fee,
                 'notes' => $delivery->notes,
                 'date' => $delivery->created_at->format('d/m/Y H:i'),
-                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'total', 'notes')),
+                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'total', 'notes')),
             ],
         ]);
     }

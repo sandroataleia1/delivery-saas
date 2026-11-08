@@ -5,16 +5,19 @@ import { ArrowLeft, Minus, Plus, Trash2 } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
+import ItemComposer from '@/components/ItemComposer.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import SaleCompleteDialog from '@/components/SaleCompleteDialog.vue';
 import { usePermissions } from '@/lib/can';
+import { label as compositionLabel, missing as compositionMissing, payloadFields, priceCents, selectionKey } from '@/lib/composition';
 import { formatMoney } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
     products: { type: Array, required: true },
+    composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
     cashNumber: { type: Number, required: true },
@@ -55,8 +58,27 @@ const discountCents = computed(() => toCents(discount.value));
 const totalCents = computed(() => Math.max(subtotalCents.value - discountCents.value, 0));
 const itemCount = computed(() => cart.value.length);
 
+const composing = ref(null);
+
 function addProduct(product, quantity = 1) {
-    const line = cart.value.find((item) => item.id === product.id);
+    if (props.composition[product.id]) {
+        composing.value = { product, quantity };
+
+        return;
+    }
+
+    addLine(product, quantity);
+}
+
+function addComposed({ selection, unitCents, label }) {
+    const { product, quantity } = composing.value;
+    composing.value = null;
+    addLine(product, quantity, { selection, label, sale_price: fromCents(unitCents) });
+}
+
+function addLine(product, quantity, composed = null) {
+    const key = composed ? selectionKey(product.id, composed.selection) : null;
+    const line = cart.value.find((item) => (composed ? item.key === key : item.id === product.id && !item.key));
 
     if (line) {
         line.quantity = String(Number(line.quantity) + quantity);
@@ -65,8 +87,9 @@ function addProduct(product, quantity = 1) {
             id: product.id,
             name: product.name,
             unit: product.unit,
-            sale_price: product.sale_price,
+            sale_price: composed?.sale_price ?? product.sale_price,
             quantity: String(quantity),
+            ...(composed ? { key, selection: composed.selection, label: composed.label } : {}),
         });
     }
 }
@@ -112,6 +135,7 @@ function finish() {
             product_id: item.id,
             quantity: item.quantity,
             expected_price: item.sale_price,
+            ...payloadFields(item.selection),
         })),
         payments: payments.value
             .filter((payment) => toCents(payment.amount) > 0)
@@ -130,7 +154,25 @@ function finish() {
 function refreshCart() {
     cart.value = cart.value
         .filter((item) => props.products.some((product) => product.id === item.id))
-        .map((item) => ({ ...item, sale_price: props.products.find((product) => product.id === item.id).sale_price }));
+        .map((item) => {
+            const product = props.products.find((candidate) => candidate.id === item.id);
+            const composition = props.composition[item.id];
+
+            if (!item.selection) {
+                return { ...item, sale_price: product.sale_price };
+            }
+
+            if (!composition || compositionMissing(composition, item.selection).length > 0) {
+                return null;
+            }
+
+            return {
+                ...item,
+                sale_price: fromCents(priceCents(product, composition, item.selection)),
+                label: compositionLabel(composition, item.selection),
+            };
+        })
+        .filter(Boolean);
 }
 
 function onKeydown(event) {
@@ -204,9 +246,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 </p>
 
                 <ul v-else class="divide-line min-h-0 flex-1 divide-y overflow-y-auto">
-                    <li v-for="item in cart" :key="item.id" class="px-4 py-3">
+                    <li v-for="item in cart" :key="item.key ?? item.id" class="px-4 py-3">
                         <div class="flex items-start justify-between gap-3">
-                            <span class="min-w-0 text-sm font-semibold break-words">{{ item.name }}</span>
+                            <span class="min-w-0 text-sm font-semibold break-words">
+                                {{ item.name }}
+                                <span v-if="item.label" class="text-muted block text-xs font-normal break-words">{{ item.label }}</span>
+                            </span>
                             <span class="shrink-0 text-sm font-bold tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                         </div>
                         <div class="mt-2 flex items-center gap-2">
@@ -259,6 +304,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             <PaymentPanel v-model:payments="payments" v-model:valid="paymentValid" :methods="paymentMethods" :total-cents="totalCents" :allow-credit="Boolean(customer?.allow_credit) && can('sales.credit')" />
             <p v-for="message in [form.errors.cash, form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
         </ConfirmDialog>
+
+        <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" :with-notes="false" @add="addComposed" @cancel="composing = null" />
 
         <SaleCompleteDialog :sale="receipt" @close="receipt = null" />
     </div>
