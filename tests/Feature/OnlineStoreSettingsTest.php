@@ -53,6 +53,16 @@ class OnlineStoreSettingsTest extends TestCase
         $this->assertDatabaseCount('online_store_hours', 0);
     }
 
+    public function test_store_whatsapp_is_saved_without_country_code(): void
+    {
+        $admin = $this->adminOf();
+
+        $this->actingAs($admin)->putJson('/loja-online/configuracao', $this->payload(['whatsapp' => '+55 (11) 99999-1234']))->assertRedirect();
+        $this->assertSame('11999991234', OnlineStore::where('company_id', $admin->company_id)->value('whatsapp'));
+
+        $this->putJson('/loja-online/configuracao', $this->payload(['whatsapp' => '999991234']))->assertJsonValidationErrors('whatsapp');
+    }
+
     public function test_slug_must_be_unique_and_well_formed(): void
     {
         OnlineStore::factory()->create(['slug' => 'ocupado']);

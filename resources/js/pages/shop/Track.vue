@@ -106,7 +106,6 @@ onUnmounted(stop);
                     </li>
                 </ol>
 
-                <p class="text-muted mt-4 text-sm">Você também recebe cada etapa no WhatsApp.</p>
             </section>
 
             <section class="card p-4">

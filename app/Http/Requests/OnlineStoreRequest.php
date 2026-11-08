@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\OnlineStore;
+use App\Support\BrazilPhone;
 use App\Support\PublicImage;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -23,7 +24,9 @@ class OnlineStoreRequest extends FormRequest
             $merge['hours'] = [];
         }
         if (is_string($this->input('whatsapp'))) {
-            $merge['whatsapp'] = preg_replace('/\D/', '', $this->input('whatsapp')) ?: null;
+            $digits = preg_replace('/\D/', '', $this->input('whatsapp'));
+            // Sem o 55: o link do WhatsApp acrescenta o país. Número inválido segue para a validação recusar.
+            $merge['whatsapp'] = BrazilPhone::normalize($digits) ?? ($digits ?: null);
         }
         if (is_string($this->input('min_order'))) {
             $merge['min_order'] = str_replace(',', '.', trim($this->input('min_order')));
@@ -45,7 +48,7 @@ class OnlineStoreRequest extends FormRequest
             'accepts_pickup' => ['required', 'boolean'],
             'min_order' => ['required', 'numeric', 'min:0', 'max:99999999', 'decimal:0,2'],
             'eta_text' => ['nullable', 'string', 'max:60'],
-            'whatsapp' => ['nullable', 'digits_between:10,13'],
+            'whatsapp' => ['nullable', 'digits_between:10,11'],
             'accept_minutes' => ['required', 'integer', 'min:5', 'max:120'],
             'logo' => PublicImage::RULES,
             'remove_logo' => ['sometimes', 'boolean'],

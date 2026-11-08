@@ -56,7 +56,8 @@ const belowMinimum = computed(() => count.value > 0 && subtotal.value < minOrder
 const isComposed = (product) => Boolean(props.composition?.[product.id]);
 const quantityOf = (product) => cart.value.filter((item) => item.product_id === product.id).reduce((sum, item) => sum + item.quantity, 0);
 const topErrors = computed(() => Object.entries(http.errors).filter(([key]) => !/^items\.\d+(\.|$)/.test(key)).map(([, message]) => message));
-const canSend = computed(() => props.store.open && count.value > 0 && !http.processing);
+/** O horário é do carregamento da página: quem decide se a loja abriu é o servidor, que responde "A loja está fechada agora.". */
+const canSend = computed(() => count.value > 0 && !http.processing);
 
 /** Um envio sem resposta confirmada mantém o mesmo client_uuid; mudar a sacola ou os dados gera outro. */
 watch([cart, checkout], () => {
@@ -184,7 +185,7 @@ onUnmounted(() => http.cancel());
         </header>
 
         <div v-if="!store.open" class="bg-danger-soft text-danger px-4 py-2 text-center text-sm font-semibold" role="alert">
-            {{ store.label }}. Você pode montar a sacola, mas o envio só abre no horário de funcionamento.
+            {{ store.label }}. Você pode montar a sacola e enviar quando a loja abrir.
         </div>
 
         <nav v-if="categories.length" class="bg-surface border-line sticky top-0 z-10 border-b" aria-label="Categorias">
