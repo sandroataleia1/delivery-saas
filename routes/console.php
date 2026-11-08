@@ -8,3 +8,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('online-orders:expire')->everyMinute()->withoutOverlapping();
+
+Schedule::command('whatsapp:sweep')->everyFiveMinutes()->withoutOverlapping();
