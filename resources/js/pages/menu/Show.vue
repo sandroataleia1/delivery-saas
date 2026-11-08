@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Head, useHttp } from '@inertiajs/vue3';
 import { Minus, Plus, Receipt, ShoppingBag, X } from '@lucide/vue';
 import ItemComposer from '@/components/ItemComposer.vue';
-import { payloadFields, selectionKey } from '@/lib/composition';
+import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid } from '@/lib/money';
 
@@ -39,6 +39,8 @@ const totalCents = computed(() => cart.value.reduce((sum, item) => sum + lineCen
 const quantityOf = product => cart.value.filter(item => item.product_id === product.id).reduce((sum, item) => sum + item.quantity, 0);
 const isComposed = product => Boolean(props.composition?.[product.id]);
 const composing = ref(null);
+let lineSequence = 0;
+const withUid = line => ({ ...line, uid: ++lineSequence });
 const stale = computed(() => journal.value.length && clock.value - lastUpdated.value > 30000);
 function readRecord(raw) {
     const record = JSON.parse(raw);
@@ -94,7 +96,7 @@ function change(product, delta) {
         error.value = 'Limite de itens atingido. Confira seu pedido.'; return;
     }
     if (line) { line.quantity += delta; if (line.quantity <= 0) cart.value = cart.value.filter(item => item !== line); }
-    else if (delta > 0) cart.value.push({ product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: 1, notes: '' });
+    else if (delta > 0) cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: 1, notes: '' });
 }
 function withinLimits(line) {
     return count.value < props.limits.max_order_units && (line?.quantity ?? 0) < props.limits.max_line_units && (line || cart.value.length < props.limits.max_lines);
@@ -106,7 +108,7 @@ function addComposed({ selection, unitCents, label, notes }) {
     const line = cart.value.find(item => item.key === key && item.notes === notes);
     if (!withinLimits(line)) { error.value = 'Limite de itens atingido. Confira seu pedido.'; return; }
     if (line) line.quantity += 1;
-    else cart.value.push({ product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity: 1, notes, key, label, fields: payloadFields(selection) });
+    else cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity: 1, notes, key, label, fields: payloadFields(selection) });
 }
 function changeLine(line, delta) {
     if (frozen.value) return;
@@ -181,7 +183,7 @@ onMounted(() => {
             if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(readRecord(JSON.stringify(record))));
         }
         syncJournal();
-        if (uncertain.value) { cart.value = JSON.parse(JSON.stringify(uncertain.value.cart)); draftReceiptUuid = uncertain.value.payload.client_uuid; error.value = 'Há um envio sem resposta confirmada. Reenvie o mesmo pedido ou chame a equipe.'; }
+        if (uncertain.value) { cart.value = JSON.parse(JSON.stringify(uncertain.value.cart)).map(withUid); draftReceiptUuid = uncertain.value.payload.client_uuid; error.value = 'Há um envio sem resposta confirmada. Reenvie o mesmo pedido ou chame a equipe.'; }
         poll();
     } catch { storageReady.value = false; error.value = 'Não foi possível recuperar seus envios neste aparelho. Chame a equipe antes de pedir novamente.'; }
     timer = setInterval(() => clock.value = Date.now(), 1000);
@@ -252,7 +254,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
 
                 <template v-if="sheet === 'cart'">
                     <ul class="space-y-3">
-                        <li v-for="item in cart" :key="item.key ?? item.product_id">
+                        <li v-for="(item, index) in cart" :key="item.uid">
                             <div class="flex justify-between gap-3 text-sm font-semibold">
                                 <span>{{ item.quantity }} × {{ item.name }}<span v-if="item.label" class="text-muted block text-sm font-normal">{{ item.label }}</span></span>
                                 <span class="tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
@@ -262,6 +264,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                                 <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${item.name}`" :disabled="frozen" @click="changeLine(item, 1)"><Plus :size="16" /></button>
                             </div>
                             <input v-model="item.notes" :disabled="frozen" class="input mt-1" maxlength="120" placeholder="Alguma observação?" :aria-label="`Observação de ${item.name}`" />
+                            <p v-if="lineError(form.errors, index)" class="text-danger mt-1 text-sm" role="alert">{{ lineError(form.errors, index) }}</p>
                         </li>
                     </ul>
                     <p v-if="form.errors.items" class="text-danger mt-3 text-sm" role="alert">{{ form.errors.items }}</p>

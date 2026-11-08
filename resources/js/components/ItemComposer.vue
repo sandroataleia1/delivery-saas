@@ -14,6 +14,8 @@ const props = defineProps({
 
 const emit = defineEmits(['add', 'cancel']);
 
+const MAX_OPTION_QUANTITY = 10;
+
 const sizeId = ref(null);
 const flavorIds = ref([]);
 const quantities = ref({});
@@ -77,7 +79,7 @@ function toggleOption(group, option) {
 function stepOption(group, option, delta) {
     const next = (quantities.value[option.id] ?? 0) + delta;
 
-    if (next < 0 || (delta > 0 && groupTotal(group) >= group.max)) {
+    if (next < 0 || (delta > 0 && groupTotal(group) >= group.max) || next > MAX_OPTION_QUANTITY) {
         return;
     }
 

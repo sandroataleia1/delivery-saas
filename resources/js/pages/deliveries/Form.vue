@@ -9,7 +9,7 @@ import ItemComposer from '@/components/ItemComposer.vue';
 import Field from '@/components/Field.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
-import { payloadFields, selectionKey } from '@/lib/composition';
+import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatPhone } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
@@ -216,7 +216,7 @@ function createCustomer() {
                     <p v-if="form.errors.items" class="text-danger mb-1 text-sm" role="alert">{{ form.errors.items }}</p>
                     <p v-if="cart.length === 0" class="text-muted text-sm">Escolha os produtos no cardápio.</p>
                     <ul class="space-y-2">
-                        <li v-for="item in cart" :key="item.uid">
+                        <li v-for="(item, index) in cart" :key="item.uid">
                             <div class="flex items-center gap-2">
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Diminuir ${item.name}`" @click="change(item, -1)"><Minus :size="14" /></button>
                                 <span class="w-6 text-center text-sm font-bold tabular-nums">{{ item.quantity }}</span>
@@ -229,6 +229,7 @@ function createCustomer() {
                                 <button type="button" class="btn btn-ghost min-h-7 px-1 py-0.5" :aria-label="`Remover ${item.name}`" @click="cart = cart.filter((line) => line !== item)"><Trash2 :size="14" /></button>
                             </div>
                             <input v-model="item.notes" class="input mt-1 min-h-9 py-1" maxlength="120" placeholder="Observação do item" :aria-label="`Observação de ${item.name}`" />
+                            <p v-if="lineError(form.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(form.errors, index) }}</p>
                         </li>
                     </ul>
                 </div>

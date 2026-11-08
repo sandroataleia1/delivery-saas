@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { label, missing, priceCents, selectionKey } from '../../resources/js/lib/composition.js';
+import { label, lineError, missing, priceCents, selectionKey } from '../../resources/js/lib/composition.js';
 
 const BROTO = 1;
 const GRANDE = 2;
@@ -68,4 +68,14 @@ test('line key keeps flavor order and ignores option order', () => {
     assert.equal(a, b);
     assert.notEqual(a, c);
     assert.equal(selectionKey(5, null), '5');
+});
+
+test('lineError finds the first error of the line and ignores other lines', () => {
+    const errors = { items: 'Geral', 'items.1.options.0.quantity': 'Qtd', 'items.10': 'Outra', 'items.1': 'Linha', 'items.2.flavor_ids': 'Sabor' };
+
+    assert.equal(lineError(errors, 1), 'Qtd');
+    assert.equal(lineError(errors, 2), 'Sabor');
+    assert.equal(lineError(errors, 10), 'Outra');
+    assert.equal(lineError(errors, 0), null);
+    assert.equal(lineError(undefined, 0), null);
 });

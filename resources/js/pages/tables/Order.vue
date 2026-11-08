@@ -13,7 +13,7 @@ import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import { usePermissions } from '@/lib/can';
-import { payloadFields, selectionKey } from '@/lib/composition';
+import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
@@ -242,7 +242,7 @@ function close() {
                 <div v-if="draftCount" class="border-line bg-surface max-h-[45%] shrink-0 overflow-y-auto border-t p-3">
                     <h2 class="mb-2 text-sm font-bold">A lançar</h2>
                     <ul class="space-y-2">
-                        <li v-for="item in drafts" :key="item.uid">
+                        <li v-for="(item, index) in drafts" :key="item.uid">
                             <div class="flex items-center gap-2">
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Diminuir ${item.name}`" @click="changeDraft(item, -1)">
                                     <Minus :size="14" />
@@ -258,6 +258,7 @@ function close() {
                                 <span class="text-sm tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                             </div>
                             <input v-model="item.notes" class="input mt-1 min-h-9 py-1" maxlength="120" placeholder="Observação (sem cebola, ao ponto...)" :aria-label="`Observação de ${item.name}`" />
+                            <p v-if="lineError(launchForm.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(launchForm.errors, index) }}</p>
                         </li>
                     </ul>
                     <p v-if="launchForm.errors.order" class="text-danger mt-2 text-sm" role="alert">{{ launchForm.errors.order }}</p>

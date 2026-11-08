@@ -11,7 +11,7 @@ import PaymentPanel from '@/components/PaymentPanel.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import SaleCompleteDialog from '@/components/SaleCompleteDialog.vue';
 import { usePermissions } from '@/lib/can';
-import { label as compositionLabel, missing as compositionMissing, payloadFields, priceCents, selectionKey } from '@/lib/composition';
+import { label as compositionLabel, missing as compositionMissing, lineError, payloadFields, priceCents, selectionKey } from '@/lib/composition';
 import { formatMoney } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
@@ -246,7 +246,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 </p>
 
                 <ul v-else class="divide-line min-h-0 flex-1 divide-y overflow-y-auto">
-                    <li v-for="item in cart" :key="item.key ?? item.id" class="px-4 py-3">
+                    <li v-for="(item, index) in cart" :key="item.key ?? item.id" class="px-4 py-3">
                         <div class="flex items-start justify-between gap-3">
                             <span class="min-w-0 text-sm font-semibold break-words">
                                 {{ item.name }}
@@ -267,6 +267,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                                 <Trash2 :size="16" />
                             </button>
                         </div>
+                        <p v-if="lineError(form.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(form.errors, index) }}</p>
                     </li>
                 </ul>
 

@@ -167,3 +167,11 @@ export function payloadFields(selection) {
         ...((selection.options ?? []).length ? { options: selection.options.map((row) => ({ option_id: row.option_id, quantity: row.quantity ?? 1 })) } : {}),
     };
 }
+
+/** Primeiro erro do servidor da linha `index`: chave `items.{index}` ou `items.{index}.*`. */
+export function lineError(errors, index) {
+    const exact = `items.${index}`;
+    const key = Object.keys(errors ?? {}).find((name) => name === exact || name.startsWith(`${exact}.`));
+
+    return key === undefined ? null : errors[key];
+}
