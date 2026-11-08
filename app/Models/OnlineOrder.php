@@ -45,6 +45,11 @@ class OnlineOrder extends Model
         return $this->hasOne(DeliveryOrder::class, 'online_order_id');
     }
 
+    public function whatsappMessages(): HasMany
+    {
+        return $this->hasMany(WhatsAppMessage::class);
+    }
+
     protected function auditExclude(): array
     {
         return ['tracking_token', 'tracking_token_hash', 'content_hash'];
