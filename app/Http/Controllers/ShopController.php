@@ -92,7 +92,7 @@ class ShopController extends Controller
         return $response;
     }
 
-    /** Verdadeiro só com WhatsApp ativado, com instância e conectado. Rota pública: consulta por company_id explícito. */
+    /** Verdadeiro sÃ³ com WhatsApp ativado, com instÃ¢ncia e conectado. Rota pÃºblica: consulta por company_id explÃ­cito. */
     private function whatsappUpdatesFor(string $slug): bool
     {
         $companyId = OnlineStore::withoutGlobalScopes()->where('slug', $slug)->value('company_id');
