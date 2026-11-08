@@ -4,6 +4,8 @@ namespace App\Actions;
 
 use App\Models\DeliveryOrder;
 use App\Models\User;
+use App\Support\ProductionGuard;
+use App\Support\ProductionLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,12 +16,20 @@ class AdvanceDeliveryOrder
     {
         return DB::transaction(function () use ($order, $expectedStatus, $courier) {
             /** @var DeliveryOrder $locked */
-            $locked = DeliveryOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = ProductionLock::delivery($order);
 
             if ($locked->status !== $expectedStatus) {
                 throw ValidationException::withMessages(['order' => 'Este pedido já mudou de etapa. Atualize a tela.']);
             }
 
+            ProductionGuard::assertKnown($locked);
+            if (in_array($locked->status, [DeliveryOrder::RECEIVED, DeliveryOrder::PREPARING], true)) {
+                throw ValidationException::withMessages(['production' => 'Atualize cada item no painel de produção.']);
+            }
+            $works = ProductionGuard::works($locked);
+            if ($works->contains(fn ($w) => $w->status !== 'ready' || $w->cancelled_at)) {
+                throw ValidationException::withMessages(['production' => 'Existem itens ainda não prontos.']);
+            }
             $next = $locked->nextStatus();
 
             if ($next === null) {
@@ -38,6 +48,10 @@ class AdvanceDeliveryOrder
 
             if ($next === DeliveryOrder::DELIVERED) {
                 $locked->delivered_at = now();
+                foreach ($works as $work) {
+                    $work->forceFill(['delivered_at' => now(), 'version' => $work->version + 1])->save();
+                    ProductionGuard::event($work, 'ready', 'delivered');
+                }
             }
 
             $locked->status = $next;

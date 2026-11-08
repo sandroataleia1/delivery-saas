@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Sale;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\ProductionGuard;
 use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,7 @@ class CloseTableOrder
             }
 
             TableOperationLock::assertNoPending($locked);
+            ProductionGuard::assertDelivered($locked);
             $items = $locked->activeItems()->orderBy('product_id')->orderBy('id')->get();
 
             if ($items->isEmpty()) {

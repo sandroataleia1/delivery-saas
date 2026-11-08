@@ -17,8 +17,13 @@ return new class extends Migration
             $table->timestamps();
             $table->unique(['company_id', 'name']);
         });
-        Schema::table('companies', fn (Blueprint $table) => $table->foreignId('default_production_sector_id')->nullable()->constrained('production_sectors')->restrictOnDelete());
-        Schema::table('categories', fn (Blueprint $table) => $table->foreignId('production_sector_id')->nullable()->constrained('production_sectors')->restrictOnDelete());
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('ALTER TABLE companies ADD COLUMN default_production_sector_id INTEGER REFERENCES production_sectors(id) ON DELETE RESTRICT');
+            DB::statement('ALTER TABLE categories ADD COLUMN production_sector_id INTEGER REFERENCES production_sectors(id) ON DELETE RESTRICT');
+        } else {
+            Schema::table('companies', fn (Blueprint $table) => $table->foreignId('default_production_sector_id')->nullable()->constrained('production_sectors')->restrictOnDelete());
+            Schema::table('categories', fn (Blueprint $table) => $table->foreignId('production_sector_id')->nullable()->constrained('production_sectors')->restrictOnDelete());
+        }
         Schema::table('products', fn (Blueprint $table) => $table->boolean('sold_out')->default(false));
         Schema::create('production_works', function (Blueprint $table) {
             $table->id();

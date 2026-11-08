@@ -3,6 +3,8 @@
 namespace App\Actions;
 
 use App\Models\DeliveryOrder;
+use App\Support\ProductionGuard;
+use App\Support\ProductionLock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +16,7 @@ class CancelDeliveryOrder
     {
         DB::transaction(function () use ($order, $reason) {
             /** @var DeliveryOrder $locked */
-            $locked = DeliveryOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = ProductionLock::delivery($order);
 
             if ($locked->isCancelled()) {
                 throw ValidationException::withMessages(['reason' => 'Este pedido já foi cancelado.']);
@@ -28,6 +30,9 @@ class CancelDeliveryOrder
                 throw ValidationException::withMessages(['reason' => 'Pedido entregue não permite cancelamento comum. É necessário um procedimento de devolução, perda ou ajuste financeiro.']);
             }
 
+            foreach (ProductionGuard::works($locked) as $work) {
+                ProductionGuard::cancel($work, $reason);
+            }
             $locked->forceFill([
                 'status' => DeliveryOrder::CANCELLED,
                 'cancelled_at' => now(),

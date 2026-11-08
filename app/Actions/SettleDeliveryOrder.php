@@ -5,6 +5,8 @@ namespace App\Actions;
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
 use App\Models\Sale;
+use App\Support\ProductionGuard;
+use App\Support\ProductionLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,7 +23,7 @@ class SettleDeliveryOrder
     {
         return DB::transaction(function () use ($order, $data) {
             /** @var DeliveryOrder $locked */
-            $locked = DeliveryOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = ProductionLock::delivery($order);
 
             if ($locked->isSettled()) {
                 $sale = Sale::find($locked->sale_id);
@@ -37,6 +39,7 @@ class SettleDeliveryOrder
                 throw ValidationException::withMessages(['order' => 'O pedido só é acertado depois de entregue.']);
             }
 
+            ProductionGuard::assertDelivered($locked);
             [$sale, $negative] = $this->registerSale->handle([
                 'client_uuid' => $data['client_uuid'],
                 'items' => $locked->items()->orderBy('product_id')->orderBy('id')->get()
