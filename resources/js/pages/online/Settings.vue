@@ -21,8 +21,21 @@ const form = useForm({
     eta_text: props.store?.eta_text ?? '',
     whatsapp: props.store?.whatsapp ?? '',
     accept_minutes: props.store?.accept_minutes ?? 15,
+    logo: null,
+    remove_logo: false,
     hours: (props.store?.hours ?? []).map((shift) => ({ ...shift })),
 });
+
+const onLogoChange = (event) => {
+    form.logo = event.target.files[0] ?? null;
+    if (form.logo) {
+        form.remove_logo = false;
+    }
+};
+
+const save = () => form
+    .transform((data) => ({ ...data, _method: 'put' }))
+    .post(route('online.settings.update'), { forceFormData: true, preserveScroll: true, onSuccess: () => { form.logo = null; } });
 
 const pauseReason = ref('');
 const pausing = ref(false);
@@ -71,7 +84,7 @@ const hoursError = computed(() => form.errors.hours
             </form>
         </div>
 
-        <form class="max-w-2xl space-y-4" @submit.prevent="form.put(route('online.settings.update'))">
+        <form class="max-w-2xl space-y-4" @submit.prevent="save">
             <div class="card space-y-4 p-5">
                 <label class="flex cursor-pointer items-start gap-2.5 text-sm">
                     <input v-model="form.enabled" type="checkbox" class="accent-brand mt-0.5 size-4" />
@@ -80,6 +93,20 @@ const hoursError = computed(() => form.errors.hours
                         <span class="text-muted">Desmarque para tirar a loja do ar.</span>
                     </span>
                 </label>
+
+                <div class="space-y-2">
+                    <Field v-slot="{ id }" label="Logo da loja" :error="form.errors.logo" hint="JPG, PNG ou WebP, até 1 MB e 2000 x 2000 px.">
+                        <input :id="id" type="file" class="input" accept="image/jpeg,image/png,image/webp" @change="onLogoChange" />
+                    </Field>
+                    <div v-if="store?.logo_url && !form.remove_logo && !form.logo" class="flex items-center gap-3">
+                        <img :src="store.logo_url" alt="Logo atual" class="size-16 rounded-lg border object-cover" />
+                        <button type="button" class="btn" @click="form.remove_logo = true">Remover</button>
+                    </div>
+                    <p v-if="form.remove_logo" class="text-muted text-sm">
+                        O logo será removido ao salvar.
+                        <button type="button" class="underline" @click="form.remove_logo = false">Desfazer</button>
+                    </p>
+                </div>
 
                 <Field v-slot="{ id }" label="Endereço da loja" :error="form.errors.slug" hint="Apenas letras minúsculas, números e hífen.">
                     <input :id="id" v-model="form.slug" class="input" required minlength="3" maxlength="60" />

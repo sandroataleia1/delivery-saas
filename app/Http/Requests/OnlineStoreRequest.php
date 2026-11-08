@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\OnlineStore;
+use App\Support\PublicImage;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,8 @@ class OnlineStoreRequest extends FormRequest
             'eta_text' => ['nullable', 'string', 'max:60'],
             'whatsapp' => ['nullable', 'digits_between:10,13'],
             'accept_minutes' => ['required', 'integer', 'min:5', 'max:120'],
+            'logo' => PublicImage::RULES,
+            'remove_logo' => ['sometimes', 'boolean'],
             'hours' => ['present', 'array', 'max:70'],
             'hours.*.weekday' => ['required', 'integer', 'between:0,6'],
             'hours.*.opens_at' => ['required', 'date_format:H:i'],
@@ -111,6 +114,7 @@ class OnlineStoreRequest extends FormRequest
             'eta_text' => 'previsão',
             'whatsapp' => 'WhatsApp',
             'accept_minutes' => 'prazo para aceitar',
+            'logo' => 'logo',
             'hours' => 'horários',
             'hours.*.opens_at' => 'abertura',
             'hours.*.closes_at' => 'fechamento',

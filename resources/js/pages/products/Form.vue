@@ -30,6 +30,8 @@ const form = useForm({
     sold_out: props.product?.sold_out ?? false,
     min_stock: props.product?.min_stock ?? '',
     initial_stock: '',
+    image: null,
+    remove_image: false,
     recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
 });
 
@@ -37,19 +39,27 @@ const form = useForm({
 const costIsCalculated = computed(() => editing.value && form.track_stock && props.product.track_stock);
 const hasRecipe = computed(() => !form.track_stock && form.recipe.length > 0);
 
+function onImageChange(event) {
+    form.image = event.target.files[0] ?? null;
+    if (form.image) {
+        form.remove_image = false;
+    }
+}
+
 function submit() {
     form.transform((data) => ({
         ...data,
+        ...(editing.value ? { _method: 'put' } : {}),
         recipe: data.track_stock
             ? []
             : data.recipe.map(({ ingredient_id, quantity }) => ({ ingredient_id, quantity })),
     }));
 
-    if (editing.value) {
-        form.put(route('products.update', props.product.id));
-    } else {
-        form.post(route('products.store'));
-    }
+    // Upload de arquivo exige multipart; o PUT é simulado por _method.
+    form.post(
+        editing.value ? route('products.update', props.product.id) : route('products.store'),
+        { forceFormData: true },
+    );
 }
 </script>
 
@@ -71,6 +81,20 @@ function submit() {
                 <Field v-slot="{ id }" label="Descrição" :error="form.errors.description" hint="Aparece no cardápio do QR Code.">
                     <input :id="id" v-model="form.description" class="input" maxlength="255" />
                 </Field>
+
+                <div class="space-y-2">
+                    <Field v-slot="{ id }" label="Foto" :error="form.errors.image" hint="Aparece no catálogo online. JPG, PNG ou WebP, até 1 MB e 2000 x 2000 px.">
+                        <input :id="id" type="file" class="input" accept="image/jpeg,image/png,image/webp" @change="onImageChange" />
+                    </Field>
+                    <div v-if="product?.image_url && !form.remove_image && !form.image" class="flex items-center gap-3">
+                        <img :src="product.image_url" alt="Foto atual" class="size-20 rounded-lg border object-cover" />
+                        <button type="button" class="btn" @click="form.remove_image = true">Remover</button>
+                    </div>
+                    <p v-if="form.remove_image" class="text-muted text-sm">
+                        A foto será removida ao salvar.
+                        <button type="button" class="underline" @click="form.remove_image = false">Desfazer</button>
+                    </p>
+                </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <Field v-slot="{ id }" label="Categoria" :error="form.errors.category_id">

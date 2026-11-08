@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\BelongsToCompany;
 use App\Support\Decimal;
+use App\Support\PublicImage;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,11 @@ class Product extends Model
             'active' => 'boolean',
             'sold_out' => 'boolean',
         ];
+    }
+
+    public function imageUrl(): ?string
+    {
+        return PublicImage::url($this->image_path);
     }
 
     public function category(): BelongsTo

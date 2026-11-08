@@ -22,6 +22,7 @@ class OnlineStoreController extends Controller
         return Inertia::render('online/Settings', [
             'store' => $store ? [
                 ...$store->only('enabled', 'slug', 'accepts_delivery', 'accepts_pickup', 'min_order', 'eta_text', 'whatsapp', 'accept_minutes'),
+                'logo_url' => $store->logoUrl(),
                 'hours' => $store->hours->map(fn ($hour) => [
                     'weekday' => (int) $hour->weekday,
                     'opens_at' => substr($hour->opens_at, 0, 5),

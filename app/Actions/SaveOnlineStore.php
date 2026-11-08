@@ -6,6 +6,8 @@ use App\Models\Company;
 use App\Models\OnlineStore;
 use App\Models\OnlineStoreHour;
 use App\Support\Audit;
+use App\Support\PublicImage;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -16,15 +18,40 @@ class SaveOnlineStore
      */
     public function handle(array $data): OnlineStore
     {
-        return DB::transaction(function () use ($data) {
-            $companyId = Auth::user()->company_id;
+        $companyId = Auth::user()->company_id;
+        $logo = $data['logo'] ?? null;
+        $removeLogo = (bool) ($data['remove_logo'] ?? false);
+        unset($data['logo'], $data['remove_logo']);
+        $newLogoPath = $logo instanceof UploadedFile ? PublicImage::store($logo, $companyId) : null;
+
+        try {
+            return $this->save($data, $companyId, $newLogoPath, $removeLogo);
+        } catch (\Throwable $e) {
+            PublicImage::discard($newLogoPath);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function save(array $data, int $companyId, ?string $newLogoPath, bool $removeLogo): OnlineStore
+    {
+        return DB::transaction(function () use ($data, $companyId, $newLogoPath, $removeLogo) {
             Company::whereKey($companyId)->lockForUpdate()->firstOrFail();
 
             $hours = $data['hours'] ?? [];
             unset($data['hours']);
 
             $store = OnlineStore::where('company_id', $companyId)->first() ?? new OnlineStore;
-            $store->forceFill([...$data, 'company_id' => $companyId])->save();
+            $oldLogoPath = $store->logo_path;
+            $store->forceFill([...$data, 'company_id' => $companyId]);
+            if ($newLogoPath !== null || $removeLogo) {
+                $store->logo_path = $newLogoPath;
+                PublicImage::deleteAfterCommit($oldLogoPath);
+            }
+            $store->save();
 
             $old = OnlineStoreHour::where('company_id', $companyId)->get(['weekday', 'opens_at', 'closes_at'])->toArray();
             OnlineStoreHour::where('company_id', $companyId)->delete();

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\PublicImage;
 use Database\Factories\OnlineStoreFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,11 @@ class OnlineStore extends Model
     public function hours(): HasMany
     {
         return $this->hasMany(OnlineStoreHour::class, 'company_id', 'company_id')->orderBy('weekday')->orderBy('opens_at');
+    }
+
+    public function logoUrl(): ?string
+    {
+        return PublicImage::url($this->logo_path);
     }
 
     public function isPaused(): bool

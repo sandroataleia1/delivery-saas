@@ -11,9 +11,12 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\RecipeItem;
 use App\Models\StockMovement;
+use App\Support\PublicImage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -103,24 +106,39 @@ class ProductController extends Controller
     public function store(ProductRequest $request, MoveStock $moveStock, SyncRecipe $syncRecipe): RedirectResponse
     {
         $data = $request->validated();
+        $newPath = $this->storeUploadedImage($data);
 
-        DB::transaction(function () use ($data, $moveStock, $syncRecipe) {
-            $product = new Product($data);
-            $product->min_stock = $data['min_stock'] ?? 0;
-            $product->cost_price = $data['cost_price'] ?? 0;
-            $product->active = true;
-            $product->save();
+        try {
+            DB::transaction(function () use ($data, $moveStock, $syncRecipe, $newPath) {
+                $this->createProduct($data, $newPath, $moveStock, $syncRecipe);
+            });
+        } catch (\Throwable $e) {
+            PublicImage::discard($newPath);
 
-            $initialStock = (string) ($data['initial_stock'] ?? '0');
-
-            if ($product->track_stock && bccomp($initialStock, '0', 3) > 0) {
-                $moveStock->handle($product, StockMovement::INITIAL, $initialStock);
-            }
-
-            $syncRecipe->handle($product, $data['recipe']);
-        });
+            throw $e;
+        }
 
         return redirect()->route('products.index')->with('success', 'Produto criado.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createProduct(array $data, ?string $imagePath, MoveStock $moveStock, SyncRecipe $syncRecipe): void
+    {
+        $product = new Product($data);
+        $product->image_path = $imagePath;
+        $product->min_stock = $data['min_stock'] ?? 0;
+        $product->cost_price = $data['cost_price'] ?? 0;
+        $product->active = true;
+        $product->save();
+
+        $initialStock = (string) ($data['initial_stock'] ?? '0');
+
+        if ($product->track_stock && bccomp($initialStock, '0', 3) > 0) {
+            $moveStock->handle($product, StockMovement::INITIAL, $initialStock);
+        }
+        $syncRecipe->handle($product, $data['recipe']);
     }
 
     public function edit(Product $product): Response
@@ -133,6 +151,7 @@ class ProductController extends Controller
                 'id', 'name', 'description', 'category_id', 'sku', 'barcode', 'unit', 'sale_price',
                 'cost_price', 'track_stock', 'sellable', 'sold_out', 'min_stock', 'stock_quantity',
             ) + [
+                'image_url' => $product->imageUrl(),
                 'recipe' => $product->recipeItems
                     ->sortBy('ingredient.name')
                     ->values()
@@ -151,6 +170,8 @@ class ProductController extends Controller
     public function update(ProductRequest $request, Product $product, SyncRecipe $syncRecipe): RedirectResponse
     {
         $data = $request->validated();
+        $removeImage = (bool) ($data['remove_image'] ?? false);
+        $newPath = $this->storeUploadedImage($data);
 
         $product->fill($data);
         $product->min_stock = $data['min_stock'] ?? 0;
@@ -160,11 +181,21 @@ class ProductController extends Controller
             $product->cost_price = $data['cost_price'] ?? 0;
         }
 
-        DB::transaction(function () use ($product, $data, $syncRecipe) {
-            Company::whereKey($product->company_id)->lockForUpdate()->firstOrFail();
-            $product->save();
-            $syncRecipe->handle($product, $data['recipe']);
-        });
+        try {
+            DB::transaction(function () use ($product, $data, $syncRecipe, $newPath, $removeImage) {
+                Company::whereKey($product->company_id)->lockForUpdate()->firstOrFail();
+                if ($newPath !== null || $removeImage) {
+                    PublicImage::deleteAfterCommit($product->image_path);
+                    $product->image_path = $newPath;
+                }
+                $product->save();
+                $syncRecipe->handle($product, $data['recipe']);
+            });
+        } catch (\Throwable $e) {
+            PublicImage::discard($newPath);
+
+            throw $e;
+        }
 
         return redirect()->route('products.index')->with('success', 'Produto atualizado.');
     }
@@ -188,6 +219,19 @@ class ProductController extends Controller
         $product->refresh();
 
         return back()->with('success', $product->active ? 'Produto ativado.' : 'Produto inativado.');
+    }
+
+    /**
+     * Grava a foto enviada, se houver, e tira `image`/`remove_image` dos dados do produto.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function storeUploadedImage(array &$data): ?string
+    {
+        $image = $data['image'] ?? null;
+        unset($data['image'], $data['remove_image']);
+
+        return $image instanceof UploadedFile ? PublicImage::store($image, Auth::user()->company_id) : null;
     }
 
     private function formProps(): array

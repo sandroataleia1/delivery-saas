@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\RecipeItem;
+use App\Support\PublicImage;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -29,6 +30,8 @@ class ProductRequest extends FormRequest
             'track_stock' => ['required', 'boolean'],
             'min_stock' => ['nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
             'initial_stock' => [Rule::excludeIf($product !== null), 'nullable', 'numeric', 'decimal:0,3', 'min:0', 'max:999999'],
+            'image' => PublicImage::RULES,
+            'remove_image' => ['sometimes', 'boolean'],
             'recipe' => ['present', 'array', 'max:50'],
             'recipe.*.ingredient_id' => [
                 'bail',
@@ -56,6 +59,7 @@ class ProductRequest extends FormRequest
             'sellable' => 'disponível para venda',
             'min_stock' => 'estoque mínimo',
             'initial_stock' => 'estoque inicial',
+            'image' => 'foto',
             'recipe' => 'ficha técnica',
             'recipe.*.ingredient_id' => 'insumo',
             'recipe.*.quantity' => 'quantidade',
