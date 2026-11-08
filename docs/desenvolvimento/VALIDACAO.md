@@ -107,3 +107,11 @@ O harness inclui `tests/Concurrency/online.php` (O1–O4) após o guard, com os 
 Execução completa no Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testing/Invoke-DisposableMariaDb.ps1 -Mode All` (ou `-Mode Concurrency` só para o harness). SQLite: `php artisan test --compact` (os 2 testes de trigger MariaDB ficam ignorados). Cliente: `node --test tests/Frontend/Composition.test.mjs`, `node --test tests/Frontend/MenuRecovery.test.mjs` e `node --test tests/Frontend/ShopCart.test.mjs`. Build: `npm run build`, separado dos testes HTTP. No PowerShell: `composer validate --strict`.
 
 As migrations `2026_11_10_000001` e `2026_11_10_000002` são aditivas e recusam rollback com dados. A implantação precisa de `php artisan storage:link` para as imagens dos produtos e do agendamento da expiração dos pedidos online.
+
+## Complemento do Bloco C — WhatsApp
+
+As notificações dos pedidos do catálogo online saem pela Evolution API. A implantação precisa das variáveis `EVOLUTION_URL` e `EVOLUTION_API_KEY` (lidas em `config('services.evolution.url')` e `config('services.evolution.key')`); sem elas o recurso fica indisponível e os pedidos seguem normalmente. O envio usa a fila: é preciso o worker (`php artisan queue:work`) e o agendador do Laravel, que executa `online-orders:expire` e `whatsapp:sweep`. O número da loja é conectado pelo administrador na tela "WhatsApp" (leitura do QR code); o token da instância fica cifrado.
+
+Falha, timeout, Evolution não configurada ou número desconectado nunca desfazem nem atrasam o pedido. O painel de pedidos online mostra um alerta quando o WhatsApp está desconectado e quando há mensagens não enviadas nas últimas 24 horas; a página de acompanhamento só menciona o WhatsApp com o número conectado.
+
+Verificação: `php artisan test --compact` (os 2 testes de trigger MariaDB ficam ignorados), `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/testing/Invoke-DisposableMariaDb.ps1 -Mode All`, `vendor/bin/pint --dirty --format agent`, `node --test tests/Frontend/Composition.test.mjs`, `node --test tests/Frontend/MenuRecovery.test.mjs`, `node --test tests/Frontend/ShopCart.test.mjs`, `npm run build` (separado dos testes HTTP) e, no PowerShell, `composer validate --strict`.

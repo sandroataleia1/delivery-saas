@@ -12,13 +12,14 @@ const props = defineProps({
     pending: { type: Array, required: true },
     recent: { type: Array, required: true },
     store: { type: Object, default: null },
+    whatsapp: { type: Object, default: null },
     operation: { type: Object, required: true },
     paymentMethods: { type: Object, default: () => ({}) },
 });
 
 const { can } = usePermissions();
 const lastUpdated = ref(Date.now());
-usePoll(10000, { only: ['pending', 'recent', 'store', 'operation', 'onlinePendingCount'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
+usePoll(10000, { only: ['pending', 'recent', 'store', 'operation', 'onlinePendingCount', 'whatsapp'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
 const pendingIds = computed(() => props.pending.map((order) => order.id));
 
 const pausing = ref(false);
@@ -49,6 +50,14 @@ function togglePause() {
         <template v-else>
             <p class="text-muted mb-3 text-sm">Link da loja: <a :href="store.link" target="_blank" rel="noopener" class="text-brand-strong break-all underline">{{ store.link }}</a></p>
             <p v-if="store.paused" class="text-warn mb-3 text-sm font-semibold" role="status">A loja está pausada: os clientes não conseguem enviar novos pedidos.</p>
+            <p v-if="whatsapp && !whatsapp.connected" class="text-warn mb-3 text-sm font-semibold" role="alert">
+                WhatsApp desconectado: os clientes não estão recebendo as mensagens dos pedidos.
+                <Link v-if="can('company.manage')" :href="route('online.whatsapp')" class="underline">Abrir WhatsApp</Link>
+            </p>
+            <p v-if="whatsapp && whatsapp.failed_recent > 0" class="text-warn mb-3 text-sm font-semibold" role="alert">
+                {{ whatsapp.failed_recent }} {{ whatsapp.failed_recent === 1 ? 'mensagem' : 'mensagens' }} de WhatsApp {{ whatsapp.failed_recent === 1 ? 'não enviada' : 'não enviadas' }} nas últimas 24 horas.
+                <Link v-if="can('company.manage')" :href="route('online.whatsapp')" class="underline">Abrir WhatsApp</Link>
+            </p>
             <MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" />
 
             <h2 class="mb-3 text-lg font-bold">Aguardando aceite</h2>

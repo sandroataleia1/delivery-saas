@@ -10,6 +10,7 @@ use App\Models\DeliveryZone;
 use App\Models\OnlineOrder;
 use App\Models\OnlineStore;
 use App\Models\Product;
+use App\Models\WhatsAppSetting;
 use App\Support\OnlineOrderProgress;
 use App\Support\ProductComposition;
 use App\Support\StoreSchedule;
@@ -85,10 +86,20 @@ class ShopController extends Controller
     /** P√°gina de acompanhamento pelo link secreto. Segue valendo mesmo com a loja pausada ou desativada. */
     public function track(Request $request, string $slug, string $token): SymfonyResponse
     {
-        $response = Inertia::render('shop/Track', [...$this->trackingPayload($slug, $token), 'slug' => $slug, 'token' => $token])->toResponse($request);
+        $response = Inertia::render('shop/Track', [...$this->trackingPayload($slug, $token), 'slug' => $slug, 'token' => $token, 'whatsapp_updates' => $this->whatsappUpdatesFor($slug)])->toResponse($request);
         $response->headers->set('Cache-Control', 'no-store, private');
 
         return $response;
+    }
+
+    /** Verdadeiro sÛ com WhatsApp ativado, com inst‚ncia e conectado. Rota p˙blica: consulta por company_id explÌcito. */
+    private function whatsappUpdatesFor(string $slug): bool
+    {
+        $companyId = OnlineStore::withoutGlobalScopes()->where('slug', $slug)->value('company_id');
+
+        $setting = $companyId ? WhatsAppSetting::withoutGlobalScopes()->where('company_id', $companyId)->first() : null;
+
+        return (bool) ($setting && $setting->enabled && filled($setting->instance_name) && $setting->isConnected());
     }
 
     /** Estado atual para o polling da p√°gina. */

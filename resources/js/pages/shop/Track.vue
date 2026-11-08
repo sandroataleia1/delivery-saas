@@ -10,6 +10,7 @@ const props = defineProps({
     token: { type: String, required: true },
     customer_first_name: { type: String, default: '' },
     progress: { type: Object, required: true },
+    whatsapp_updates: { type: Boolean, default: false },
 });
 
 const POLL_MS = 10000;
@@ -106,6 +107,7 @@ onUnmounted(stop);
                     </li>
                 </ol>
 
+                <p v-if="whatsapp_updates" class="text-muted mt-4 text-sm">Você também recebe cada etapa no WhatsApp.</p>
             </section>
 
             <section class="card p-4">

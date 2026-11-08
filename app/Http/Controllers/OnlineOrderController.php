@@ -6,6 +6,8 @@ use App\Actions\AcceptOnlineOrder;
 use App\Actions\RejectOnlineOrder;
 use App\Models\OnlineOrder;
 use App\Models\OnlineStore;
+use App\Models\WhatsAppMessage;
+use App\Models\WhatsAppSetting;
 use App\Support\RestaurantOperationPolicy;
 use App\Support\StoreSchedule;
 use Carbon\CarbonImmutable;
@@ -27,6 +29,8 @@ class OnlineOrderController extends Controller
             ->whereIn('status', [OnlineOrder::ACCEPTED, OnlineOrder::REJECTED, OnlineOrder::EXPIRED])
             ->where('decided_at', '>=', now()->subHours(12))->orderByDesc('decided_at')->orderByDesc('id')->limit(30)->get();
 
+        $whatsapp = WhatsAppSetting::where('company_id', $company->id)->where('enabled', true)->first();
+
         return Inertia::render('online/Orders', [
             'pending' => $pending->map(fn (OnlineOrder $order) => $this->present($order))->values(),
             'recent' => $recent->map(fn (OnlineOrder $order) => $this->present($order))->values(),
@@ -37,6 +41,11 @@ class OnlineOrderController extends Controller
             ] : null,
             'operation' => array_intersect_key($policy->resolve($company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
             'paymentMethods' => config('sales.payment_methods'),
+            'whatsapp' => $whatsapp && filled($whatsapp->instance_name) ? [
+                'connected' => $whatsapp->isConnected(),
+                'failed_recent' => WhatsAppMessage::where('company_id', $company->id)
+                    ->where('status', WhatsAppMessage::FAILED)->where('updated_at', '>=', now()->subDay())->count(),
+            ] : null,
         ]);
     }
 
