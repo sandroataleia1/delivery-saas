@@ -18,7 +18,7 @@ const props = defineProps({
 
 const { can } = usePermissions();
 const lastUpdated = ref(Date.now());
-usePoll(10000, { only: ['pending', 'recent', 'store'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
+usePoll(10000, { only: ['pending', 'recent', 'store', 'operation', 'onlinePendingCount'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
 const pendingIds = computed(() => props.pending.map((order) => order.id));
 
 const pausing = ref(false);
