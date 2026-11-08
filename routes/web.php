@@ -16,6 +16,7 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MenuOrderReceiptController;
+use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\OnlineStoreController;
 use App\Http\Controllers\OptionController;
 use App\Http\Controllers\PizzaController;
@@ -261,6 +262,8 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         Route::middleware('can:online_orders.accept')->group(function () {
             Route::post('loja-online/pausa', [OnlineStoreController::class, 'pause'])->name('online.pause');
             Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
+            Route::post('loja-online/pedidos/{onlineOrder}/aceitar', [OnlineOrderController::class, 'accept'])->name('online.orders.accept');
+            Route::post('loja-online/pedidos/{onlineOrder}/recusar', [OnlineOrderController::class, 'reject'])->name('online.orders.reject');
         });
 
         Route::middleware('can:company.manage')->group(function () {

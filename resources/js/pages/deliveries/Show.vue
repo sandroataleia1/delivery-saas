@@ -77,7 +77,7 @@ function settle() {
 
 <template>
     <AppLayout :title="`Pedido #${order.number}`">
-        <PageHeader :title="`Pedido #${order.number}`" :subtitle="`${order.type_label} · ${order.status_label} · ${order.date}`">
+        <PageHeader :title="order.online_number ? `Pedido #${order.number} · Online #${order.online_number}` : `Pedido #${order.number}`" :subtitle="`${order.type_label} · ${order.status_label} · ${order.date}`">
             <a :href="route('deliveries.ticket', order.id)" target="_blank" class="btn btn-secondary">
                 <Printer :size="16" />
                 Imprimir

@@ -15,6 +15,7 @@ onMounted(() => window.print());
         <Head :title="`Pedido ${order.number}`" />
 
         <p class="text-center text-xl font-bold">PEDIDO #{{ order.number }}</p>
+        <p v-if="order.online_number" class="text-center text-xs font-bold">ONLINE #{{ order.online_number }}</p>
         <p class="text-center text-xs">{{ order.type_label }} · {{ order.date }}</p>
 
         <div class="my-2 border-t border-dashed border-black pt-2">

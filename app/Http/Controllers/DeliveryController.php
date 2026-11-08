@@ -15,6 +15,7 @@ use App\Models\DeliveryZone;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\ProductComposition;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -29,6 +30,7 @@ class DeliveryController extends Controller
     {
         return Inertia::render('deliveries/Board', [
             'orders' => DeliveryOrder::query()
+                ->with('onlineOrder:id,number')
                 ->whereNull('sale_id')
                 ->where('status', '!=', DeliveryOrder::CANCELLED)
                 ->orderBy('id')
@@ -51,12 +53,12 @@ class DeliveryController extends Controller
         $query = DeliveryOrder::query()
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['courier'] ?? null, fn ($query, $courier) => $query->where('courier_id', $courier))
-            ->when($filters['search'] ?? null, fn ($query, $search) => $query->where('customer_name', 'like', "%$search%"))
+            ->when($filters['search'] ?? null, fn ($query, $search) => $this->search($query, $search, $request->user()->company_id))
             ->when($filters['from'] ?? null, fn ($query, $from) => $query->where('created_at', '>=', Carbon::parse($from)->startOfDay()))
             ->when($filters['to'] ?? null, fn ($query, $to) => $query->where('created_at', '<=', Carbon::parse($to)->endOfDay()));
 
         return Inertia::render('deliveries/History', [
-            'orders' => (clone $query)->latest('id')->paginate(20)->withQueryString()
+            'orders' => (clone $query)->with('onlineOrder:id,number')->latest('id')->paginate(20)->withQueryString()
                 ->through(fn (DeliveryOrder $order) => $this->card($order)),
             'filters' => $filters,
             'summary' => [
@@ -91,7 +93,7 @@ class DeliveryController extends Controller
 
     public function show(Request $request, DeliveryOrder $delivery): Response
     {
-        $delivery->load('items');
+        $delivery->load('items', 'onlineOrder:id,number');
 
         return Inertia::render('deliveries/Show', [
             'order' => [
@@ -116,7 +118,7 @@ class DeliveryController extends Controller
 
     public function ticket(DeliveryOrder $delivery): Response
     {
-        $delivery->load('items');
+        $delivery->load('items', 'onlineOrder:id,number');
 
         return Inertia::render('deliveries/Ticket', [
             'order' => [
@@ -182,6 +184,7 @@ class DeliveryController extends Controller
     {
         return Inertia::render('deliveries/Mine', [
             'orders' => DeliveryOrder::query()
+                ->with('onlineOrder:id,number')
                 ->where('courier_id', $request->user()->id)
                 ->where('status', DeliveryOrder::OUT)
                 ->orderBy('dispatched_at')
@@ -250,11 +253,25 @@ class DeliveryController extends Controller
             ->all();
     }
 
+    /** O nome do cliente, ou um número, que pode ser o da entrega ou o do pedido online. */
+    private function search(Builder $query, string $search, int $companyId): Builder
+    {
+        return $query->where(function (Builder $query) use ($search, $companyId) {
+            $query->where('customer_name', 'like', "%$search%");
+
+            if (ctype_digit($search)) {
+                $query->orWhere('number', (int) $search)
+                    ->orWhereHas('onlineOrder', fn (Builder $online) => $online->where('company_id', $companyId)->where('number', (int) $search));
+            }
+        });
+    }
+
     private function card(DeliveryOrder $order): array
     {
         return [
             'id' => $order->id,
             'number' => $order->number,
+            'online_number' => $order->onlineOrder?->number,
             'type' => $order->type,
             'type_label' => __("deliveries.types.{$order->type}"),
             'status' => $order->status,

@@ -86,6 +86,7 @@ function dispatch() {
                     <li v-for="order in column.orders" :key="order.id" class="card p-3 text-sm">
                         <div class="flex items-center justify-between gap-2">
                             <Link :href="route('deliveries.show', order.id)" class="text-brand font-bold hover:underline">#{{ order.number }}</Link>
+                            <span v-if="order.online_number" class="text-muted text-xs">Online #{{ order.online_number }}</span>
                             <span class="text-muted text-xs tabular-nums">{{ order.minutes }} min</span>
                         </div>
                         <p class="mt-1 truncate font-semibold">{{ order.customer }}</p>
