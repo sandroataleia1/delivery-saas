@@ -70,7 +70,7 @@ class EvolutionClientTest extends TestCase
         $this->assertSame('close', $client->state('x', 'TOKEN1'));
     }
 
-    public function test_failures_become_evolution_exception(): void
+    public function test_http_error_becomes_evolution_exception(): void
     {
         Http::fake(['https://evo.test/message/sendText/x' => Http::response(['error' => 'boom'], 500)]);
 
@@ -79,12 +79,22 @@ class EvolutionClientTest extends TestCase
             $this->fail('Deveria lançar EvolutionException.');
         } catch (EvolutionException $e) {
             $this->assertLessThanOrEqual(255, mb_strlen($e->getMessage()));
+            $this->assertStringContainsString('500', $e->getMessage());
+            $this->assertNull($e->getPrevious());
         }
+    }
 
+    public function test_connection_failure_becomes_evolution_exception(): void
+    {
         Http::fake(fn () => throw new ConnectionException('timeout'));
 
-        $this->expectException(EvolutionException::class);
-        app(EvolutionClient::class)->sendText('x', 'T', '5511988887777', 'Oi');
+        try {
+            app(EvolutionClient::class)->sendText('x', 'T', '5511988887777', 'Oi');
+            $this->fail('Deveria lançar EvolutionException.');
+        } catch (EvolutionException $e) {
+            $this->assertInstanceOf(ConnectionException::class, $e->getPrevious());
+            $this->assertStringContainsString('Falha de conexão', $e->getMessage());
+        }
     }
 
     public function test_not_configured(): void

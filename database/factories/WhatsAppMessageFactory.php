@@ -7,7 +7,7 @@ use App\Models\WhatsAppMessage;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * Exige `online_order_id` (n„o h· factory de OnlineOrder); `company_id` sai do pedido.
+ * Exige `online_order_id` (n√£o h√° factory de OnlineOrder); `company_id` sai do pedido.
  *
  * @extends Factory<WhatsAppMessage>
  */
