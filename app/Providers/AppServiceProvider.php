@@ -11,6 +11,7 @@ use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Models\User;
 use App\Support\BrazilPhone;
+use App\Support\WhatsAppOutbox;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -74,5 +75,7 @@ class AppServiceProvider extends ServiceProvider
             ->by('online-status|'.hash('sha256', (string) $request->route('slug').'|'.(string) $request->route('token')).'|'.$request->ip()));
 
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
+
+        WhatsAppOutbox::register();
     }
 }
