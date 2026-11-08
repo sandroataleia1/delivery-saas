@@ -33,9 +33,15 @@ const onLogoChange = (event) => {
     }
 };
 
-const save = () => form
-    .transform((data) => ({ ...data, _method: 'put' }))
-    .post(route('online.settings.update'), { forceFormData: true, preserveScroll: true, onSuccess: () => { form.logo = null; } });
+const save = () => {
+    // Multipart só com arquivo anexado: o FormData descarta listas vazias.
+    if (form.logo instanceof File) {
+        form.transform((data) => ({ ...data, _method: 'put' }))
+            .post(route('online.settings.update'), { forceFormData: true, preserveScroll: true, onSuccess: () => { form.logo = null; } });
+        return;
+    }
+    form.transform((data) => data).put(route('online.settings.update'), { preserveScroll: true });
+};
 
 const pauseReason = ref('');
 const pausing = ref(false);

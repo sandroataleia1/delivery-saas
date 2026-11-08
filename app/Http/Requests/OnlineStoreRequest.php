@@ -18,6 +18,10 @@ class OnlineStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $merge = [];
+        // FormData omite listas vazias; em multipart a ausência de `hours` significa nenhum turno.
+        if (! $this->isJson() && ! $this->has('hours')) {
+            $merge['hours'] = [];
+        }
         if (is_string($this->input('whatsapp'))) {
             $merge['whatsapp'] = preg_replace('/\D/', '', $this->input('whatsapp')) ?: null;
         }

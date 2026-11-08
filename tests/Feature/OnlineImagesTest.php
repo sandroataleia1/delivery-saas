@@ -131,4 +131,35 @@ class OnlineImagesTest extends TestCase
         $this->assertSame('online/999/x.jpg', $foreign->fresh()->image_path);
         Storage::disk('public')->assertExists('online/999/x.jpg');
     }
+
+    public function test_multipart_product_update_without_empty_recipe_key_succeeds(): void
+    {
+        Storage::fake('public');
+        $admin = $this->adminOf();
+        $product = Product::factory()->create(['company_id' => $admin->company_id]);
+        $payload = $this->productPayload(['_method' => 'put']);
+        unset($payload['recipe']);
+
+        $this->actingAs($admin)->call('POST', "/produtos/{$product->id}", $payload, [], [
+            'image' => UploadedFile::fake()->image('a.jpg', 300, 300),
+        ])->assertRedirect(route('products.index'))->assertSessionHasNoErrors();
+
+        Storage::disk('public')->assertExists($product->fresh()->image_path);
+    }
+
+    public function test_multipart_settings_without_empty_hours_key_saves_zero_shifts(): void
+    {
+        Storage::fake('public');
+        $admin = $this->adminOf();
+        $payload = $this->storePayload(['_method' => 'put']);
+        unset($payload['hours']);
+
+        $this->actingAs($admin)->call('POST', '/loja-online/configuracao', $payload, [], [
+            'logo' => UploadedFile::fake()->image('logo.png', 200, 200),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $store = OnlineStore::where('company_id', $admin->company_id)->firstOrFail();
+        Storage::disk('public')->assertExists($store->logo_path);
+        $this->assertSame(0, $store->hours()->count());
+    }
 }

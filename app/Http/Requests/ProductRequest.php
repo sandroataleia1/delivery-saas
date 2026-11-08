@@ -10,6 +10,17 @@ use Illuminate\Validation\Validator;
 
 class ProductRequest extends FormRequest
 {
+    /**
+     * O FormData do navegador omite listas vazias; em multipart a ausência de `recipe` significa lista vazia.
+     * Clientes JSON continuam obrigados a enviar a chave.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->isJson() && ! $this->has('recipe')) {
+            $this->merge(['recipe' => []]);
+        }
+    }
+
     public function rules(): array
     {
         $companyId = $this->user()->company_id;

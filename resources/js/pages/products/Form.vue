@@ -47,18 +47,25 @@ function onImageChange(event) {
 }
 
 function submit() {
+    const hasFile = form.image instanceof File;
+
     form.transform((data) => ({
         ...data,
-        ...(editing.value ? { _method: 'put' } : {}),
+        ...(editing.value && hasFile ? { _method: 'put' } : {}),
         recipe: data.track_stock
             ? []
             : data.recipe.map(({ ingredient_id, quantity }) => ({ ingredient_id, quantity })),
     }));
 
-    // Upload de arquivo exige multipart; o PUT é simulado por _method.
+    // Multipart só com arquivo (o FormData descarta listas vazias); o PUT vira POST com _method.
+    if (editing.value && !hasFile) {
+        form.put(route('products.update', props.product.id));
+        return;
+    }
+
     form.post(
         editing.value ? route('products.update', props.product.id) : route('products.store'),
-        { forceFormData: true },
+        { forceFormData: hasFile },
     );
 }
 </script>
