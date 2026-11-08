@@ -1,6 +1,6 @@
 # Catálogo online, opções/pizza, WhatsApp e Pix
 
-**Data:** 08/11/2026. **Estado:** rascunho para aprovação do usuário. Nada implementado.
+**Data:** 08/11/2026. **Estado:** aprovado expressamente pelo usuário em 08/11/2026, incluindo as propostas marcadas. Nada implementado; implantação não autorizada.
 **Base:** `phase4/production-flow` (Fase 4 concluída, não implantada). Regras das Fases 3 e 4 continuam válidas.
 **Convenção:** o que o usuário decidiu está marcado **[usuário]**; o que é proposta do autor do desenho está marcado **[proposta]** e pode ser revisto na aprovação.
 
