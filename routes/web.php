@@ -44,6 +44,7 @@ Route::middleware('public.page')->group(function () {
 
 // Loja online: pública, acessada pelo link da loja.
 Route::middleware('public.page')->group(function () {
+    Route::get('loja/{slug}', [ShopController::class, 'show'])->name('shop.show');
     Route::post('loja/{slug}/pedidos', [ShopController::class, 'store'])->middleware('throttle:online')->name('shop.store');
 });
 

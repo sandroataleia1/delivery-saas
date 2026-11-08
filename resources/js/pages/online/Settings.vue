@@ -117,7 +117,12 @@ const hoursError = computed(() => form.errors.hours
                 <Field v-slot="{ id }" label="Endereço da loja" :error="form.errors.slug" hint="Apenas letras minúsculas, números e hífen.">
                     <input :id="id" v-model="form.slug" class="input" required minlength="3" maxlength="60" />
                 </Field>
-                <p class="text-muted text-sm">Link público: <span class="font-mono">/loja/{{ form.slug || 'sua-loja' }}</span></p>
+                <p class="text-muted text-sm">
+                    Link público:
+                    <a v-if="store?.slug" :href="route('shop.show', store.slug)" target="_blank" rel="noopener" class="text-brand-strong font-mono break-all underline">{{ route('shop.show', store.slug) }}</a>
+                    <span v-else class="font-mono">/loja/{{ form.slug || 'sua-loja' }}</span>
+                    <span v-if="store?.slug && form.slug !== store.slug" class="block">Salve para trocar o link para /loja/{{ form.slug || 'sua-loja' }}.</span>
+                </p>
 
                 <div class="space-y-2">
                     <label class="flex cursor-pointer items-center gap-2.5 text-sm">

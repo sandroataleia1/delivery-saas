@@ -35,7 +35,7 @@ function togglePause() {
 
 <template>
     <AppLayout title="Pedidos online">
-        <PageHeader title="Pedidos online" :subtitle="store ? `${store.label} · ${store.link}` : null">
+        <PageHeader title="Pedidos online" :subtitle="store ? store.label : null">
             <button v-if="store" type="button" class="btn btn-secondary" :disabled="pausing" @click="togglePause">
                 {{ store.paused ? 'Reabrir loja' : 'Pausar loja' }}
             </button>
@@ -47,6 +47,7 @@ function togglePause() {
         </div>
 
         <template v-else>
+            <p class="text-muted mb-3 text-sm">Link da loja: <a :href="store.link" target="_blank" rel="noopener" class="text-brand-strong break-all underline">{{ store.link }}</a></p>
             <p v-if="store.paused" class="text-warn mb-3 text-sm font-semibold" role="status">A loja está pausada: os clientes não conseguem enviar novos pedidos.</p>
             <MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" />
 

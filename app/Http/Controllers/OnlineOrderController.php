@@ -33,7 +33,7 @@ class OnlineOrderController extends Controller
             'store' => $store ? [
                 'label' => StoreSchedule::label($store, CarbonImmutable::now()),
                 'paused' => $store->isPaused(),
-                'link' => '/loja/'.$store->slug,
+                'link' => route('shop.show', $store->slug),
             ] : null,
             'operation' => array_intersect_key($policy->resolve($company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
             'paymentMethods' => config('sales.payment_methods'),
