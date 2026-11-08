@@ -8,6 +8,7 @@ use App\Models\Bill;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
+use App\Models\ProductionWork;
 use App\Models\Role;
 use App\Models\Sale;
 use App\Models\StockMovement;
@@ -33,7 +34,7 @@ class DeliveryTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->courier = $this->userWith(['deliveries.courier'], $this->admin->company);
         $this->customer = Customer::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Maria']);
         $this->product = Product::factory()->create(['company_id' => $this->admin->company_id, 'sale_price' => '30', 'stock_quantity' => '10']);
@@ -64,6 +65,12 @@ class DeliveryTest extends TestCase
 
     private function advance(DeliveryOrder $order, array $extra = [])
     {
+        if (in_array($order->fresh()->status, ['received', 'preparing'], true)) {
+            $work = ProductionWork::whereIn('delivery_order_item_id', $order->items()->pluck('id'))->firstOrFail();
+
+            return $this->post(route('production.transition', $work->id), ['expected_version' => $work->version, 'target' => $work->status === 'waiting' ? 'preparing' : 'ready']);
+        }
+
         return $this->post("/entregas/{$order->id}/avancar", ['expected_status' => $order->fresh()->status, ...$extra]);
     }
 
@@ -164,7 +171,7 @@ class DeliveryTest extends TestCase
     {
         $order = $this->order();
 
-        $this->post("/entregas/{$order->id}/avancar", ['expected_status' => DeliveryOrder::RECEIVED]);
+        $this->advance($order);
         $this->post("/entregas/{$order->id}/avancar", ['expected_status' => DeliveryOrder::RECEIVED])->assertSessionHasErrors('order');
 
         $this->assertSame(DeliveryOrder::PREPARING, $order->fresh()->status);
@@ -382,7 +389,7 @@ class DeliveryTest extends TestCase
     public function test_isolamento_entre_empresas(): void
     {
         $order = $this->order();
-        $other = $this->adminOf();
+        $other = $this->productionAdminOf();
         $foreignCustomer = Customer::factory()->create(['company_id' => $other->company_id]);
 
         $this->actingAs($this->admin)->post('/entregas', $this->payload(['customer_id' => $foreignCustomer->id]))->assertSessionHasErrors('customer_id');

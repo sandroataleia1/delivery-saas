@@ -49,6 +49,7 @@ report('R3 limite acumulado não permite fracionamento concorrente', $r, [
 $table = $makeTable(302);
 $order = app(OpenTable::class)->handle($table, 1, $admin);
 app(AddOrderItems::class)->handle($order, [['product_id' => $pqr->id, 'quantity' => 1]], $u());
+deliver_production($order);
 $beforeStock = $pqr->fresh()->stock_quantity;
 $beforeMovements = StockMovement::where('product_id', $pqr->id)->count();
 $saleUuid = $u();

@@ -34,7 +34,7 @@ class MenuTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->table = DiningTable::factory()->create(['company_id' => $this->admin->company_id, 'number' => 7]);
         $this->product = Product::factory()->create([
             'company_id' => $this->admin->company_id,
@@ -207,7 +207,7 @@ class MenuTest extends TestCase
 
     public function test_funcionario_logado_de_outra_empresa_ve_e_pede_normalmente(): void
     {
-        $outsider = $this->adminOf();
+        $outsider = $this->productionAdminOf();
 
         $this->actingAs($outsider)->get($this->url())->assertInertia(fn (Assert $page) => $page->has('products', 1));
 
@@ -259,6 +259,7 @@ class MenuTest extends TestCase
 
         $this->actingAs($this->admin)->post(route('receipts.confirm', MenuOrderReceipt::withoutGlobalScopes()->sole()->id))->assertSessionHasNoErrors();
 
+        $this->deliverProduction($order);
         $this->actingAs($this->admin)->post("/mesas/comandas/{$order->id}/fechar", [
             'client_uuid' => (string) Str::uuid(),
             'expected_subtotal' => '80.00',

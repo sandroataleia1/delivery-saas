@@ -3,19 +3,23 @@
 /** C1–C9: integridade sob concorrência, exclusivamente em instância descartável. */
 
 use App\Actions\AddOrderItems;
+use App\Actions\CancelOrderItem;
 use App\Actions\CancelSale;
 use App\Actions\CancelStockEntry;
 use App\Actions\CloseCashSession;
 use App\Actions\CloseTableOrder;
 use App\Actions\ConfirmMenuOrder;
+use App\Actions\MarkProductSoldOut;
 use App\Actions\OpenCashSession;
 use App\Actions\OpenTable;
 use App\Actions\PlaceMenuOrder;
+use App\Actions\ReconcileProduction;
 use App\Actions\RegisterSale;
 use App\Actions\RejectMenuOrder;
 use App\Actions\ReopenBill;
 use App\Actions\SettleBill;
 use App\Actions\TransferTable;
+use App\Actions\TransitionProduction;
 use App\Models\Bill;
 use App\Models\CashMovement;
 use App\Models\CashSession;
@@ -23,6 +27,8 @@ use App\Models\Company;
 use App\Models\DiningTable;
 use App\Models\MenuOrderReceipt;
 use App\Models\Product;
+use App\Models\ProductionSector;
+use App\Models\ProductionWork;
 use App\Models\RestaurantOperationSettings;
 use App\Models\Role;
 use App\Models\Sale;
@@ -30,6 +36,7 @@ use App\Models\SalePayment;
 use App\Models\StockEntry;
 use App\Models\StockMovement;
 use App\Models\TableOrder;
+use App\Models\TableOrderItem;
 use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
@@ -79,6 +86,11 @@ if (($argv[1] ?? '') === 'worker') {
     $t = microtime(true);
     try {
         match ($op) {
+            'dispatchitems' => app(AddOrderItems::class)->handle(TableOrder::findOrFail($p['order']), [['product_id' => $p['product'], 'quantity' => '1']], $p['uuid']),
+            'productionstage' => app(TransitionProduction::class)->handle(ProductionWork::findOrFail($p['work']), $p['version'], $p['target']),
+            'cancelitem' => app(CancelOrderItem::class)->handle(TableOrderItem::findOrFail($p['item']), 'Cancelamento concorrente'),
+            'reconcileproduction' => app(ReconcileProduction::class)->handle(ProductionWork::findOrFail($p['work']), 'delivered', 'Conferência observada pelo gestor'),
+            'soldout' => app(MarkProductSoldOut::class)->handle(Product::findOrFail($p['product']), true),
             'sale' => app(RegisterSale::class)->handle(sale_payload($p['product'], $p['uuid'], $p['price'] ?? '10.00')),
             'qr' => app(PlaceMenuOrder::class)->handle(DiningTable::withoutGlobalScopes()->findOrFail($p['table']), ['service_context' => $p['context'], 'client_uuid' => $p['uuid'], 'tracking_key' => $p['key'] ?? str_repeat('a', 64), 'items' => [['product_id' => $p['product'], 'quantity' => 1, 'notes' => null]]]),
             'confirmreceipt' => app(ConfirmMenuOrder::class)->handle(MenuOrderReceipt::findOrFail($p['receipt'])),
@@ -160,6 +172,17 @@ function tally(array $results): array
     return ['workers' => count($results), 'barrier_ready' => count(array_filter($results, fn ($result) => $result['barrier_ready'])), 'ok' => $ok, 'errors' => $errors, 'ms_max' => end($times)];
 }
 
+function deliver_production(TableOrder $order): void
+{
+    foreach (ProductionWork::whereIn('table_order_item_id', $order->activeItems()->pluck('id'))->orderBy('id')->get() as $work) {
+        app(TransitionProduction::class)->handle($work, $work->version, 'preparing');
+        $work->refresh();
+        app(TransitionProduction::class)->handle($work, $work->version, 'ready');
+        $work->refresh();
+        app(TransitionProduction::class)->handle($work, $work->version, 'delivered');
+    }
+}
+
 function report(string $name, array $results, array $invariants): void
 {
     global $failedScenarios;
@@ -178,6 +201,8 @@ function inv(string $what, $got, $want): array
 Artisan::call('migrate:fresh', ['--force' => true]);
 $failedScenarios = 0;
 $company = Company::factory()->create();
+$sector = ProductionSector::factory()->create(['company_id' => $company->id]);
+$company->forceFill(['default_production_sector_id' => $sector->id])->save();
 $role = Role::factory()->admin()->create(['company_id' => $company->id]);
 $admin = User::factory()->forRole($role)->create();
 Auth::setUser($admin);
@@ -227,6 +252,7 @@ report('C3 20 pedidos QR simultâneos em mesa livre', $r, [
 $table4 = DiningTable::factory()->create(['company_id' => $company->id, 'number' => 102]);
 $o4 = app(OpenTable::class)->handle($table4, 1, $admin);
 app(AddOrderItems::class)->handle($o4, [['product_id' => $p3->id, 'quantity' => 1, 'notes' => null]], $u());
+deliver_production($o4);
 $before = Sale::count();
 $r = run_all(array_map(fn () => ['close', ['user' => $admin->id, 'order' => $o4->id, 'uuid' => (string) Str::uuid(), 'subtotal' => '10.00']], range(1, 6)));
 report('C4 fechar mesma comanda 6x (uuids distintos)', $r, [
@@ -280,6 +306,7 @@ report('C8 fechar caixa com 15 vendas simultâneas', $r, [
 
 require __DIR__.'/financial.php';
 require __DIR__.'/receipts.php';
+require __DIR__.'/production.php';
 
 // C9: fechar x transferir a mesma comanda (ordem de lock invertida), 30 rodadas.
 $deadlocks = 0;
@@ -292,6 +319,7 @@ foreach (range(1, 30) as $round) {
     $to = DiningTable::factory()->create(['company_id' => $company->id, 'number' => 1001 + $round * 2]);
     $o = app(OpenTable::class)->handle($from, 1, $admin);
     app(AddOrderItems::class)->handle($o, [['product_id' => $p8->id, 'quantity' => 1, 'notes' => null]], $u());
+    deliver_production($o);
     $closeUuids = [$u(), $u()];
     $stockBefore = $p8->fresh()->stock_quantity;
     $r = run_all([

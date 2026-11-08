@@ -30,7 +30,7 @@ class TableTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->table = DiningTable::factory()->create(['company_id' => $this->admin->company_id, 'number' => 5]);
         $this->soda = Product::factory()->create([
             'company_id' => $this->admin->company_id,
@@ -58,6 +58,10 @@ class TableTest extends TestCase
 
     private function closing(array $overrides = []): array
     {
+        foreach (TableOrder::where('status', 'open')->get() as $activeOrder) {
+            $this->deliverProduction($activeOrder);
+        }
+
         return [
             'client_uuid' => (string) Str::uuid(),
             'expected_subtotal' => '20.00',
@@ -454,7 +458,7 @@ class TableTest extends TestCase
         $order = $this->openTable();
         $this->launch($order);
         $item = $order->items()->sole();
-        $other = $this->adminOf();
+        $other = $this->productionAdminOf();
         $foreignProduct = Product::factory()->create(['company_id' => $other->company_id]);
 
         $this->actingAs($other);

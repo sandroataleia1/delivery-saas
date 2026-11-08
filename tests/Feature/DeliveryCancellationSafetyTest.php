@@ -23,7 +23,7 @@ class DeliveryCancellationSafetyTest extends TestCase
 
     private function order(): DeliveryOrder
     {
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $customer = Customer::factory()->create(['company_id' => $this->admin->company_id]);
         $this->product = Product::factory()->create(['company_id' => $this->admin->company_id, 'stock_quantity' => '10', 'sale_price' => '80']);
         $this->actingAs($this->admin)->post('/entregas', [
@@ -81,7 +81,7 @@ class DeliveryCancellationSafetyTest extends TestCase
     {
         $order = $this->order();
         $order->forceFill(['status' => DeliveryOrder::DELIVERED, 'delivered_at' => now()])->save();
-        $otherAdmin = $this->adminOf();
+        $otherAdmin = $this->productionAdminOf();
         $before = $this->effects();
 
         $this->actingAs($otherAdmin)->post("/entregas/{$order->id}/cancelar", ['reason' => 'Outra empresa'])->assertNotFound();

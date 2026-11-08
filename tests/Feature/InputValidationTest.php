@@ -31,7 +31,7 @@ class InputValidationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->actingAs($this->admin);
         $this->product = Product::factory()->create(['company_id' => $this->admin->company_id, 'stock_quantity' => '10', 'sale_price' => '10', 'track_stock' => true]);
         $this->table = DiningTable::factory()->create(['company_id' => $this->admin->company_id]);
