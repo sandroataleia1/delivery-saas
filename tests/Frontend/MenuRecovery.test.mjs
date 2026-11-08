@@ -63,4 +63,5 @@ test('network retry keeps UUID, key, context and content across reload', async (
     reload.start(); assert.equal(reload.error.value.includes('Não foi possível recuperar'), false, reload.error.value); assert.ok(reload.journal.value.length, reload.error.value); await reload.send();
     assert.deepEqual(recovered, firstPayload);
     assert.equal(reload.journal.value[0].uncertain, false);
+    assert.equal(reload.cart.value.length, 0, 'only the recovered submission draft is cleared');
 });

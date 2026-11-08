@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\RestaurantOperationSettingsFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 class RestaurantOperationSettings extends Model
 {
     /** @use HasFactory<RestaurantOperationSettingsFactory> */
-    use \App\Models\Concerns\BelongsToCompany, Auditable, HasFactory;
+    use Auditable, BelongsToCompany, HasFactory;
 
     protected function casts(): array
     {

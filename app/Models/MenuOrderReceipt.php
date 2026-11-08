@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\MenuOrderReceiptFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class MenuOrderReceipt extends Model
 {
     /** @use HasFactory<MenuOrderReceiptFactory> */
-    use \App\Models\Concerns\BelongsToCompany, Auditable, HasFactory;
+    use Auditable, BelongsToCompany, HasFactory;
 
     public const PENDING = 'pending';
 
