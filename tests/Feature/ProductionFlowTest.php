@@ -10,6 +10,7 @@ use App\Actions\TransitionProduction;
 use App\Models\Customer;
 use App\Models\DiningTable;
 use App\Models\Product;
+use App\Models\ProductionEvent;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
 use App\Models\Sale;
@@ -176,5 +177,55 @@ class ProductionFlowTest extends TestCase
         $this->post('/producao/'.$work->id.'/reconciliar', ['observed' => 'delivered', 'reason' => 'Entrega conferida com responsável'])->assertSessionHasNoErrors();
         $this->post('/entregas/'.$order->id.'/acertar', $payload)->assertSessionHasNoErrors();
         $this->assertSame(1, Sale::count());
+    }
+
+    public function test_staff_replay_after_sold_out_returns_persisted_launch(): void
+    {
+        [$admin, $order] = $this->works();
+        $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+        $payload = ['client_uuid' => (string) Str::uuid(), 'items' => [['product_id' => $product->id, 'quantity' => '1']]];
+        $this->post('/mesas/comandas/'.$order->id.'/itens', $payload)->assertSessionHasNoErrors();
+        $product->forceFill(['sold_out' => true])->save();
+        $this->post('/mesas/comandas/'.$order->id.'/itens', $payload)->assertSessionHasNoErrors();
+        $this->assertSame(3, ProductionWork::count());
+        $payload['client_uuid'] = (string) Str::uuid();
+        $this->post('/mesas/comandas/'.$order->id.'/itens', $payload)->assertSessionHasErrors();
+        $this->assertSame(3, ProductionWork::count());
+    }
+
+    public function test_delivered_legacy_delivery_only_accepts_delivered_observation(): void
+    {
+        [$admin] = $this->works();
+        $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+        $customer = Customer::factory()->create(['company_id' => $admin->company_id]);
+        $order = app(CreateDeliveryOrder::class)->handle(['client_uuid' => (string) Str::uuid(), 'customer_id' => $customer->id, 'type' => 'pickup', 'payment_method' => 'pix', 'items' => [['product_id' => $product->id, 'quantity' => '1']]]);
+        $order->forceFill(['status' => 'delivered', 'delivered_at' => now()])->save();
+        $work = ProductionWork::whereNotNull('delivery_order_item_id')->sole();
+        $work->forceFill(['legacy' => true, 'status' => null])->save();
+        foreach (['waiting', 'preparing', 'ready'] as $observed) {
+            $this->post('/producao/'.$work->id.'/reconciliar', ['observed' => $observed, 'reason' => 'Conferido'])->assertSessionHasErrors('production');
+        }
+        $this->assertNull($work->fresh()->reconciled_at);
+        $this->post('/producao/'.$work->id.'/reconciliar', ['observed' => 'delivered', 'reason' => 'Conferido'])->assertSessionHasNoErrors();
+        $this->assertNotNull($work->fresh()->delivered_at);
+    }
+
+    public function test_completing_delivery_keeps_delivery_already_recorded_by_reconciliation(): void
+    {
+        [$admin] = $this->works();
+        $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+        $customer = Customer::factory()->create(['company_id' => $admin->company_id]);
+        $order = app(CreateDeliveryOrder::class)->handle(['client_uuid' => (string) Str::uuid(), 'customer_id' => $customer->id, 'type' => 'pickup', 'payment_method' => 'pix', 'items' => [['product_id' => $product->id, 'quantity' => '1'], ['product_id' => $product->id, 'quantity' => '1']]]);
+        $works = ProductionWork::whereNotNull('delivery_order_item_id')->orderBy('id')->get();
+        $works[0]->forceFill(['legacy' => true, 'status' => null])->save();
+        $this->post('/producao/'.$works[0]->id.'/reconciliar', ['observed' => 'delivered', 'reason' => 'Entregue no balcão'])->assertSessionHasNoErrors();
+        $recorded = $works[0]->fresh()->delivered_at;
+        app(TransitionProduction::class)->handle($works[1], 0, 'preparing');
+        app(TransitionProduction::class)->handle($works[1], 1, 'ready');
+        $this->travel(5)->minutes();
+        $this->post('/entregas/'.$order->id.'/avancar', ['expected_status' => 'ready'])->assertSessionHasNoErrors();
+        $this->assertEquals($recorded, $works[0]->fresh()->delivered_at);
+        $this->assertSame(0, ProductionEvent::where('production_work_id', $works[0]->id)->where('to_state', 'delivered')->count());
+        $this->assertSame(1, ProductionEvent::where('production_work_id', $works[1]->id)->where('to_state', 'delivered')->count());
     }
 }

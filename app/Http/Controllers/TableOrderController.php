@@ -101,7 +101,7 @@ class TableOrderController extends Controller
                 'bail',
                 'required',
                 'integer',
-                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true)->where('sold_out', false),
+                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
             'items.*.notes' => ['nullable', 'string', 'max:120'],

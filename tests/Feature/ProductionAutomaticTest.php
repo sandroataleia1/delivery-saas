@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\DiningTable;
 use App\Models\MenuOrderReceipt;
 use App\Models\Product;
+use App\Models\ProductionEvent;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
 use App\Models\RestaurantOperationSettings;
@@ -91,5 +92,21 @@ class ProductionAutomaticTest extends TestCase
         $this->actingAs($admin)->putJson('/empresa/operacao', ['automatic_enabled' => false, 'confirmation_mode' => 'manual', 'remote_risk_accepted' => false])->assertOk();
         $this->assertFalse(RestaurantOperationSettings::sole()->automatic_enabled);
         $this->assertNull(RestaurantOperationSettings::sole()->automatic_accepted_at);
+    }
+
+    public function test_automatic_confirmation_never_records_logged_in_staff_as_actor(): void
+    {
+        $admin = $this->adminOf();
+        $sector = ProductionSector::factory()->create(['company_id' => $admin->company_id]);
+        $admin->company->forceFill(['default_production_sector_id' => $sector->id, 'qr_menu_enabled' => true])->save();
+        $product = Product::factory()->create(['company_id' => $admin->company_id]);
+        $table = DiningTable::factory()->create(['company_id' => $admin->company_id]);
+        $this->actingAs($admin)->putJson('/empresa/operacao', ['confirmation_mode' => 'automatic', 'automatic_enabled' => true, 'remote_risk_accepted' => true])->assertOk();
+        $data = ['client_uuid' => (string) Str::uuid(), 'service_context' => $table->service_context, 'tracking_key' => str_repeat('b', 64), 'items' => [['product_id' => $product->id, 'quantity' => 1]]];
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated()->assertJsonPath('receipt.status', 'confirmed');
+        $this->assertNull(MenuOrderReceipt::sole()->decided_by_id);
+        $event = ProductionEvent::sole();
+        $this->assertNull($event->actor_id);
+        $this->assertNotSame($admin->name, $event->actor_name);
     }
 }

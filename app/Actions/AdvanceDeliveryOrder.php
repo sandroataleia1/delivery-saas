@@ -48,7 +48,7 @@ class AdvanceDeliveryOrder
 
             if ($next === DeliveryOrder::DELIVERED) {
                 $locked->delivered_at = now();
-                foreach ($works as $work) {
+                foreach ($works->whereNull('delivered_at') as $work) {
                     $work->forceFill(['delivered_at' => now(), 'version' => $work->version + 1])->save();
                     ProductionGuard::event($work, 'ready', 'delivered');
                 }

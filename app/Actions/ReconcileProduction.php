@@ -26,6 +26,10 @@ class ReconcileProduction
             }
             $locked->load('tableItem', 'deliveryItem');
             $item = $locked->tableItem ?? $locked->deliveryItem;
+            if ($locked->deliveryItem && $observed !== 'delivered'
+                && DeliveryOrder::findOrFail($item->delivery_order_id)->status === DeliveryOrder::DELIVERED) {
+                throw ValidationException::withMessages(['production' => 'Pedido já entregue: registre a entrega observada para permitir o acerto.']);
+            }
             $sector = (new ProductionDestination)->resolve(Product::where('company_id', $locked->company_id)->findOrFail($item->product_id));
             $locked->forceFill(['production_sector_id' => $sector->id, 'sector_name' => $sector->name,
                 'status' => $observed === 'delivered' ? 'ready' : $observed, 'version' => $locked->version + 1,
