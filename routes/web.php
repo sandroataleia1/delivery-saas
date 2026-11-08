@@ -33,6 +33,7 @@ use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 // Cardápio da mesa: público, acessado pelo QR Code.
@@ -275,6 +276,10 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');
             Route::get('loja-online/configuracao', [OnlineStoreController::class, 'edit'])->name('online.settings');
             Route::put('loja-online/configuracao', [OnlineStoreController::class, 'update'])->name('online.settings.update');
+            Route::get('loja-online/whatsapp', [WhatsAppController::class, 'edit'])->name('online.whatsapp');
+            Route::post('loja-online/whatsapp/conectar', [WhatsAppController::class, 'connect'])->name('online.whatsapp.connect');
+            Route::delete('loja-online/whatsapp/conexao', [WhatsAppController::class, 'disconnect'])->name('online.whatsapp.disconnect');
+            Route::put('loja-online/whatsapp', [WhatsAppController::class, 'update'])->name('online.whatsapp.update');
             Route::put('empresa/operacao', [RestaurantOperationSettingsController::class, 'update'])->name('company.operation');
         });
     });
