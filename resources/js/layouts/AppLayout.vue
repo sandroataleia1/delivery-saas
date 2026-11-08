@@ -13,6 +13,7 @@ import {
     CircleArrowUp,
     Contact,
     Globe,
+    ShoppingBag,
     History,
     House,
     Landmark,
@@ -55,6 +56,7 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
             can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', icon: Armchair },
             can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', icon: Motorcycle },
             can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
+            can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
             can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
             can('customers.view') && { label: 'Clientes', href: route('customers.index'), match: '/clientes', icon: Contact },
         ],
@@ -84,7 +86,7 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
             can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
             can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
             can('audit.view') && { label: 'Auditoria', href: route('audit.index'), match: '/auditoria', icon: History },
-            can('company.manage') && { label: 'Loja online', href: route('online.settings'), match: '/loja-online', icon: Globe },
+            can('company.manage') && { label: 'Loja online', href: route('online.settings'), match: '/loja-online/configuracao', icon: Globe },
             can('company.manage') && { label: 'Empresa', href: route('company.edit'), match: '/empresa', icon: Store },
         ],
     },
@@ -207,6 +209,7 @@ watch(() => page.url, () => (menuOpen.value = false));
                         >
                             <component :is="item.icon" :size="18" />
                             {{ item.label }}
+                            <span v-if="item.badge" class="bg-danger ml-auto rounded-full px-2 text-xs font-bold text-white" :aria-label="`${item.badge} pendente(s)`">{{ item.badge }}</span>
                         </Link>
                     </div>
                 </section>

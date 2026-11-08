@@ -260,6 +260,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         Route::middleware('can:audit.view')->get('auditoria', [AuditController::class, 'index'])->name('audit.index');
 
         Route::middleware('can:online_orders.accept')->group(function () {
+            Route::get('loja-online/pedidos', [OnlineOrderController::class, 'index'])->name('online.orders');
             Route::post('loja-online/pausa', [OnlineStoreController::class, 'pause'])->name('online.pause');
             Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
             Route::post('loja-online/pedidos/{onlineOrder}/aceitar', [OnlineOrderController::class, 'accept'])->name('online.orders.accept');
