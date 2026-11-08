@@ -23,6 +23,9 @@ const form = useHttp({});
 const tracking = useHttp({});
 const storageKey = `menu-receipts:${props.token}`;
 let timer;
+let pollTimer;
+let generation = 0;
+let draftReceiptUuid = null;
 let disposed = false;
 const uncertain = computed(() => journal.value.find(record => record.uncertain));
 const frozen = computed(() => Boolean(uncertain.value) || form.processing);
@@ -32,9 +35,49 @@ const count = computed(() => cart.value.reduce((sum, item) => sum + item.quantit
 const totalCents = computed(() => cart.value.reduce((sum, item) => sum + lineCents(item.quantity, item.sale_price), 0));
 const quantityOf = product => cart.value.find(item => item.product_id === product.id)?.quantity ?? 0;
 const stale = computed(() => journal.value.length && clock.value - lastUpdated.value > 30000);
-function persist() {
-    try { localStorage.setItem(storageKey, JSON.stringify(journal.value)); return true; }
-    catch { error.value = 'Não foi possível guardar o envio neste aparelho. Chame a equipe antes de pedir novamente.'; storageReady.value = false; return false; }
+function readRecord(raw) {
+    const record = JSON.parse(raw);
+    if (!record?.payload?.client_uuid || !/^[a-f0-9]{64}$/.test(record.payload.tracking_key) || !Array.isArray(record.cart)) throw new Error('Invalid journal');
+    return record;
+}
+function mergeRecord(saved, incoming) {
+    if (!saved) return incoming;
+    let receipt = incoming.receipt ?? saved.receipt;
+    if (saved.receipt && saved.receipt.status !== 'pending' && receipt?.status === 'pending') receipt = saved.receipt;
+    if (receipt && saved.receipt) {
+        receipt = { ...receipt, attendance_cancelled: receipt.attendance_cancelled || saved.receipt.attendance_cancelled,
+            items: receipt.items?.map((item, index) => ({ ...item, cancelled: item.cancelled || saved.receipt.items?.[index]?.cancelled })) };
+    }
+    const validationFailed = saved.validation_failed || incoming.validation_failed;
+    return { ...incoming, receipt, validation_failed: validationFailed, uncertain: !receipt && !validationFailed && (saved.uncertain || incoming.uncertain) };
+}
+function syncJournal() {
+    const records = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (key?.startsWith(`${storageKey}:`)) records.push(readRecord(localStorage.getItem(key)));
+    }
+    const active = records.filter(record => !record.validation_failed || record.receipt).sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0));
+    const known = active.filter(record => !record.uncertain).slice(-20);
+    journal.value = [...active.filter(record => record.uncertain), ...known];
+}
+function persist(record) {
+    try {
+        const key = `${storageKey}:${record.payload.client_uuid}`;
+        const existing = localStorage.getItem(key);
+        // Each UUID owns its record: another tab cannot replace its recovery credentials.
+        localStorage.setItem(key, JSON.stringify(mergeRecord(existing ? readRecord(existing) : null, record)));
+        syncJournal(); return true;
+    } catch { error.value = 'Não foi possível guardar o envio neste aparelho. Chame a equipe antes de pedir novamente.'; storageReady.value = false; return false; }
+}
+function clearOwnDraft(uuid) {
+    if (draftReceiptUuid === uuid) { cart.value = []; draftReceiptUuid = null; }
+}
+function storageChanged(event) {
+    if (event.key === null || event.key?.startsWith(`${storageKey}:`)) {
+        generation++; tracking.cancel();
+        try { syncJournal(); } catch { storageReady.value = false; error.value = 'Falha ao recuperar envios. Chame a equipe.'; }
+    }
 }
 function change(product, delta) {
     if (frozen.value) return;
@@ -48,27 +91,34 @@ function change(product, delta) {
 async function send() {
     if (form.processing || !storageReady.value) return;
     error.value = '';
+    const knownUncertain = uncertain.value?.payload.client_uuid;
+    try { syncJournal(); } catch { storageReady.value = false; error.value = 'Falha ao recuperar envios. Chame a equipe.'; return; }
+    if (uncertain.value && uncertain.value.payload.client_uuid !== knownUncertain) {
+        error.value = 'Há um envio sem resposta em outra aba. Confira Meus envios e use Reenviar o mesmo pedido antes de enviar seu novo rascunho.';
+        sheet.value = 'receipts'; return;
+    }
+    generation++; tracking.cancel();
     let record = uncertain.value;
     if (!record) {
         if (!count.value) return;
         const key = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
         record = { payload: { client_uuid: newUuid(), service_context: props.serviceContext, tracking_key: key,
             items: cart.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })) },
-            cart: JSON.parse(JSON.stringify(cart.value)), uncertain: true, receipt: null };
-        journal.value = [...journal.value.slice(-19), record];
+            cart: JSON.parse(JSON.stringify(cart.value)), created_at: Date.now(), uncertain: true, receipt: null };
+        draftReceiptUuid = record.payload.client_uuid;
     }
-    if (!persist()) return;
+    if (!persist(record)) return;
     const uuid = record.payload.client_uuid;
     const timeout = setTimeout(() => form.cancel(), 15000);
     try {
         const response = await form.transform(() => record.payload).post(route('menu.store', props.token));
         if (!response) {
             error.value = Object.values(form.errors).join(' ') || 'Confira os dados do pedido.';
-            journal.value = journal.value.filter(item => item.payload.client_uuid !== uuid);
-            persist(); return;
+            persist({ ...record, uncertain: false, validation_failed: true });
+            draftReceiptUuid = null; return;
         }
-        journal.value = journal.value.map(item => item.payload.client_uuid === uuid ? { ...item, uncertain: false, receipt: response.receipt } : item);
-        cart.value = []; sheet.value = 'receipts'; lastUpdated.value = Date.now(); persist();
+        persist({ ...record, uncertain: false, receipt: response.receipt });
+        clearOwnDraft(uuid); sheet.value = 'receipts'; lastUpdated.value = Date.now();
     } catch (exception) {
         const status = exception.response?.status;
         error.value = status === 429 ? 'Muitos envios. Aguarde e use Reenviar o mesmo pedido.' : status === 409
@@ -78,31 +128,41 @@ async function send() {
 }
 async function poll() {
     if (disposed || tracking.processing || form.processing || !journal.value.length) return;
+    const responseGeneration = generation;
     let allOk = true;
     for (const record of [...journal.value]) {
-        if (disposed) return;
+        if (disposed || generation !== responseGeneration || form.processing) return;
         const timeout = setTimeout(() => tracking.cancel(), 10000);
         try {
             const response = await tracking.get(route('menu.track', [props.token, record.payload.client_uuid]), { headers: { 'X-Menu-Receipt-Key': record.payload.tracking_key } });
-            if (!response || disposed) { allOk = false; continue; }
-            journal.value = journal.value.map(item => item.payload.client_uuid === record.payload.client_uuid ? { ...item, uncertain: false, receipt: response.receipt } : item);
-            if (record.uncertain) { cart.value = []; error.value = ''; }
+            if (disposed || generation !== responseGeneration) return;
+            if (!response) { allOk = false; continue; }
+            persist({ ...record, uncertain: false, receipt: response.receipt });
+            clearOwnDraft(record.payload.client_uuid);
+            if (record.uncertain) error.value = '';
         } catch { allOk = false; } finally { clearTimeout(timeout); }
     }
     if (allOk) lastUpdated.value = Date.now();
-    if (!disposed) persist();
+
 }
 onMounted(() => {
     try {
-        const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        if (!Array.isArray(saved) || saved.some(record => !record.payload?.client_uuid || !/^[a-f0-9]{64}$/.test(record.payload?.tracking_key) || !Array.isArray(record.cart))) throw new Error('Invalid journal');
-        journal.value = saved.slice(-20);
-        if (uncertain.value) { cart.value = uncertain.value.cart; error.value = 'Há um envio sem resposta confirmada. Reenvie o mesmo pedido ou chame a equipe.'; }
+        // Preserve any journal from an earlier build before adopting independent UUID records.
+        const legacy = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        if (!Array.isArray(legacy)) throw new Error('Invalid journal');
+        for (const record of legacy) {
+            const key = `${storageKey}:${record.payload.client_uuid}`;
+            if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(readRecord(JSON.stringify(record))));
+        }
+        syncJournal();
+        if (uncertain.value) { cart.value = JSON.parse(JSON.stringify(uncertain.value.cart)); draftReceiptUuid = uncertain.value.payload.client_uuid; error.value = 'Há um envio sem resposta confirmada. Reenvie o mesmo pedido ou chame a equipe.'; }
         poll();
     } catch { storageReady.value = false; error.value = 'Não foi possível recuperar seus envios neste aparelho. Chame a equipe antes de pedir novamente.'; }
-    timer = setInterval(() => { clock.value = Date.now(); if (clock.value % 20000 < 1000) poll(); }, 1000);
+    timer = setInterval(() => clock.value = Date.now(), 1000);
+    pollTimer = setInterval(poll, 20000);
+    window.addEventListener('storage', storageChanged);
 });
-onUnmounted(() => { disposed = true; clearInterval(timer); form.cancel(); tracking.cancel(); });
+onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTimer); window.removeEventListener('storage', storageChanged); form.cancel(); tracking.cancel(); });
 </script>
 
 <template>

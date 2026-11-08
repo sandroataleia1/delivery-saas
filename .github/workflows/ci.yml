@@ -31,6 +31,7 @@ jobs:
       - run: php artisan test --compact
       - run: vendor/bin/pint --test
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test tests/Frontend/*.test.mjs
       - run: npm run build
       - run: composer audit --locked
       - run: npm audit --omit=dev
