@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\DeliveryOrder;
 use App\Models\Product;
 use App\Models\ProductionWork;
 use App\Support\ProductionDestination;
@@ -30,6 +31,9 @@ class ReconcileProduction
                 'status' => $observed === 'delivered' ? 'ready' : $observed, 'version' => $locked->version + 1,
                 'reconciled_at' => now(), 'delivered_at' => $observed === 'delivered' ? now() : null])->save();
             ProductionGuard::event($locked, null, 'reconciled', 'Estágio observado: '.$observed.'. '.$reason);
+            if ($locked->delivery_order_item_id) {
+                ProductionGuard::syncDeliveryStatus(DeliveryOrder::findOrFail($item->delivery_order_id));
+            }
 
             return $locked;
         });

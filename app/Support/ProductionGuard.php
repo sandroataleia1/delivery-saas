@@ -43,6 +43,27 @@ class ProductionGuard
         }
     }
 
+    /**
+     * Derive a delivery order's preparation status from its lines while it is still in the kitchen stages.
+     * Orders already out or delivered are never regressed, and unknown legacy lines leave the status untouched.
+     */
+    public static function syncDeliveryStatus(DeliveryOrder $order): void
+    {
+        if (! in_array($order->status, [DeliveryOrder::RECEIVED, DeliveryOrder::PREPARING, DeliveryOrder::READY], true)) {
+            return;
+        }
+        $works = self::works($order)->reject(fn ($w) => $w->cancelled_at);
+        if ($works->isEmpty() || $works->contains(fn ($w) => $w->status === null || ($w->legacy && ! $w->reconciled_at))) {
+            return;
+        }
+        $status = match (true) {
+            $works->every(fn ($w) => $w->status === 'ready') => DeliveryOrder::READY,
+            $works->contains(fn ($w) => in_array($w->status, ['preparing', 'ready'], true)) => DeliveryOrder::PREPARING,
+            default => DeliveryOrder::RECEIVED,
+        };
+        $order->forceFill(['status' => $status])->save();
+    }
+
     public static function event(ProductionWork $work, ?string $from, string $to, ?string $reason = null): void
     {
         $event = new ProductionEvent;

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\AddOrderItems;
 use App\Actions\CreateDeliveryOrder;
 use App\Actions\OpenTable;
+use App\Actions\TransferTable;
 use App\Actions\TransitionProduction;
 use App\Models\Customer;
 use App\Models\DiningTable;
@@ -138,5 +139,42 @@ class ProductionFlowTest extends TestCase
         $this->assertSame(2, ProductionWork::whereNotNull('delivery_order_item_id')->whereNotNull('delivered_at')->count());
         $this->assertSame(0, Sale::count());
         $this->assertSame(0, StockMovement::count());
+    }
+
+    public function test_transfer_updates_operational_destination_without_restarting_preparation(): void
+    {
+        [$admin, $order, $work] = $this->works();
+        app(TransitionProduction::class)->handle($work, 0, 'preparing');
+        $target = DiningTable::factory()->create(['company_id' => $admin->company_id, 'number' => 99]);
+        app(TransferTable::class)->handle($order, $target);
+        $this->assertSame('Mesa 99 / comanda '.$order->number, $work->fresh()->origin_label);
+        $this->assertSame('preparing', $work->fresh()->status);
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(0, StockMovement::count());
+    }
+
+    public function test_reconciled_delivery_ready_stage_unblocks_dispatch_but_delivered_legacy_blocks_settlement(): void
+    {
+        [$admin] = $this->works();
+        $this->openCash($admin);
+        $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+        $customer = Customer::factory()->create(['company_id' => $admin->company_id]);
+        $order = app(CreateDeliveryOrder::class)->handle(['client_uuid' => (string) Str::uuid(), 'customer_id' => $customer->id, 'type' => 'pickup', 'payment_method' => 'pix', 'items' => [['product_id' => $product->id, 'quantity' => '1']]]);
+        $work = ProductionWork::whereNotNull('delivery_order_item_id')->sole();
+        $work->forceFill(['legacy' => true, 'status' => null])->save();
+        $this->post('/producao/'.$work->id.'/reconciliar', ['observed' => 'ready', 'reason' => 'Conferido no balcão'])->assertSessionHasNoErrors();
+        $this->assertSame('ready', $order->fresh()->status);
+        $this->post('/entregas/'.$order->id.'/avancar', ['expected_status' => 'ready'])->assertSessionHasNoErrors();
+        $this->assertNotNull($work->fresh()->delivered_at);
+        // Represent a migrated delivered/unsettled origin whose observation is still unknown.
+        $work = $work->fresh();
+        $work->forceFill(['status' => null, 'reconciled_at' => null, 'delivered_at' => null])->save();
+        $payload = ['client_uuid' => (string) Str::uuid(), 'payments' => [['method' => 'pix', 'amount' => '10']]];
+        $this->postJson('/entregas/'.$order->id.'/acertar', $payload)->assertUnprocessable()->assertJsonValidationErrors('production');
+        $this->assertSame(0, Sale::count());
+        $this->assertSame(0, StockMovement::count());
+        $this->post('/producao/'.$work->id.'/reconciliar', ['observed' => 'delivered', 'reason' => 'Entrega conferida com responsável'])->assertSessionHasNoErrors();
+        $this->post('/entregas/'.$order->id.'/acertar', $payload)->assertSessionHasNoErrors();
+        $this->assertSame(1, Sale::count());
     }
 }

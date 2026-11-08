@@ -34,9 +34,8 @@ class TransitionProduction
             if ($locked->delivery_order_item_id) {
                 $item = DeliveryOrderItem::findOrFail($locked->delivery_order_item_id);
                 $order = DeliveryOrder::findOrFail($item->delivery_order_id);
-                $works = ProductionGuard::assertKnown($order);
-                $status = $works->every(fn ($w) => $w->status === 'ready') ? DeliveryOrder::READY : DeliveryOrder::PREPARING;
-                $order->forceFill(['status' => $status])->save();
+                ProductionGuard::assertKnown($order);
+                ProductionGuard::syncDeliveryStatus($order);
             }
 
             return $locked;
