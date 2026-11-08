@@ -1,6 +1,6 @@
 # Fase 4 — produção por item e setor
 
-**Data:** 08/11/2026. **Estado:** início da Fase 4 autorizado; desenho detalhado para revisão, ainda sem implementação.
+**Data:** 08/11/2026. **Estado:** desenho aprovado expressamente pelo usuário; implementação autorizada.
 **Base:** `82b52cf`, Fase 3 concluída localmente. **Branch:** `phase4/production-flow`.
 **Referências:** plano geral de Fundação e Evolução Operacional; desenho e relatório da Fase 3. Regras anteriores continuam válidas, exceto a autorização agora recebida para iniciar a Fase 4.
 
