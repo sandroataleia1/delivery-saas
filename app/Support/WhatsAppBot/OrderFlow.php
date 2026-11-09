@@ -37,7 +37,7 @@ class OrderFlow
 
     public const NOTES_LIMIT = 120;
 
-    private const FOOTER = "\n\n9 – voltar · 0 – atendente";
+    public const FOOTER = "\n\n9 – voltar · 0 – atendente";
 
     private WhatsAppConversation $conversation;
 
@@ -48,11 +48,11 @@ class OrderFlow
 
     private string $state;
 
-    public function __construct(private ItemComposer $composer) {}
+    public function __construct(private ItemComposer $composer, private CheckoutFlow $checkout) {}
 
     public static function isOrderState(?string $state): bool
     {
-        return in_array($state, self::STATES, true);
+        return in_array($state, self::STATES, true) || in_array($state, CheckoutFlow::STATES, true);
     }
 
     /**
@@ -112,7 +112,7 @@ class OrderFlow
             self::CART => $this->cartAction($answer),
             self::REMOVE => $this->removeItem($answer),
             self::RESUME => $this->resume($answer),
-            default => null,
+            default => in_array($this->state, CheckoutFlow::STATES, true) ? $this->checkoutAnswer($answer, trim($text)) : null,
         };
 
         return $texts === null ? null : $this->save($texts);
@@ -345,7 +345,44 @@ class OrderFlow
             return [$this->moveTo(self::REMOVE)];
         }
 
+        if ($answer === '3' && $this->context['cart'] !== []) {
+            $first = $this->checkout->bind($this->conversation)->start($this->context);
+            $this->remember();
+
+            return [$this->moveTo($first)];
+        }
+
         return null;
+    }
+
+    /** @return list<string>|null */
+    private function checkoutAnswer(string $answer, string $raw): ?array
+    {
+        $result = $this->checkout->bind($this->conversation)->answer($this->state, $answer, $raw, $this->context);
+
+        if ($result === null || $result['next'] === null) {
+            return $result['texts'] ?? null;
+        }
+
+        $next = $result['next'];
+
+        if ($result['remember']) {
+            $this->remember();
+        } else {
+            $this->context['history'] = in_array($next, [self::CART, WhatsAppBot::GREETED, CheckoutFlow::DONE], true) ? [] : [['state' => self::CART]];
+        }
+
+        if ($next === WhatsAppBot::GREETED || $next === CheckoutFlow::DONE) {
+            $this->state = $next;
+
+            return $result['texts'];
+        }
+
+        if ($next === self::CART && $this->context['cart'] === []) {
+            $next = self::CATEGORY;
+        }
+
+        return [...$result['texts'], $this->moveTo($next)];
     }
 
     /** @return list<string>|null */
@@ -451,12 +488,13 @@ class OrderFlow
             self::CART => $this->cartSummary(),
             self::REMOVE => 'Qual item quer remover? Digite o número.',
             self::RESUME => "Você tinha um pedido em andamento.\n1 – continuar o pedido\n2 – começar de novo",
+            default => $this->checkout->bind($this->conversation)->prompt($this->state, $this->context),
         };
     }
 
     private function categoryPrompt(): string
     {
-        return "Escolha uma categoria:\n".$this->numbered(array_column($this->catalog->categories(), 'name')).self::FOOTER;
+        return "Escolha uma categoria:\n".self::numbered(array_column($this->catalog->categories(), 'name')).self::FOOTER;
     }
 
     private function productPrompt(): string
@@ -467,7 +505,7 @@ class OrderFlow
             $this->catalog->products($categoryId),
         );
 
-        return $this->catalog->categoryName($categoryId).":\n".$this->numbered($lines).self::FOOTER;
+        return $this->catalog->categoryName($categoryId).":\n".self::numbered($lines).self::FOOTER;
     }
 
     private function sizePrompt(): string
@@ -477,7 +515,7 @@ class OrderFlow
             $this->composition()['pizza']['sizes'] ?? [],
         );
 
-        return "Escolha o tamanho:\n".$this->numbered($lines).self::FOOTER;
+        return "Escolha o tamanho:\n".self::numbered($lines).self::FOOTER;
     }
 
     private function flavorsPrompt(): string
@@ -487,7 +525,7 @@ class OrderFlow
         $lines = array_map(fn (array $flavor) => $flavor['name'].' – R$ '.Decimal::currency($flavor['prices'][$sizeId]), $this->flavorsForSize());
         $header = $max === 1 ? 'Escolha o sabor:' : "Escolha até {$max} sabores, separados por vírgula (ex.: 1,2):";
 
-        return $header."\n".$this->numbered($lines).self::FOOTER;
+        return $header."\n".self::numbered($lines).self::FOOTER;
     }
 
     private function groupPrompt(): string
@@ -514,23 +552,36 @@ class OrderFlow
             return bccomp((string) $price, '0', 2) > 0 ? $option['name'].' – + R$ '.Decimal::currency($price) : $option['name'];
         }, $group['options']);
 
-        return "{$group['name']} – {$rule}:\n".$this->numbered($lines).self::FOOTER;
+        return "{$group['name']} – {$rule}:\n".self::numbered($lines).self::FOOTER;
     }
 
     private function cartSummary(): string
     {
+        [$lines, $subtotal] = self::cartLines($this->context['cart']);
+
+        return "Seu pedido:\n{$lines}\nSubtotal: R$ ".Decimal::currency($subtotal)
+            ."\n\n1 – adicionar mais itens\n2 – remover um item\n3 – finalizar\n0 – atendente";
+    }
+
+    /**
+     * Linhas numeradas do carrinho (com observação) e subtotal, a partir do preço que o ItemComposer deu ao item.
+     *
+     * @param  list<array<string, mixed>>  $cart
+     * @return array{0: string, 1: string}
+     */
+    public static function cartLines(array $cart): array
+    {
         $subtotal = '0';
         $lines = [];
 
-        foreach ($this->context['cart'] as $index => $line) {
+        foreach ($cart as $index => $line) {
             $total = bcmul($line['unit_price'], (string) $line['quantity'], 2);
             $subtotal = bcadd($subtotal, $total, 2);
             $text = ($index + 1).". {$line['quantity']}x {$line['label']} – R$ ".Decimal::currency($total);
             $lines[] = isset($line['notes']) ? $text."\n   Obs.: {$line['notes']}" : $text;
         }
 
-        return "Seu pedido:\n".implode("\n", $lines)."\nSubtotal: R$ ".Decimal::currency($subtotal)
-            ."\n\n1 – adicionar mais itens\n2 – remover um item\n3 – finalizar\n0 – atendente";
+        return [implode("\n", $lines), $subtotal];
     }
 
     /** @return array<string, mixed>|null */
@@ -595,7 +646,7 @@ class OrderFlow
     }
 
     /** @param  list<string>  $lines */
-    private function numbered(array $lines): string
+    public static function numbered(array $lines): string
     {
         return implode("\n", array_map(fn (string $line, int $index) => ($index + 1).' – '.$line, $lines, array_keys($lines)));
     }

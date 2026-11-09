@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\OnlineStore;
 use App\Models\WhatsAppBotMessage;
 use App\Models\WhatsAppConversation;
+use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSetting;
 use App\Support\StoreSchedule;
 use Carbon\CarbonImmutable;
@@ -26,6 +27,9 @@ class WhatsAppBot
     public const ECHO_MINUTES = 2;
 
     public const CART_EXPIRES_MINUTES = 120;
+
+    /** Avisos de pedido podem sair da fila com atraso (tentativas); o eco deles é reconhecido por mais tempo. */
+    public const NOTIFICATION_ECHO_MINUTES = 60;
 
     public const IDLE = 'idle';
 
@@ -79,7 +83,7 @@ class WhatsAppBot
             return;
         }
 
-        if ($conversation->state === self::IDLE) {
+        if ($conversation->state === self::IDLE || $conversation->state === CheckoutFlow::DONE) {
             return;
         }
 
@@ -149,7 +153,7 @@ class WhatsAppBot
             return $this->misunderstood($conversation);
         }
 
-        return $conversation->state === self::GREETED ? [$this->greeting($turn)] : $texts;
+        return $conversation->state === self::GREETED ? [...$texts, $this->greeting($turn)] : $texts;
     }
 
     /** Pedido pela conversa: só com a loja aberta e o telefone do cliente conhecido. */
@@ -204,10 +208,7 @@ class WhatsAppBot
 
         $conversation = $this->conversation($companyId, $message);
 
-        if ($message->text !== null && WhatsAppBotMessage::where('conversation_id', $conversation->id)
-            ->where('body', $message->text)
-            ->where('created_at', '>=', now()->subMinutes(self::ECHO_MINUTES))
-            ->exists()) {
+        if ($message->text !== null && $this->isOwnEcho($conversation, $message->text)) {
             return;
         }
 
@@ -216,6 +217,23 @@ class WhatsAppBot
             'human_until' => now()->addMinutes(self::PAUSE_MINUTES),
             'waiting_since' => null,
         ])->save();
+    }
+
+    /**
+     * Texto que o próprio sistema mandou e voltou pelo webhook: resposta do bot (pela conversa, alguns minutos)
+     * ou aviso automático de pedido online (pela empresa, enquanto a fila pode estar reenviando).
+     */
+    private function isOwnEcho(WhatsAppConversation $conversation, string $text): bool
+    {
+        return WhatsAppBotMessage::where('conversation_id', $conversation->id)
+            ->where('body', $text)
+            ->where('created_at', '>=', now()->subMinutes(self::ECHO_MINUTES))
+            ->exists()
+            || WhatsAppMessage::withoutGlobalScopes()
+                ->where('company_id', $conversation->company_id)
+                ->where('body', $text)
+                ->where('created_at', '>=', now()->subMinutes(self::NOTIFICATION_ECHO_MINUTES))
+                ->exists();
     }
 
     private function conversation(int $companyId, InboundMessage $message): WhatsAppConversation
