@@ -59,6 +59,19 @@ class WhatsAppWebhookTest extends TestCase
         Queue::assertPushed(ProcessWhatsAppInbound::class, 1);
     }
 
+    public function test_instance_api_key_sent_by_evolution_is_not_stored(): void
+    {
+        Queue::fake();
+        $payload = json_decode(file_get_contents(base_path('tests/Fixtures/whatsapp/customer_text.json')), true);
+
+        $this->postJson('/webhooks/whatsapp/inst-a/segredo-a', [...$payload, 'apikey' => 'TOKEN-DA-INSTANCIA', 'destination' => 'https://x/segredo-a'])->assertOk();
+
+        $stored = DB::table('whatsapp_inbound_messages')->value('payload');
+        $this->assertStringNotContainsString('TOKEN-DA-INSTANCIA', $stored);
+        $this->assertStringNotContainsString('segredo-a', $stored);
+        $this->assertSame('123456789012345@lid', DB::table('whatsapp_inbound_messages')->value('remote_jid'));
+    }
+
     public function test_wrong_secret_or_unknown_instance_is_404(): void
     {
         Queue::fake();

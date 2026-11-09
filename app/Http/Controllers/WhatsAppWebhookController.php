@@ -15,6 +15,9 @@ use Throwable;
  */
 class WhatsAppWebhookController extends Controller
 {
+    /** Campos que a Evolution manda junto e não podem ir para o banco: token da instância e a URL com o segredo. */
+    private const SECRET_KEYS = ['apikey', 'destination', 'server_url'];
+
     public function __invoke(Request $request, string $instance, string $secret): JsonResponse
     {
         $setting = WhatsAppSetting::withoutGlobalScopes()->where('instance_name', $instance)->first();
@@ -55,7 +58,7 @@ class WhatsAppWebhookController extends Controller
             'wa_message_id' => $id,
             'remote_jid' => $jid,
             'from_me' => (bool) data_get($payload, 'data.key.fromMe', false),
-            'payload' => json_encode($payload),
+            'payload' => json_encode(array_diff_key($payload, array_flip(self::SECRET_KEYS))),
             'created_at' => now(),
         ]);
 
