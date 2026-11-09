@@ -56,9 +56,9 @@ function toggleStatus() {
 <template>
     <AppLayout title="Produtos">
         <PageHeader title="Produtos" subtitle="O que sua loja vende e compra.">
-            <button type="button" class="btn btn-secondary" @click="categoriesOpen = true">
+            <button v-if="can('products.manage')" type="button" class="btn btn-secondary" @click="categoriesOpen = true">
                 <Tags :size="16" />
-                Categorias
+                Nova categoria
             </button>
             <Link v-if="can('products.manage')" :href="route('options.index')" class="btn btn-secondary">Opções</Link>
             <Link v-if="can('products.manage')" :href="route('products.create')" class="btn btn-primary">
@@ -132,7 +132,7 @@ function toggleStatus() {
 
         <Pagination :meta="products" />
 
-        <CategoryDialog :open="categoriesOpen" :categories="categories" :sectors="sectors" @close="categoriesOpen = false" />
+        <CategoryDialog :open="categoriesOpen" :sectors="sectors" @close="categoriesOpen = false" />
 
         <ConfirmDialog
             :open="target !== null"

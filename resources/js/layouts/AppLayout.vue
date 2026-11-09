@@ -8,6 +8,7 @@ import {
     Building2,
     CalendarDays,
     ChartColumn,
+    ChefHat,
     ChevronDown,
     EllipsisVertical,
     CircleArrowDown,
@@ -19,7 +20,10 @@ import {
     History,
     House,
     Landmark,
+    LayoutGrid,
+    ListPlus,
     LogOut,
+    MapPin,
     Menu,
     Armchair,
     Package,
@@ -28,6 +32,7 @@ import {
     ShieldCheck,
     ShoppingCart,
     Store,
+    Tags,
     Truck,
     UserCog,
     Users,
@@ -70,14 +75,27 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
         name: 'Vendas',
         items: [
             can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
-            can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', icon: Store },
-            can('production.configure') && !can('production.view') && { label: 'Setores', href: route('production.sectors'), match: '/producao/setores', icon: Store },
-            can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', icon: Armchair },
-            can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', icon: Motorcycle },
+            can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', exclude: '/producao/setores', icon: Store },
+            can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
+            can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
             can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
             can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
             can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
+        ],
+    },
+    {
+        name: 'Cadastros',
+        items: [
+            can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', exclude: '/produtos/opcoes', icon: Package },
+            can('products.view') && { label: 'Categorias', href: route('categories.index'), match: '/categorias', icon: Tags },
+            can('products.manage') && { label: 'Opções', href: route('options.index'), match: '/produtos/opcoes', icon: ListPlus },
             can('customers.view') && { label: 'Clientes', href: route('customers.index'), match: '/clientes', icon: Contact },
+            can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
+            can('deliveries.manage') && { label: 'Bairros de entrega', href: route('deliveries.zones'), match: '/entregas/bairros', icon: MapPin },
+            can('tables.manage') && { label: 'Mesas do salão', href: route('tables.manage'), match: '/mesas/gerenciar', icon: LayoutGrid },
+            can('production.configure') && { label: 'Setores de produção', href: route('production.sectors'), match: '/producao/setores', icon: ChefHat },
+            can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
+            can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
         ],
     },
     {
@@ -92,18 +110,14 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
     {
         name: 'Estoque',
         items: [
-            can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', icon: Package },
             can('stock.view') && { label: 'Estoque', href: route('stock.index'), match: '/estoque', icon: Boxes },
             can('stock.view') && { label: 'Entradas', href: route('entries.index'), match: '/entradas', icon: PackagePlus },
-            can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
         ],
     },
     {
         name: 'Gestão',
         items: [
             (can('reports.view') || can('reports.finance')) && { label: 'Relatórios', href: route('reports.index'), match: '/relatorios', icon: ChartColumn },
-            can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
-            can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
             can('audit.view') && { label: 'Auditoria', href: route('audit.index'), match: '/auditoria', icon: History },
             can('company.manage') && { label: 'Loja online', href: route('online.settings'), match: '/loja-online/configuracao', icon: Globe },
             can('company.manage') && { label: 'WhatsApp', href: route('online.whatsapp'), match: '/loja-online/whatsapp', icon: MessageCircle },
@@ -159,7 +173,7 @@ function toggle(group) {
 function isActive(item) {
     const path = page.url.split('?')[0];
 
-    if (item.exclude && path.startsWith(item.exclude)) {
+    if ([item.exclude ?? []].flat().some((prefix) => path.startsWith(prefix))) {
         return false;
     }
 

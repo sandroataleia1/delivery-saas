@@ -65,7 +65,7 @@ class ProductController extends Controller
         return Inertia::render('products/Index', [
             'products' => $products,
             'filters' => $filters,
-            'categories' => Category::withCount('products')->orderBy('name')->get(['id', 'name', 'production_sector_id']),
+            'categories' => Category::orderBy('name')->get(['id', 'name']),
             'sectors' => ProductionSector::where('active', true)->orderBy('name')->get(['id', 'name']),
             'canSeeCost' => $canSeeCost,
         ]);

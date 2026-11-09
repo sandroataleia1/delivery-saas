@@ -4,17 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\ProductionSector;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class CategoryController extends Controller
 {
-    /** As categorias são gerenciadas num modal da tela de produtos; o endereço antigo leva para lá. */
-    public function index(): RedirectResponse
+    public function index(): Response
     {
-        return to_route('products.index');
+        return Inertia::render('categories/Index', [
+            'sectors' => ProductionSector::where('active', true)->orderBy('name')->get(['id', 'name']),
+            'categories' => Category::withCount('products')->orderBy('name')->get(['id', 'name', 'production_sector_id']),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
