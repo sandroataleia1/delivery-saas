@@ -78,6 +78,13 @@ class StoreSchedule
             return 'Fechado no momento';
         }
 
+        return 'Fechado · abre '.self::openingText($next, $at);
+    }
+
+    /** Quando a loja abre, em palavras: "hoje às 18h", "amanhã às 11h30", "sexta às 18h". */
+    public static function openingText(CarbonImmutable $next, CarbonImmutable $at): string
+    {
+        $next = $next->setTimezone(self::TIMEZONE);
         $today = $at->setTimezone(self::TIMEZONE)->startOfDay();
         $when = match (true) {
             $next->isSameDay($today) => 'hoje',
@@ -86,7 +93,7 @@ class StoreSchedule
         };
         $time = $next->minute === 0 ? $next->hour.'h' : $next->hour.'h'.$next->format('i');
 
-        return "Fechado · abre {$when} às {$time}";
+        return "{$when} às {$time}";
     }
 
     private static function minutes(string $time): int
