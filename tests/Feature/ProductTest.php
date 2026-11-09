@@ -154,6 +154,20 @@ class ProductTest extends TestCase
         ]);
     }
 
+    public function test_categorias_sao_gerenciadas_na_tela_de_produtos(): void
+    {
+        $admin = $this->adminOf();
+        $category = Category::factory()->create(['company_id' => $admin->company_id, 'name' => 'Bebidas']);
+        Product::factory()->create(['company_id' => $admin->company_id, 'category_id' => $category->id]);
+
+        $this->actingAs($admin)->get('/produtos')->assertInertia(fn (Assert $page) => $page
+            ->where('categories.0.name', 'Bebidas')
+            ->where('categories.0.products_count', 1)
+            ->has('sectors'));
+
+        $this->get('/categorias')->assertRedirect('/produtos');
+    }
+
     public function test_categoria_com_produtos_nao_e_excluida(): void
     {
         $admin = $this->adminOf();

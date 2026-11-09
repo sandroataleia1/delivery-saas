@@ -3,6 +3,7 @@ import { router as availabilityRouter } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Pencil, Plus, Power, Tags } from '@lucide/vue';
+import CategoryDialog from '@/components/CategoryDialog.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -16,6 +17,7 @@ const props = defineProps({
     products: { type: Object, required: true },
     filters: { type: Object, required: true },
     categories: { type: Array, required: true },
+    sectors: { type: Array, default: () => [] },
     canSeeCost: { type: Boolean, required: true },
 });
 
@@ -38,6 +40,7 @@ watch(filters, () => {
     }, 300);
 });
 
+const categoriesOpen = ref(false);
 const target = ref(null);
 const statusForm = useForm({});
 const willDeactivate = computed(() => target.value?.active);
@@ -53,10 +56,10 @@ function toggleStatus() {
 <template>
     <AppLayout title="Produtos">
         <PageHeader title="Produtos" subtitle="O que sua loja vende e compra.">
-            <Link :href="route('categories.index')" class="btn btn-secondary">
+            <button type="button" class="btn btn-secondary" @click="categoriesOpen = true">
                 <Tags :size="16" />
                 Categorias
-            </Link>
+            </button>
             <Link v-if="can('products.manage')" :href="route('options.index')" class="btn btn-secondary">Opções</Link>
             <Link v-if="can('products.manage')" :href="route('products.create')" class="btn btn-primary">
                 <Plus :size="16" />
@@ -128,6 +131,8 @@ function toggleStatus() {
         </div>
 
         <Pagination :meta="products" />
+
+        <CategoryDialog :open="categoriesOpen" :categories="categories" :sectors="sectors" @close="categoriesOpen = false" />
 
         <ConfirmDialog
             :open="target !== null"

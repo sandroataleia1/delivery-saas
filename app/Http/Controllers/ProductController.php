@@ -9,6 +9,7 @@ use App\Http\Requests\ProductRequest;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Product;
+use App\Models\ProductionSector;
 use App\Models\RecipeItem;
 use App\Models\StockMovement;
 use App\Support\PublicImage;
@@ -64,7 +65,8 @@ class ProductController extends Controller
         return Inertia::render('products/Index', [
             'products' => $products,
             'filters' => $filters,
-            'categories' => Category::orderBy('name')->get(['id', 'name']),
+            'categories' => Category::withCount('products')->orderBy('name')->get(['id', 'name', 'production_sector_id']),
+            'sectors' => ProductionSector::where('active', true)->orderBy('name')->get(['id', 'name']),
             'canSeeCost' => $canSeeCost,
         ]);
     }
