@@ -40,34 +40,50 @@ function beep() {
     oscillator.stop(audio.currentTime + 0.18);
 }
 
-/** O navegador só libera o áudio depois de um gesto na página; tenta já e, se não der, no primeiro toque. */
-async function unlock() {
-    try {
-        audio ??= new (window.AudioContext || window.webkitAudioContext)();
-        await audio.resume();
-        unlocked.value = audio.state === 'running';
-    } catch {
-        audioError.value = 'Som indisponível neste navegador. Acompanhe os alertas visuais.';
+/**
+ * O navegador só libera o áudio depois de um gesto na página. Sem gesto, o resume() fica pendente
+ * (não falha), então o estado é acompanhado pelo evento statechange em vez de esperar a promessa.
+ */
+function context() {
+    if (!audio) {
+        audio = new (window.AudioContext || window.webkitAudioContext)();
+        audio.addEventListener('statechange', syncState);
     }
+
+    return audio;
+}
+
+function syncState() {
+    unlocked.value = audio?.state === 'running';
 
     if (unlocked.value) {
         stopWaitingForGesture();
     }
-
-    return unlocked.value;
 }
 
-const gestureEvents = ['pointerdown', 'keydown', 'touchend'];
-const onGesture = () => unlock();
-const waitForGesture = () => gestureEvents.forEach((name) => document.addEventListener(name, onGesture, { capture: true }));
-const stopWaitingForGesture = () => gestureEvents.forEach((name) => document.removeEventListener(name, onGesture, { capture: true }));
+function resume() {
+    try {
+        context().resume().then(syncState).catch(() => {});
+        syncState();
+    } catch {
+        audioError.value = 'Som indisponível neste navegador. Acompanhe os alertas visuais.';
+    }
+}
+
+const gestureEvents = ['pointerdown', 'pointerup', 'mousedown', 'click', 'keydown', 'touchend'];
+const waitForGesture = () => gestureEvents.forEach((name) => document.addEventListener(name, resume, { capture: true }));
+const stopWaitingForGesture = () => gestureEvents.forEach((name) => document.removeEventListener(name, resume, { capture: true }));
 
 async function enable() {
     wanted.value = true;
     remember(true);
 
-    if (await unlock()) {
+    try {
+        await context().resume();
+        syncState();
         beep();
+    } catch {
+        audioError.value = 'Som indisponível neste navegador. Acompanhe os alertas visuais.';
     }
 }
 
@@ -77,13 +93,11 @@ function disable() {
     stopWaitingForGesture();
 }
 
-onMounted(async () => {
+onMounted(() => {
     if (props.operation.sound_alerts && remembered()) {
         wanted.value = true;
-
-        if (!(await unlock())) {
-            waitForGesture();
-        }
+        waitForGesture();
+        resume();
     }
 });
 
