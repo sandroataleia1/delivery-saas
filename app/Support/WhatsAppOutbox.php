@@ -119,7 +119,9 @@ class WhatsAppOutbox
                 ->where('online_order_id', $order->id)
                 ->where('event', $event)
                 ->value('id');
-            SendWhatsAppMessage::dispatch($id)->afterCommit();
+            DB::afterCommit(fn () => rescue(function () use ($id): void {
+                SendWhatsAppMessage::dispatch($id);
+            }, report: true));
 
             return $id;
         } catch (Throwable $e) {

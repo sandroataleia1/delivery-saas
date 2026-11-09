@@ -24,8 +24,11 @@ use App\Models\WhatsAppSetting;
 use App\Support\WhatsAppTemplates;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Connectors\ConnectorInterface;
+use Illuminate\Queue\SyncQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Facade;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -238,6 +241,31 @@ class WhatsAppOutboxTest extends TestCase
         $this->assertSame(1, OnlineOrder::withoutGlobalScopes()->where('company_id', $this->admin->company_id)->count());
         $this->assertSame(0, WhatsAppMessage::withoutGlobalScopes()->count());
         Queue::assertNothingPushed();
+    }
+
+    public function test_failed_job_push_never_reaches_the_request(): void
+    {
+        app()->forgetInstance('queue');
+        Facade::clearResolvedInstance('queue');
+        config(['queue.default' => 'broken', 'queue.connections.broken' => ['driver' => 'broken']]);
+        Queue::extend('broken', fn () => new class implements ConnectorInterface
+        {
+            public function connect(array $config)
+            {
+                return new class extends SyncQueue
+                {
+                    protected function resolveJob($payload, $queue)
+                    {
+                        throw new RuntimeException('queue down');
+                    }
+                };
+            }
+        });
+
+        $this->postJson('/loja/lanchonete/pedidos', $this->payload())->assertCreated()->assertJsonPath('number', 1);
+
+        $this->assertSame(1, OnlineOrder::withoutGlobalScopes()->where('company_id', $this->admin->company_id)->count());
+        $this->assertSame(WhatsAppMessage::PENDING, WhatsAppMessage::withoutGlobalScopes()->sole()->status);
     }
 
     public function test_render_appends_link_keeps_unknown_markers_and_falls_back_to_default(): void

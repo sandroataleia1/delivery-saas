@@ -24,9 +24,21 @@ class ConnectWhatsApp
         $setting = WhatsAppSetting::where('company_id', $company->id)->first() ?? new WhatsAppSetting;
 
         try {
+            $qr = null;
+            $needsInstance = true;
+
             if (filled($setting->instance_name) && filled($setting->instance_token)) {
-                $qr = $this->evolution->connect($setting->instance_name, $setting->instance_token);
-            } else {
+                try {
+                    $qr = $this->evolution->connect($setting->instance_name, $setting->instance_token);
+                    $needsInstance = false;
+                } catch (EvolutionException $e) {
+                    if (! in_array($e->status, [401, 404], true)) {
+                        throw $e;
+                    }
+                }
+            }
+
+            if ($needsInstance) {
                 $name = 'delivery-'.$company->id.'-'.Str::lower(Str::random(6));
                 $created = $this->evolution->createInstance($name);
                 $setting->forceFill([

@@ -80,16 +80,30 @@ class EvolutionClient
         try {
             $response = $this->request($apiKey)->send($method, $path, $method === 'GET' || $method === 'DELETE' ? [] : ['json' => $body]);
         } catch (ConnectionException $e) {
-            throw new EvolutionException(Str::limit('Falha de conexão com a Evolution: '.$e->getMessage(), 255, ''), 0, $e);
+            throw new EvolutionException(
+                Str::limit('Falha de conexão com a Evolution: '.$e->getMessage(), 255, ''),
+                0,
+                $e,
+                retriable: $this->neverReachedEvolution($e),
+            );
         }
 
         if (! $response->successful()) {
             $detail = Str::limit(trim(preg_replace('/\s+/', ' ', $response->body()) ?? ''), 120, '');
 
-            throw new EvolutionException(Str::limit('A Evolution respondeu '.$response->status().($detail !== '' ? ': '.$detail : '.'), 255, ''));
+            throw new EvolutionException(
+                Str::limit('A Evolution respondeu '.$response->status().($detail !== '' ? ': '.$detail : '.'), 255, ''),
+                status: $response->status(),
+            );
         }
 
         return $response;
+    }
+
+    /** Só é seguro reenviar quando a requisição certamente não chegou à Evolution. */
+    private function neverReachedEvolution(ConnectionException $e): bool
+    {
+        return preg_match('/cURL error (6|7)\b|Connection timed out|Resolving timed out|Failed to connect|Could not resolve host/i', $e->getMessage()) === 1;
     }
 
     private function request(string $apiKey): PendingRequest

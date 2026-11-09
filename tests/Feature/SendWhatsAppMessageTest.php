@@ -187,7 +187,21 @@ class SendWhatsAppMessageTest extends TestCase
 
     public function test_connection_timeout_never_throws(): void
     {
-        Http::fake(fn () => throw new ConnectionException('timeout'));
+        Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out after 10000 milliseconds with 0 bytes received'));
+        $message = $this->message();
+
+        $job = $this->runJob($message);
+
+        $row = $this->fresh($message);
+        $this->assertSame(WhatsAppMessage::FAILED, $row->status);
+        $this->assertSame('Envio não confirmado; não reenviado para evitar mensagem duplicada.', $row->last_error);
+        $this->assertSame(1, $row->attempts);
+        $job->assertNotReleased();
+    }
+
+    public function test_connect_failure_stays_retriable(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 7: Failed to connect to evo.test port 443'));
         $message = $this->message();
 
         $this->runJob($message);

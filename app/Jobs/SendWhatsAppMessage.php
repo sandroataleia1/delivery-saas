@@ -70,6 +70,12 @@ class SendWhatsAppMessage implements ShouldQueue
             ]);
             $this->markConnectionOpen($settings);
         } catch (EvolutionException $e) {
+            if (! $e->retriable) {
+                $this->failWithoutRetry();
+                $this->refreshConnectionState($settings, $client);
+
+                return;
+            }
             $this->handleFailure($settings, $client, $e->getMessage());
         } catch (Throwable $e) {
             report($e);
@@ -88,6 +94,16 @@ class SendWhatsAppMessage implements ShouldQueue
                 'last_error' => mb_substr($error, 0, 500),
                 'updated_at' => now(),
             ]) === 1;
+    }
+
+    /** Envio não confirmado: a mensagem pode ter saído, então não há nova tentativa. */
+    private function failWithoutRetry(): void
+    {
+        try {
+            $this->finish($this->messageId, WhatsAppMessage::FAILED, 'Envio não confirmado; não reenviado para evitar mensagem duplicada.');
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     private function handleFailure(?WhatsAppSetting $settings, EvolutionClient $client, string $error): void

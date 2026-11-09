@@ -73,6 +73,41 @@ class WhatsAppSettingsTest extends TestCase
         $this->assertSame('QR2', Cache::get('whatsapp-qr:'.$admin->company_id));
     }
 
+    public function test_reconnect_recreates_instance_missing_on_server(): void
+    {
+        Http::fake([
+            'evo.test/instance/connect/*' => Http::response('not found', 404),
+            'evo.test/instance/create' => Http::response(['hash' => 'TOK2', 'qrcode' => ['base64' => 'QR3']]),
+        ]);
+        $admin = $this->adminOf();
+        WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'close']);
+
+        $this->actingAs($admin)->post('/loja-online/whatsapp/conectar')->assertRedirect()->assertSessionHasNoErrors();
+
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), 'instance/create'));
+        $setting = WhatsAppSetting::where('company_id', $admin->company_id)->firstOrFail();
+        $this->assertNotSame('inst-a', $setting->instance_name);
+        $this->assertStringStartsWith('delivery-'.$admin->company_id.'-', $setting->instance_name);
+        $this->assertSame('TOK2', $setting->instance_token);
+        $this->assertSame('QR3', Cache::get('whatsapp-qr:'.$admin->company_id));
+    }
+
+    public function test_disconnect_clears_instance_missing_on_server(): void
+    {
+        Http::fake(['evo.test/instance/logout/*' => Http::response('not found', 404)]);
+        $admin = $this->adminOf();
+        WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'open']);
+        Cache::put('whatsapp-qr:'.$admin->company_id, 'QR', 60);
+
+        $this->actingAs($admin)->delete('/loja-online/whatsapp/conexao')->assertRedirect()->assertSessionHasNoErrors();
+
+        $setting = WhatsAppSetting::where('company_id', $admin->company_id)->firstOrFail();
+        $this->assertNull($setting->instance_name);
+        $this->assertNull($setting->instance_token);
+        $this->assertSame('close', $setting->state);
+        $this->assertNull(Cache::get('whatsapp-qr:'.$admin->company_id));
+    }
+
     public function test_evolution_error_is_friendly(): void
     {
         Http::fake(['evo.test/instance/create' => Http::response('boom', 500)]);

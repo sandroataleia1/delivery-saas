@@ -24,8 +24,12 @@ class DisconnectWhatsApp
         if ($setting !== null && filled($setting->instance_name) && filled($setting->instance_token)) {
             try {
                 $this->evolution->logout($setting->instance_name, $setting->instance_token);
-            } catch (EvolutionException) {
-                throw ValidationException::withMessages(['whatsapp' => 'Não foi possível falar com o servidor do WhatsApp. Tente de novo em instantes.']);
+            } catch (EvolutionException $e) {
+                if (! in_array($e->status, [401, 404], true)) {
+                    throw ValidationException::withMessages(['whatsapp' => 'Não foi possível falar com o servidor do WhatsApp. Tente de novo em instantes.']);
+                }
+
+                $setting->forceFill(['instance_name' => null, 'instance_token' => null]);
             }
 
             $setting->forceFill(['state' => 'close', 'state_checked_at' => now()])->save();
