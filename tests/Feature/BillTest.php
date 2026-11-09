@@ -395,10 +395,10 @@ class BillTest extends TestCase
     {
         $this->bill(['due_date' => today()->subDay()]);
 
-        $this->actingAs($this->admin)->get('/')->assertInertia(fn (Assert $page) => $page->where('stats.overdue_bills', 1));
+        $this->actingAs($this->admin)->get('/')->assertInertia(fn (Assert $page) => $page->where('finance.payable_overdue.count', 1));
 
         $this->actingAs($this->userWith([], $this->admin->company))->get('/')
-            ->assertInertia(fn (Assert $page) => $page->where('stats.overdue_bills', null));
+            ->assertInertia(fn (Assert $page) => $page->where('finance', null));
     }
 
     public function test_permissoes(): void
