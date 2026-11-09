@@ -34,7 +34,13 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WhatsAppController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Webhook da Evolution (WhatsApp): público, protegido pelo segredo da instância.
+Route::post('webhooks/whatsapp/{instance}/{secret}', WhatsAppWebhookController::class)
+    ->middleware('throttle:240,1')
+    ->name('whatsapp.webhook');
 
 // Cardápio da mesa: público, acessado pelo QR Code.
 Route::middleware('public.page')->group(function () {

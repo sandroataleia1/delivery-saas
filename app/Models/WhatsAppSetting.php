@@ -7,6 +7,7 @@ use App\Models\Concerns\BelongsToCompany;
 use Database\Factories\WhatsAppSettingFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class WhatsAppSetting extends Model
 {
@@ -22,6 +23,9 @@ class WhatsAppSetting extends Model
             'instance_token' => 'encrypted',
             'templates' => 'array',
             'state_checked_at' => 'datetime',
+            'webhook_secret' => 'encrypted',
+            'auto_reply' => 'boolean',
+            'ignored_numbers' => 'array',
         ];
     }
 
@@ -30,9 +34,19 @@ class WhatsAppSetting extends Model
         return $this->state === 'open';
     }
 
+    /** Endereço do webhook desta instância; cria o segredo na primeira vez. */
+    public function webhookUrl(): string
+    {
+        if (blank($this->webhook_secret)) {
+            $this->forceFill(['webhook_secret' => Str::random(40)])->save();
+        }
+
+        return route('whatsapp.webhook', [$this->instance_name, $this->webhook_secret]);
+    }
+
     protected function auditRedact(): array
     {
-        return ['instance_token'];
+        return ['instance_token', 'webhook_secret'];
     }
 
     protected function auditExclude(): array

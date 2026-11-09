@@ -30,6 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'public.page' => ForgetSessionUser::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(fn () => route('dashboard'));
     })

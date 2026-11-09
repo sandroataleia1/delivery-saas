@@ -23,6 +23,7 @@ class WhatsAppSettingsTest extends TestCase
 
         Http::preventStrayRequests();
         config(['services.evolution.url' => 'https://evo.test', 'services.evolution.key' => 'KEY']);
+        Http::fake(['evo.test/webhook/set/*' => Http::response(['webhook' => []])]);
     }
 
     private function orderFor(int $companyId, int $number): int

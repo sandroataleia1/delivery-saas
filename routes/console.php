@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\WhatsAppInboundMessage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 
@@ -10,3 +11,5 @@ Artisan::command('inspire', function () {
 Schedule::command('online-orders:expire')->everyMinute()->withoutOverlapping();
 
 Schedule::command('whatsapp:sweep')->everyFiveMinutes()->withoutOverlapping();
+
+Schedule::command('model:prune', ['--model' => [WhatsAppInboundMessage::class]])->daily();

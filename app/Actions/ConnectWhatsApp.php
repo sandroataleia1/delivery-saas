@@ -52,8 +52,20 @@ class ConnectWhatsApp
             throw ValidationException::withMessages(['whatsapp' => 'Não foi possível falar com o servidor do WhatsApp. Tente de novo em instantes.']);
         }
 
+        $this->registerWebhook($setting);
+
         if ($qr !== null) {
             Cache::put("whatsapp-qr:{$company->id}", $qr, 60);
+        }
+    }
+
+    /** Sem webhook a loja ainda envia avisos; só o bot fica sem ouvir. Por isso a falha não bloqueia a conexão. */
+    private function registerWebhook(WhatsAppSetting $setting): void
+    {
+        try {
+            $this->evolution->setWebhook($setting->instance_name, $setting->instance_token, $setting->webhookUrl());
+        } catch (EvolutionException $e) {
+            report($e);
         }
     }
 }

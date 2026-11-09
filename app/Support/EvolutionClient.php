@@ -60,11 +60,28 @@ class EvolutionClient
         $this->send('DELETE', '/instance/logout/'.rawurlencode($name), $token);
     }
 
-    public function sendText(string $name, string $token, string $number, string $text): void
+    /** Envia um texto e devolve o id da mensagem no WhatsApp, quando a Evolution informa. */
+    public function sendText(string $name, string $token, string $number, string $text): ?string
     {
-        $this->send('POST', '/message/sendText/'.rawurlencode($name), $token, [
+        $id = $this->send('POST', '/message/sendText/'.rawurlencode($name), $token, [
             'number' => $number,
             'text' => $text,
+        ])->json('key.id');
+
+        return is_string($id) && $id !== '' ? $id : null;
+    }
+
+    /** Aponta o webhook da instância para o sistema, só com mensagens recebidas e enviadas. */
+    public function setWebhook(string $name, string $token, string $url): void
+    {
+        $this->send('POST', '/webhook/set/'.rawurlencode($name), $token, [
+            'webhook' => [
+                'enabled' => true,
+                'url' => $url,
+                'byEvents' => false,
+                'base64' => false,
+                'events' => ['MESSAGES_UPSERT'],
+            ],
         ]);
     }
 
