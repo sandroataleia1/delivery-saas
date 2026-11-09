@@ -26,13 +26,13 @@ class ProductComposition
 
         $loaded = Product::query()
             ->whereIn('id', $products->pluck('id')->all())
-            ->with(['pizzaSizes', 'optionGroups.options.prices'])
+            ->with(['pizzaSizes', 'optionGroups.options.prices', 'category.optionGroups.options.prices'])
             ->get();
 
         $result = [];
 
         foreach ($loaded as $product) {
-            $groups = $product->optionGroups->filter(fn (OptionGroup $group) => $group->active);
+            $groups = $product->availableOptionGroups()->filter(fn (OptionGroup $group) => $group->active);
             $extras = $groups->filter(fn (OptionGroup $group) => $group->kind === OptionGroup::EXTRA);
             $flavorGroup = $groups->first(fn (OptionGroup $group) => $group->kind === OptionGroup::FLAVOR);
 

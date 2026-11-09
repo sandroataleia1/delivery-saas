@@ -9,6 +9,7 @@ use App\Models\OptionRecipeItem;
 use App\Models\PizzaSize;
 use App\Models\Product;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -474,14 +475,28 @@ class ItemComposer
     }
 
     /**
-     * @return Collection<int, OptionGroup> grupos do produto, na ordem do pivot
+     * @return Collection<int, OptionGroup> grupos do produto, na ordem do pivot, seguidos dos da categoria
      */
     private function loadGroups(int $companyId, Product $product): Collection
     {
-        return $product->optionGroups()
+        $direct = $product->optionGroups()
             ->withoutGlobalScopes()
             ->where('option_groups.company_id', $companyId)
             ->get()
             ->keyBy('id');
+
+        if ($product->category_id === null) {
+            return $direct;
+        }
+
+        $fromCategory = OptionGroup::withoutGlobalScopes()
+            ->where('company_id', $companyId)
+            ->where('kind', OptionGroup::EXTRA)
+            ->whereIn('id', DB::table('category_option_group')->where('category_id', $product->category_id)->select('option_group_id'))
+            ->orderBy('name')
+            ->get()
+            ->keyBy('id');
+
+        return $direct->union($fromCategory);
     }
 }

@@ -6,6 +6,7 @@ use App\Actions\DispatchProduction;
 use App\Actions\OpenTable;
 use App\Actions\RegisterSale;
 use App\Actions\SavePizzaSetup;
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\DiningTable;
@@ -242,6 +243,50 @@ class OptionChannelsTest extends TestCase
         $this->assertSame('highest', $composition[$this->pizza->id]['pizza']['pricing']);
         $this->assertCount(2, $composition[$this->pizza->id]['pizza']['sizes']);
         $this->assertSame('49.90', $composition[$this->pizza->id]['pizza']['flavors'][0]['prices'][$this->grande]);
+    }
+
+    public function test_group_of_a_category_applies_to_its_products_including_ones_created_later(): void
+    {
+        $this->setUpCatalog();
+        $this->openCash($this->admin);
+        $companyId = $this->admin->company_id;
+        $snacks = Category::factory()->create(['company_id' => $companyId]);
+        $group = OptionGroup::findOrFail($this->bacon->option_group_id);
+        $group->products()->detach();
+        $group->categories()->attach($snacks->id, ['company_id' => $companyId]);
+
+        $later = Product::factory()->create(['company_id' => $companyId, 'name' => 'X-Salada', 'sale_price' => '25', 'track_stock' => false, 'category_id' => $snacks->id]);
+        $outside = Product::factory()->create(['company_id' => $companyId, 'name' => 'Suco', 'sale_price' => '8', 'track_stock' => false]);
+
+        $composition = ProductComposition::forProducts(collect([$later, $outside]));
+        $this->assertSame([$later->id], array_keys($composition));
+        $this->assertSame('Adicionais', $composition[$later->id]['groups'][0]['name']);
+
+        $this->post('/vendas', [
+            'client_uuid' => (string) Str::uuid(),
+            'items' => [['product_id' => $later->id, 'quantity' => '1', 'expected_price' => '30.00', 'options' => [['option_id' => $this->bacon->id]]]],
+            'payments' => [['method' => 'pix', 'amount' => '30.00']],
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('+1 Bacon', SaleItem::sole()->options_label);
+
+        $this->post('/vendas', [
+            'client_uuid' => (string) Str::uuid(),
+            'items' => [['product_id' => $outside->id, 'quantity' => '1', 'expected_price' => '13.00', 'options' => [['option_id' => $this->bacon->id]]]],
+            'payments' => [['method' => 'pix', 'amount' => '13.00']],
+        ])->assertSessionHasErrors('items.0');
+    }
+
+    public function test_group_linked_to_product_and_its_category_appears_once(): void
+    {
+        $this->setUpCatalog();
+        $companyId = $this->admin->company_id;
+        $snacks = Category::factory()->create(['company_id' => $companyId]);
+        $this->burger->update(['category_id' => $snacks->id]);
+        OptionGroup::findOrFail($this->bacon->option_group_id)->categories()->attach($snacks->id, ['company_id' => $companyId]);
+
+        $composition = ProductComposition::forProducts(collect([$this->burger]));
+
+        $this->assertCount(1, $composition[$this->burger->id]['groups']);
     }
 
     /** @return array{0: DiningTable, 1: array<string, mixed>} */

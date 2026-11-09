@@ -8,13 +8,13 @@ use App\Models\OptionGroup;
 use App\Support\Audit;
 use Illuminate\Support\Facades\DB;
 
-/** Cria ou atualiza um grupo de adicionais com opções, fichas e produtos ligados. */
+/** Cria ou atualiza um grupo de adicionais com opções, fichas e os produtos e categorias ligados. */
 class SaveOptionGroup
 {
     public function __construct(private SyncOptionRecipe $syncRecipe) {}
 
     /**
-     * @param  array{name: string, min_choices: int, max_choices: int, allows_quantity: bool, active: bool, product_ids: array<int, int>, options: array<int, array{id?: int|null, name: string, price: string, active: bool, recipe: array<int, array{ingredient_id: int, quantity: string}>}>}  $data
+     * @param  array{name: string, min_choices: int, max_choices: int, allows_quantity: bool, active: bool, product_ids: array<int, int>, category_ids: array<int, int>, options: array<int, array{id?: int|null, name: string, price: string, active: bool, recipe: array<int, array{ingredient_id: int, quantity: string}>}>}  $data
      */
     public function handle(?OptionGroup $group, array $data): OptionGroup
     {
@@ -34,6 +34,7 @@ class SaveOptionGroup
             $group->save();
 
             $group->products()->sync($this->links($group, $data['product_ids'], $companyId));
+            $group->categories()->sync(array_fill_keys($data['category_ids'], ['company_id' => $companyId]));
 
             $keptIds = [];
             $changes = [];

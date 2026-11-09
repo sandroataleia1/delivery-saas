@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\PauseOption;
 use App\Actions\SaveOptionGroup;
 use App\Http\Requests\OptionGroupRequest;
+use App\Models\Category;
 use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\OptionRecipeItem;
@@ -20,7 +21,7 @@ class OptionController extends Controller
     {
         $groups = OptionGroup::query()
             ->where('kind', OptionGroup::EXTRA)
-            ->with(['options.recipeItems' => fn ($query) => $query->whereNull('pizza_size_id'), 'options.recipeItems.ingredient:id,name,unit,cost_price,stock_quantity', 'products:id'])
+            ->with(['options.recipeItems' => fn ($query) => $query->whereNull('pizza_size_id'), 'options.recipeItems.ingredient:id,name,unit,cost_price,stock_quantity', 'products:id', 'categories:id'])
             ->orderBy('name')
             ->get()
             ->map(fn (OptionGroup $group) => [
@@ -31,6 +32,7 @@ class OptionController extends Controller
                 'allows_quantity' => $group->allows_quantity,
                 'active' => $group->active,
                 'product_ids' => $group->products->sortBy('pivot.position')->pluck('id')->values(),
+                'category_ids' => $group->categories->pluck('id')->values(),
                 'options' => $group->options->map(fn (Option $option) => [
                     'id' => $option->id,
                     'name' => $option->name,
@@ -47,6 +49,7 @@ class OptionController extends Controller
         return Inertia::render('products/Options', [
             'groups' => $groups,
             'products' => Product::where('active', true)->where('sellable', true)->orderBy('name')->get(['id', 'name']),
+            'categories' => Category::orderBy('name')->get(['id', 'name']),
         ]);
     }
 

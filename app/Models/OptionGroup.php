@@ -38,4 +38,10 @@ class OptionGroup extends Model
     {
         return $this->belongsToMany(Product::class, 'product_option_group')->withPivot('position');
     }
+
+    /** Categorias cujos produtos recebem este grupo. */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'category_option_group');
+    }
 }

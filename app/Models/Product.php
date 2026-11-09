@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 // stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
 #[Fillable(['category_id', 'name', 'description', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable', 'sold_out'])]
@@ -61,6 +62,20 @@ class Product extends Model
         return $this->belongsToMany(OptionGroup::class, 'product_option_group')
             ->withPivot('position')
             ->orderByPivot('position');
+    }
+
+    /**
+     * Grupos que o produto oferece: os ligados a ele, na ordem do pivot, e depois os da categoria.
+     * Espera optionGroups e category.optionGroups já carregados quando usado em lista.
+     *
+     * @return Collection<int, OptionGroup>
+     */
+    public function availableOptionGroups(): Collection
+    {
+        $direct = $this->optionGroups;
+        $fromCategory = $this->category?->optionGroups ?? collect();
+
+        return $direct->concat($fromCategory->reject(fn (OptionGroup $group) => $direct->contains('id', $group->id)))->values();
     }
 
     public function pizzaSizes(): HasMany

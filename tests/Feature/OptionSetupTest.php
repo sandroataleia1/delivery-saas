@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
+use App\Models\Category;
 use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\OptionPrice;
@@ -52,6 +53,7 @@ class OptionSetupTest extends TestCase
             'allows_quantity' => true,
             'active' => true,
             'product_ids' => [$this->pizza->id],
+            'category_ids' => [],
             'options' => [
                 ['name' => 'Bacon', 'price' => '4.50', 'active' => true, 'recipe' => [
                     ['ingredient_id' => $this->cheese->id, 'quantity' => '0.030'],
@@ -227,6 +229,34 @@ class OptionSetupTest extends TestCase
         $this->actingAs($other)->put(route('options.update', $group), $this->groupPayload(['product_ids' => []]))->assertNotFound();
         $this->actingAs($other)->patch(route('options.pause', $option), ['paused' => true])->assertNotFound();
         $this->actingAs($other)->put(route('products.pizza.update', $this->pizza), $this->pizzaPayload())->assertNotFound();
+    }
+
+    public function test_group_is_linked_to_categories_and_rejects_foreign_category(): void
+    {
+        $snacks = Category::factory()->create(['company_id' => $this->admin->company_id]);
+        $foreign = Category::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('options.store'), $this->groupPayload(['category_ids' => [$foreign->id]]))
+            ->assertSessionHasErrors('category_ids.0');
+
+        $this->post(route('options.store'), $this->groupPayload(['category_ids' => [$snacks->id]]))->assertSessionHasNoErrors();
+        $group = OptionGroup::sole();
+        $this->assertDatabaseHas('category_option_group', ['category_id' => $snacks->id, 'option_group_id' => $group->id, 'company_id' => $this->admin->company_id]);
+
+        $this->put(route('options.update', $group), $this->groupPayload(['category_ids' => []]))->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('category_option_group', ['option_group_id' => $group->id]);
+    }
+
+    public function test_category_linked_to_group_can_still_be_deleted(): void
+    {
+        $snacks = Category::factory()->create(['company_id' => $this->admin->company_id]);
+        $this->actingAs($this->admin)->post(route('options.store'), $this->groupPayload(['category_ids' => [$snacks->id]]));
+
+        $this->delete(route('categories.destroy', $snacks))->assertSessionHasNoErrors();
+
+        $this->assertModelMissing($snacks);
+        $this->assertDatabaseCount('category_option_group', 0);
     }
 
     public function test_extra_group_rejects_foreign_product(): void

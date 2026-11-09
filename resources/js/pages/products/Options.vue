@@ -14,6 +14,7 @@ import { Pause, Play, Plus, Trash2 } from '@lucide/vue';
 const props = defineProps({
     groups: { type: Array, required: true },
     products: { type: Array, required: true },
+    categories: { type: Array, default: () => [] },
 });
 
 const blankOption = () => ({ id: null, name: '', price: '', active: true, recipe: [] });
@@ -24,6 +25,7 @@ const blankGroup = () => ({
     allows_quantity: false,
     active: true,
     product_ids: [],
+    category_ids: [],
     options: [blankOption()],
 });
 
@@ -55,11 +57,16 @@ function startEdit(group) {
         allows_quantity: group.allows_quantity,
         active: group.active,
         product_ids: [...group.product_ids],
+        category_ids: [...group.category_ids],
         options: group.options
             .filter((option) => option.active)
             .map((option) => ({ id: option.id, name: option.name, price: option.price, active: option.active, recipe: recipeRows(option.recipe) })),
     }).reset();
     form.clearErrors();
+}
+
+function toggleCategory(id) {
+    form.category_ids = form.category_ids.includes(id) ? form.category_ids.filter((item) => item !== id) : [...form.category_ids, id];
 }
 
 function toggleProduct(id) {
@@ -110,7 +117,7 @@ function togglePause(option) {
                         <div class="min-w-0">
                             <p class="truncate font-semibold">{{ group.name }}</p>
                             <p class="text-muted text-xs">
-                                Escolhe de {{ group.min_choices }} a {{ group.max_choices }} · {{ group.product_ids.length }} produto(s)
+                                Escolhe de {{ group.min_choices }} a {{ group.max_choices }} · {{ group.category_ids.length }} categoria(s) · {{ group.product_ids.length }} produto(s)
                                 <span v-if="!group.active"> · inativo</span>
                             </p>
                         </div>
@@ -205,7 +212,27 @@ function togglePause(option) {
                 </div>
 
                 <div class="card space-y-3 p-5">
-                    <h2 class="font-bold">Produtos com este grupo</h2>
+                    <div>
+                        <h2 class="font-bold">Categorias com este grupo</h2>
+                        <p class="text-muted text-sm">Vale para todos os produtos da categoria, inclusive os cadastrados depois.</p>
+                    </div>
+                    <p v-if="form.errors.category_ids" class="text-danger text-sm" role="alert">{{ form.errors.category_ids }}</p>
+                    <p v-if="categories.length === 0" class="text-muted text-sm">Nenhuma categoria cadastrada.</p>
+                    <ul v-else class="grid max-h-64 gap-1 overflow-y-auto sm:grid-cols-2">
+                        <li v-for="category in categories" :key="category.id">
+                            <label class="flex cursor-pointer items-center gap-2.5 text-sm">
+                                <input type="checkbox" class="accent-brand size-4" :checked="form.category_ids.includes(category.id)" @change="toggleCategory(category.id)" />
+                                {{ category.name }}
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="card space-y-3 p-5">
+                    <div>
+                        <h2 class="font-bold">Outros produtos com este grupo</h2>
+                        <p class="text-muted text-sm">Para produtos avulsos, fora das categorias marcadas.</p>
+                    </div>
                     <input v-model="productSearch" class="input" placeholder="Buscar produto" aria-label="Buscar produto" />
                     <p v-if="form.errors.product_ids" class="text-danger text-sm" role="alert">{{ form.errors.product_ids }}</p>
                     <ul class="max-h-64 space-y-1 overflow-y-auto">

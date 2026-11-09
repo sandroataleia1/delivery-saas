@@ -21,6 +21,7 @@ class PizzaController extends Controller
             'pizzaSizes.recipeItems.ingredient:id,name,unit,cost_price,stock_quantity',
             'optionGroups.options.prices',
             'optionGroups.options.recipeItems.ingredient:id,name,unit,cost_price,stock_quantity',
+            'category.optionGroups.options.prices',
         ]);
         $editorRows = fn ($items) => $items->sortBy('ingredient.name')->values()->map(fn (OptionRecipeItem $item) => $item->toEditorRow());
         $flavorGroup = $product->optionGroups->firstWhere('kind', OptionGroup::FLAVOR);
@@ -42,7 +43,7 @@ class PizzaController extends Controller
                 'prices' => $option->prices->mapWithKeys(fn ($price) => [$price->pizza_size_id => $price->price]),
                 'recipes' => $option->recipeItems->whereNotNull('pizza_size_id')->groupBy('pizza_size_id')->map($editorRows),
             ])->values(),
-            'extras' => $product->optionGroups->where('kind', OptionGroup::EXTRA)->map(fn (OptionGroup $group) => [
+            'extras' => $product->availableOptionGroups()->where('kind', OptionGroup::EXTRA)->map(fn (OptionGroup $group) => [
                 'id' => $group->id,
                 'name' => $group->name,
                 'options' => $group->options->map(fn (Option $option) => [
