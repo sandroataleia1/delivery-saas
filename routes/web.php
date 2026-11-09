@@ -269,6 +269,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
             Route::post('loja-online/pedidos/{onlineOrder}/aceitar', [OnlineOrderController::class, 'accept'])->name('online.orders.accept');
             Route::post('loja-online/pedidos/{onlineOrder}/recusar', [OnlineOrderController::class, 'reject'])->name('online.orders.reject');
+            Route::post('loja-online/pedidos/{onlineOrder}/pronto', [OnlineOrderController::class, 'ready'])->middleware('can:production.operate')->name('online.orders.ready');
         });
 
         Route::middleware('can:company.manage')->group(function () {

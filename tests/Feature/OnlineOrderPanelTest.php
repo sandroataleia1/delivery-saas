@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
+use App\Models\DeliveryOrder;
 use App\Models\OnlineOrder;
 use App\Models\OnlineOrderItem;
 use App\Models\OnlineStore;
@@ -62,6 +64,43 @@ class OnlineOrderPanelTest extends TestCase
         foreach (['tracking_token', 'cost', 'content_hash', 'secret-token'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $json);
         }
+    }
+
+    private function makeDelivery(OnlineOrder $online, int $number, string $status): DeliveryOrder
+    {
+        $customer = Customer::factory()->create(['company_id' => $online->company_id]);
+        $delivery = new DeliveryOrder;
+        $delivery->forceFill(['company_id' => $online->company_id, 'number' => $number, 'client_uuid' => (string) Str::uuid(), 'customer_id' => $customer->id,
+            'online_order_id' => $online->id, 'type' => 'delivery', 'status' => $status, 'customer_name' => 'Joana', 'subtotal' => '20.00',
+            'delivery_fee' => '5.00', 'payment_method' => 'pix', 'user_name' => 'Loja online'])->save();
+
+        return $delivery;
+    }
+
+    public function test_panel_splits_orders_into_analysis_production_and_ready(): void
+    {
+        $admin = $this->productionAdminOf();
+        OnlineStore::factory()->create(['company_id' => $admin->company_id]);
+        $this->makeOrder($admin->company_id, 1);
+        $this->makeDelivery($this->makeOrder($admin->company_id, 2, OnlineOrder::ACCEPTED), 20, DeliveryOrder::RECEIVED);
+        $this->makeDelivery($this->makeOrder($admin->company_id, 3, OnlineOrder::ACCEPTED), 30, DeliveryOrder::PREPARING);
+        $this->makeDelivery($this->makeOrder($admin->company_id, 4, OnlineOrder::ACCEPTED), 40, DeliveryOrder::READY);
+        $this->makeDelivery($this->makeOrder($admin->company_id, 5, OnlineOrder::ACCEPTED), 50, DeliveryOrder::OUT);
+        $this->makeOrder($admin->company_id, 6, OnlineOrder::REJECTED)->forceFill(['decided_at' => now()])->save();
+
+        $this->actingAs($admin)->get(route('online.orders'))->assertInertia(fn (Assert $page) => $page
+            ->has('pending', 1)
+            ->where('producing.0.number', 2)
+            ->where('producing.1.number', 3)
+            ->has('producing', 2)
+            ->where('producing.1.delivery.status', 'preparing')
+            ->has('ready', 1)
+            ->where('ready.0.number', 4)
+            ->where('ready.0.delivery.number', 40)
+            ->where('ready.0.delivery.next_status', 'out_for_delivery')
+            ->has('closed', 1)
+            ->where('closed.0.number', 6)
+            ->has('couriers'));
     }
 
     public function test_panel_requires_permission(): void

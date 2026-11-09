@@ -242,15 +242,7 @@ class DeliveryController extends Controller
     /** @return array<int, array{id: int, name: string}> */
     private function couriers(): array
     {
-        return User::query()
-            ->where('active', true)
-            ->with('role')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn (User $user) => $user->hasPermission('deliveries.courier'))
-            ->map(fn (User $user) => $user->only('id', 'name'))
-            ->values()
-            ->all();
+        return User::activeCouriers();
     }
 
     /** O nome do cliente, ou um número, que pode ser o da entrega ou o do pedido online. */

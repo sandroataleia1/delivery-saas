@@ -48,6 +48,24 @@ class User extends Authenticatable
         return $this->role?->grantedPermissions() ?? [];
     }
 
+    /**
+     * Usuários ativos que podem levar entregas, para escolher ao despachar.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    public static function activeCouriers(): array
+    {
+        return self::query()
+            ->where('active', true)
+            ->with('role')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (User $user) => $user->hasPermission('deliveries.courier'))
+            ->map(fn (User $user) => $user->only('id', 'name'))
+            ->values()
+            ->all();
+    }
+
     public function hasPermission(string $permission): bool
     {
         return in_array($permission, $this->permissions(), true);

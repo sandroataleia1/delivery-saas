@@ -3,16 +3,22 @@ import { computed, onUnmounted, ref } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import Field from '@/components/Field.vue';
+import { usePermissions } from '@/lib/can';
 import { formatMoney } from '@/lib/format';
 
 const props = defineProps({
     order: { type: Object, required: true },
     paymentMethods: { type: Object, default: () => ({}) },
-    decided: { type: Boolean, default: false },
+    /** analysis: aguardando aceite; production: em preparo; ready: pronto para sair; closed: recusado ou expirado. */
+    stage: { type: String, default: 'analysis' },
 });
 
+const emit = defineEmits(['advance', 'ready']);
+const { can } = usePermissions();
+const decided = computed(() => props.stage !== 'analysis');
+
 const now = ref(Date.now());
-const timer = props.decided ? null : setInterval(() => (now.value = Date.now()), 1000);
+const timer = props.stage !== 'analysis' ? null : setInterval(() => (now.value = Date.now()), 1000);
 onUnmounted(() => timer && clearInterval(timer));
 
 const remaining = computed(() => Math.max(0, Math.floor((Date.parse(props.order.expires_at) - now.value) / 1000)));
@@ -21,7 +27,7 @@ const countdown = computed(() => `${String(Math.floor(remaining.value / 60)).pad
 const urgent = computed(() => remaining.value <= 120);
 
 const statusLabel = { accepted: 'Aceito', rejected: 'Recusado', expired: 'Expirado' };
-const statusClass = { accepted: 'text-success', rejected: 'text-danger', expired: 'text-muted' };
+const statusClass = { accepted: 'text-ok', rejected: 'text-danger', expired: 'text-muted' };
 
 const processing = ref(false);
 const errors = ref({});
@@ -61,6 +67,10 @@ const time = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit
             <p v-if="!decided" class="font-semibold tabular-nums" :class="expired ? 'text-danger' : urgent ? 'text-warn' : ''" role="timer">
                 {{ expired ? 'Prazo encerrado' : `Aceitar em ${countdown}` }}
             </p>
+            <p v-else-if="order.delivery && stage !== 'closed'" class="text-right text-sm">
+                <span class="badge" :class="stage === 'ready' ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'">{{ order.delivery.status_label }}</span>
+                <span class="text-muted block text-xs">Entrega #{{ order.delivery.number }}</span>
+            </p>
             <p v-else class="text-sm font-semibold" :class="statusClass[order.status]">
                 {{ statusLabel[order.status] }}<template v-if="order.decided_at"> às {{ time(order.decided_at) }}</template>
                 <template v-if="order.decided_by_name"> por {{ order.decided_by_name }}</template>
@@ -87,8 +97,10 @@ const time = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit
         <p v-if="order.notes" class="mt-2 text-sm italic">Obs. do pedido: {{ order.notes }}</p>
 
         <dl class="border-line mt-3 space-y-0.5 border-t pt-3 text-sm">
-            <div class="flex justify-between"><dt>Subtotal</dt><dd class="tabular-nums">{{ formatMoney(order.subtotal) }}</dd></div>
-            <div class="flex justify-between"><dt>Taxa de entrega</dt><dd class="tabular-nums">{{ formatMoney(order.delivery_fee) }}</dd></div>
+            <template v-if="stage === 'analysis'">
+                <div class="flex justify-between"><dt>Subtotal</dt><dd class="tabular-nums">{{ formatMoney(order.subtotal) }}</dd></div>
+                <div class="flex justify-between"><dt>Taxa de entrega</dt><dd class="tabular-nums">{{ formatMoney(order.delivery_fee) }}</dd></div>
+            </template>
             <div class="flex justify-between font-bold"><dt>Total</dt><dd class="tabular-nums">{{ formatMoney(order.total) }}</dd></div>
             <div class="text-muted flex justify-between">
                 <dt>Pagamento na entrega</dt>
@@ -97,7 +109,19 @@ const time = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit
         </dl>
 
         <p v-if="decided && order.decision_reason" class="text-muted mt-2 text-sm">Motivo: {{ order.decision_reason }}</p>
-        <Link v-if="decided && order.delivery_id" :href="route('deliveries.show', order.delivery_id)" class="btn btn-secondary mt-3">Ver entrega</Link>
+        <div v-if="stage === 'production' || stage === 'ready'" class="mt-4 flex flex-wrap gap-2">
+            <button
+                v-if="stage === 'ready' && order.delivery.next_status && can('deliveries.operate')"
+                type="button"
+                class="btn btn-primary"
+                @click="emit('advance', order)"
+            >
+                {{ order.delivery.next_status === 'out_for_delivery' ? 'Despachar' : 'Marcar como entregue' }}
+            </button>
+            <button v-if="stage === 'production' && can('production.operate')" type="button" class="btn btn-primary" @click="emit('ready', order)">Marcar pronto</button>
+            <Link v-if="stage === 'production' && can('production.view')" :href="route('production.index')" class="btn btn-secondary">Ver preparo</Link>
+            <Link v-if="can('deliveries.operate')" :href="route('deliveries.show', order.delivery.id)" class="btn btn-secondary">Ver entrega</Link>
+        </div>
 
         <p v-if="errors.online_order" class="text-danger mt-3 text-sm" role="alert">{{ errors.online_order }}</p>
 

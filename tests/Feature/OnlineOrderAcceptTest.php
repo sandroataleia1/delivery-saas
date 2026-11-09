@@ -253,6 +253,32 @@ class OnlineOrderAcceptTest extends TestCase
         $this->assertSame(0, DeliveryOrder::withoutGlobalScopes()->count());
     }
 
+    public function test_mark_ready_finishes_every_item_and_moves_order_to_ready(): void
+    {
+        $online = $this->place();
+        $this->accept($online)->assertSessionHasNoErrors();
+        $delivery = DeliveryOrder::where('online_order_id', $online->id)->sole();
+
+        $this->actingAs($this->admin)->post(route('online.orders.ready', $online->id))->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertSame(DeliveryOrder::READY, $delivery->fresh()->status);
+        $works = ProductionWork::whereIn('delivery_order_item_id', $delivery->items()->pluck('id'))->get();
+        $this->assertCount(2, $works);
+        $this->assertTrue($works->every(fn (ProductionWork $work) => $work->status === 'ready'));
+    }
+
+    public function test_mark_ready_requires_production_permission_and_an_accepted_order(): void
+    {
+        $online = $this->place();
+        $this->actingAs($this->admin)->post(route('online.orders.ready', $online->id))->assertSessionHasErrors('online_order');
+
+        $this->accept($online)->assertSessionHasNoErrors();
+        $attendant = $this->userWith(['online_orders.accept'], $this->admin->company);
+        $this->actingAs($attendant)->post(route('online.orders.ready', $online->id))->assertForbidden();
+
+        $this->assertSame(DeliveryOrder::RECEIVED, DeliveryOrder::where('online_order_id', $online->id)->sole()->status);
+    }
+
     public function test_history_search_finds_by_online_number(): void
     {
         $this->place('11911111111');

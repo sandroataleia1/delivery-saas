@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Actions\AcceptOnlineOrder;
+use App\Actions\MarkDeliveryReady;
 use App\Actions\RejectOnlineOrder;
+use App\Models\DeliveryOrder;
 use App\Models\OnlineOrder;
 use App\Models\OnlineStore;
+use App\Models\User;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSetting;
 use App\Support\RestaurantOperationPolicy;
@@ -25,15 +28,23 @@ class OnlineOrderController extends Controller
 
         $pending = OnlineOrder::with('items')->where('status', OnlineOrder::PENDING)->where('expires_at', '>', now())
             ->orderBy('created_at')->orderBy('id')->get();
-        $recent = OnlineOrder::with(['items', 'deliveryOrder:id,online_order_id'])
-            ->whereIn('status', [OnlineOrder::ACCEPTED, OnlineOrder::REJECTED, OnlineOrder::EXPIRED])
+        $inProgress = OnlineOrder::with(['items', 'deliveryOrder'])
+            ->where('status', OnlineOrder::ACCEPTED)
+            ->whereHas('deliveryOrder', fn ($query) => $query->whereIn('status', [DeliveryOrder::RECEIVED, DeliveryOrder::PREPARING, DeliveryOrder::READY]))
+            ->orderBy('decided_at')->orderBy('id')->get()
+            ->partition(fn (OnlineOrder $order) => $order->deliveryOrder->status !== DeliveryOrder::READY);
+        $closed = OnlineOrder::with('items')
+            ->whereIn('status', [OnlineOrder::REJECTED, OnlineOrder::EXPIRED])
             ->where('decided_at', '>=', now()->subHours(12))->orderByDesc('decided_at')->orderByDesc('id')->limit(30)->get();
 
         $whatsapp = WhatsAppSetting::where('company_id', $company->id)->where('enabled', true)->first();
 
         return Inertia::render('online/Orders', [
             'pending' => $pending->map(fn (OnlineOrder $order) => $this->present($order))->values(),
-            'recent' => $recent->map(fn (OnlineOrder $order) => $this->present($order))->values(),
+            'producing' => $inProgress[0]->map(fn (OnlineOrder $order) => $this->present($order))->values(),
+            'ready' => $inProgress[1]->map(fn (OnlineOrder $order) => $this->present($order))->values(),
+            'closed' => $closed->map(fn (OnlineOrder $order) => $this->present($order))->values(),
+            'couriers' => $request->user()->hasPermission('deliveries.operate') ? User::activeCouriers() : [],
             'store' => $store ? [
                 'label' => StoreSchedule::label($store, CarbonImmutable::now()),
                 'paused' => $store->isPaused(),
@@ -60,7 +71,13 @@ class OnlineOrderController extends Controller
             'created_at' => $order->created_at?->toIso8601String(),
             'expires_at' => $order->expires_at?->toIso8601String(),
             'decided_at' => $order->decided_at?->toIso8601String(),
-            'delivery_id' => $order->relationLoaded('deliveryOrder') ? $order->deliveryOrder?->id : null,
+            'delivery' => $order->relationLoaded('deliveryOrder') && $order->deliveryOrder ? [
+                'id' => $order->deliveryOrder->id,
+                'number' => $order->deliveryOrder->number,
+                'status' => $order->deliveryOrder->status,
+                'status_label' => __("deliveries.status.{$order->deliveryOrder->status}"),
+                'next_status' => $order->deliveryOrder->nextStatus(),
+            ] : null,
             'items' => $order->items->map(fn ($item) => [
                 'id' => $item->id,
                 'product_name' => $item->product_name,
@@ -77,6 +94,20 @@ class OnlineOrderController extends Controller
         $delivery = $acceptOrder->handle($onlineOrder);
 
         return back()->with('success', "Pedido online #{$onlineOrder->number} aceito como entrega #{$delivery->number}.");
+    }
+
+    /** Conclui o preparo de todos os itens do pedido, como ao soltá-lo na coluna "Prontos para entrega". */
+    public function ready(OnlineOrder $onlineOrder, MarkDeliveryReady $markReady): RedirectResponse
+    {
+        $delivery = $onlineOrder->status === OnlineOrder::ACCEPTED ? $onlineOrder->deliveryOrder : null;
+
+        if ($delivery === null) {
+            return back()->withErrors(['online_order' => 'Aceite o pedido antes de marcá-lo como pronto.']);
+        }
+
+        $markReady->handle($delivery);
+
+        return back()->with('success', "Pedido online #{$onlineOrder->number} pronto para entrega.");
     }
 
     public function reject(Request $request, OnlineOrder $onlineOrder, RejectOnlineOrder $rejectOrder): RedirectResponse
