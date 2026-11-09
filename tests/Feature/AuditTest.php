@@ -90,4 +90,20 @@ class AuditTest extends TestCase
             ['field' => 'Nome', 'old' => '—', 'new' => 'Ana'],
         ], $log->present()['changes']);
     }
+
+    public function test_horarios_da_loja_sao_apresentados_sem_erro(): void
+    {
+        $admin = $this->adminOf();
+
+        $log = Audit::record('hours_updated', $admin, old: ['hours' => []], new: ['hours' => [
+            ['weekday' => 1, 'opens_at' => '13:00:00', 'closes_at' => '23:00:00'],
+            ['weekday' => 6, 'opens_at' => '18:00:00', 'closes_at' => '02:00:00'],
+        ]], actor: $admin);
+
+        $this->assertSame([
+            ['field' => 'Horários', 'old' => '—', 'new' => 'Seg 13:00–23:00, Sáb 18:00–02:00'],
+        ], $log->present()['changes']);
+
+        $this->actingAs($admin)->get('/')->assertOk();
+    }
 }

@@ -47,6 +47,7 @@ return [
     ],
     'fields' => [
         'active' => 'Ativo',
+        'hours' => 'Horários',
         'confirmation_mode' => 'Preferência de confirmação',
         'automatic_blocked' => 'Automático bloqueado',
         'automatic_block_reason' => 'Motivo do bloqueio',

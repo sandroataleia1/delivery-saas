@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     Bike,
@@ -9,6 +9,7 @@ import {
     CalendarDays,
     ChartColumn,
     ChevronDown,
+    EllipsisVertical,
     CircleArrowDown,
     CircleArrowUp,
     Contact,
@@ -42,6 +43,23 @@ defineProps({
 const page = usePage();
 const { can } = usePermissions();
 const menuOpen = ref(false);
+const userMenuOpen = ref(false);
+const userMenu = ref(null);
+
+function closeUserMenu(event) {
+    if (event.type === 'keydown' ? event.key === 'Escape' : !userMenu.value?.contains(event.target)) {
+        userMenuOpen.value = false;
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', closeUserMenu);
+    document.addEventListener('keydown', closeUserMenu);
+});
+onBeforeUnmount(() => {
+    document.removeEventListener('click', closeUserMenu);
+    document.removeEventListener('keydown', closeUserMenu);
+});
 
 const user = computed(() => page.props.auth.user);
 const company = computed(() => page.props.auth.company);
@@ -217,10 +235,10 @@ watch(() => page.url, () => (menuOpen.value = false));
                 </section>
             </nav>
 
-            <div class="border-t border-white/10 p-3">
+            <div ref="userMenu" class="relative flex items-center gap-1 border-t border-white/10 p-3">
                 <Link
                     :href="route('account.edit')"
-                    class="hover:bg-sidebar-hover flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                    class="hover:bg-sidebar-hover flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 transition-colors"
                 >
                     <UserCog :size="18" class="shrink-0" />
                     <span class="min-w-0">
@@ -228,15 +246,34 @@ watch(() => page.url, () => (menuOpen.value = false));
                         <span class="block truncate text-xs">{{ user.is_super_admin ? 'Super administrador' : user.role }}</span>
                     </span>
                 </Link>
-                <Link
-                    :href="route('logout')"
-                    method="post"
-                    as="button"
-                    class="hover:bg-sidebar-hover mt-1 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors hover:text-white"
+                <button
+                    type="button"
+                    class="hover:bg-sidebar-hover shrink-0 cursor-pointer rounded-lg p-2 transition-colors hover:text-white"
+                    :class="{ 'bg-sidebar-hover text-white': userMenuOpen }"
+                    aria-label="Opções do usuário"
+                    aria-haspopup="menu"
+                    :aria-expanded="userMenuOpen"
+                    @click="userMenuOpen = !userMenuOpen"
                 >
-                    <LogOut :size="18" />
-                    Sair
-                </Link>
+                    <EllipsisVertical :size="18" />
+                </button>
+
+                <div
+                    v-if="userMenuOpen"
+                    role="menu"
+                    class="bg-sidebar absolute right-3 bottom-full z-50 mb-1 w-44 rounded-lg border border-white/10 p-1 shadow-lg"
+                >
+                    <Link
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
+                        role="menuitem"
+                        class="hover:bg-sidebar-hover flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:text-white"
+                    >
+                        <LogOut :size="18" />
+                        Sair
+                    </Link>
+                </div>
             </div>
         </aside>
 
