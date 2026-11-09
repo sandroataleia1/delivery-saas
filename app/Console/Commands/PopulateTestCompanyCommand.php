@@ -30,6 +30,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -81,12 +82,18 @@ class PopulateTestCompanyCommand extends Command
         mt_srand(2026);
         Auth::setUser($admin);
 
+        $days = max(1, (int) $this->option('days'));
+
+        // Tudo ou nada: uma falha no meio não deixa a empresa populada pela metade.
         try {
-            $this->catalog($company->id);
-            $this->registers($company->id);
-            $days = max(1, (int) $this->option('days'));
-            $sales = $this->history($admin, $days);
-            $this->openBills();
+            $sales = DB::transaction(function () use ($company, $admin, $days) {
+                $this->catalog($company->id);
+                $this->registers($company->id);
+                $sales = $this->history($admin, $days);
+                $this->openBills();
+
+                return $sales;
+            });
         } finally {
             Carbon::setTestNow();
         }
@@ -228,15 +235,16 @@ class PopulateTestCompanyCommand extends Command
     private function history(User $admin, int $days): int
     {
         $sales = 0;
+        $today = today();
 
         for ($back = $days; $back >= 1; $back--) {
-            $day = today()->subDays($back);
+            $day = $today->copy()->subDays($back);
             $this->at($day, 10, 30);
             $session = app(OpenCashSession::class)->handle($admin, '150');
 
             $sales += $this->sellDay($day);
 
-            if ($day->dayOfWeek === Carbon::SATURDAY) {
+            if ($day->dayOfWeek === Carbon::SATURDAY && bccomp($session->fresh()->calculateSummary()['expected_cash'], '350', 2) >= 0) {
                 $this->at($day, 21, 50);
                 app(RecordCashMovement::class)->handle($session, CashMovement::WITHDRAWAL, '200.00', 'Depósito no cofre');
             }

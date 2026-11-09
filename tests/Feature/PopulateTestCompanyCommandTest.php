@@ -31,7 +31,10 @@ class PopulateTestCompanyCommandTest extends TestCase
         $sales = Sale::withoutGlobalScopes()->where('company_id', $companyId);
         $this->assertGreaterThanOrEqual(18, (clone $sales)->count());
         $this->assertTrue((clone $sales)->whereHas('items', fn ($query) => $query->where('product_id', $pizza->id))->exists());
-        $this->assertSame(3, CashSession::withoutGlobalScopes()->where('company_id', $companyId)->whereNotNull('closed_at')->count());
+        $this->assertSame(
+            [today()->subDays(3)->toDateString(), today()->subDays(2)->toDateString(), today()->subDay()->toDateString()],
+            CashSession::withoutGlobalScopes()->where('company_id', $companyId)->whereNotNull('closed_at')->orderBy('id')->get()->map(fn (CashSession $session) => $session->opened_at->toDateString())->all(),
+        );
         $this->assertFalse(CashSession::withoutGlobalScopes()->where('company_id', $companyId)->whereNull('closed_at')->exists());
         $this->assertTrue(Bill::withoutGlobalScopes()->where('company_id', $companyId)->where('type', Bill::RECEIVABLE)->exists());
         $this->assertSame(0, Sale::withoutGlobalScopes()->where('company_id', $other->company_id)->count());
