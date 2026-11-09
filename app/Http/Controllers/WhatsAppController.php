@@ -6,10 +6,12 @@ use App\Actions\ConnectWhatsApp;
 use App\Actions\DisconnectWhatsApp;
 use App\Actions\SaveWhatsAppSettings;
 use App\Http\Requests\WhatsAppSettingsRequest;
+use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSetting;
 use App\Support\EvolutionClient;
 use App\Support\EvolutionException;
+use App\Support\WhatsAppBot\BotReplies;
 use App\Support\WhatsAppTemplates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +53,24 @@ class WhatsAppController extends Controller
                     'default' => WhatsAppTemplates::DEFAULTS[$key],
                     'value' => $overrides[$key] ?? null,
                 ])->values(),
+            ],
+            'bot' => [
+                'auto_reply' => (bool) $setting?->auto_reply,
+                'greeting' => $setting?->greeting,
+                'default_greeting' => BotReplies::DEFAULT_INTRO,
+                'ignored_numbers' => $setting?->ignored_numbers ?? [],
+                'conversations' => WhatsAppConversation::where('company_id', $companyId)
+                    ->latest('updated_at')
+                    ->latest('id')
+                    ->limit(30)
+                    ->get()
+                    ->map(fn (WhatsAppConversation $conversation) => [
+                        'id' => $conversation->id,
+                        'phone' => $conversation->phone,
+                        'name' => $conversation->contact_name,
+                        'status_label' => $conversation->statusLabel(),
+                        'updated_at' => $conversation->updated_at?->toIso8601String(),
+                    ])->values(),
             ],
             'qr' => $connected ? null : Cache::get("whatsapp-qr:{$companyId}"),
             'messages' => WhatsAppMessage::with('onlineOrder:id,number')

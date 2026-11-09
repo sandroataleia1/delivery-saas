@@ -9,6 +9,7 @@ use App\Models\DeliveryOrder;
 use App\Models\OnlineOrder;
 use App\Models\OnlineStore;
 use App\Models\User;
+use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppMessage;
 use App\Models\WhatsAppSetting;
 use App\Support\RestaurantOperationPolicy;
@@ -57,6 +58,18 @@ class OnlineOrderController extends Controller
                 'failed_recent' => WhatsAppMessage::where('company_id', $company->id)
                     ->where('status', WhatsAppMessage::FAILED)->where('updated_at', '>=', now()->subDay())->count(),
             ] : null,
+            'waitingCustomers' => WhatsAppConversation::where('company_id', $company->id)
+                ->waitingForAttendant()
+                ->orderBy('waiting_since')
+                ->limit(20)
+                ->get()
+                ->map(fn (WhatsAppConversation $conversation) => [
+                    'id' => $conversation->id,
+                    'name' => $conversation->contact_name,
+                    'phone' => $conversation->phone,
+                    'since' => $conversation->waiting_since->toIso8601String(),
+                    'wa_link' => $conversation->phone ? 'https://wa.me/55'.$conversation->phone : null,
+                ])->values(),
         ]);
     }
 

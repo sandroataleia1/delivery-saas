@@ -77,7 +77,7 @@ final class InboundMessage
     }
 
     /** O WhatsApp ainda identifica muitos celulares sem o 9; o sistema guarda com o 9, como no site. */
-    private static function withMobileNine(?string $phone): ?string
+    public static function withMobileNine(?string $phone): ?string
     {
         if ($phone !== null && strlen($phone) === 10 && in_array($phone[2], ['6', '7', '8', '9'], true)) {
             return substr($phone, 0, 2).'9'.substr($phone, 2);

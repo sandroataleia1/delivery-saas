@@ -19,11 +19,12 @@ const props = defineProps({
     whatsapp: { type: Object, default: null },
     operation: { type: Object, required: true },
     paymentMethods: { type: Object, default: () => ({}) },
+    waitingCustomers: { type: Array, default: () => [] },
 });
 
 const { can } = usePermissions();
 const lastUpdated = ref(Date.now());
-usePoll(10000, { only: ['pending', 'producing', 'ready', 'closed', 'store', 'operation', 'onlinePendingCount', 'whatsapp'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
+usePoll(10000, { only: ['pending', 'producing', 'ready', 'closed', 'store', 'operation', 'onlinePendingCount', 'whatsapp', 'waitingCustomers'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
 const pendingIds = computed(() => props.pending.map((order) => order.id));
 
 const columns = computed(() => [
@@ -147,6 +148,15 @@ function togglePause() {
                 {{ whatsapp.failed_recent }} {{ whatsapp.failed_recent === 1 ? 'mensagem' : 'mensagens' }} de WhatsApp {{ whatsapp.failed_recent === 1 ? 'não enviada' : 'não enviadas' }} nas últimas 24 horas.
                 <Link v-if="can('company.manage')" :href="route('online.whatsapp')" class="underline">Abrir WhatsApp</Link>
             </p>
+            <div v-if="waitingCustomers.length" class="border-warn bg-canvas mb-3 rounded-xl border p-3 text-sm" role="alert">
+                <p class="text-warn font-semibold">Cliente aguardando atendente no WhatsApp</p>
+                <ul class="mt-1 space-y-0.5">
+                    <li v-for="customer in waitingCustomers" :key="customer.id">
+                        {{ customer.name ?? 'Cliente' }} · {{ customer.phone ?? 'número oculto' }}
+                        <a v-if="customer.wa_link" :href="customer.wa_link" target="_blank" rel="noopener" class="text-brand-strong underline">Abrir conversa</a>
+                    </li>
+                </ul>
+            </div>
             <MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" />
 
             <p v-if="advanceError || moveError" class="text-danger mb-3 text-sm" role="alert">{{ advanceError ?? moveError }}</p>

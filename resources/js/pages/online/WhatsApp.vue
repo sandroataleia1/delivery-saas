@@ -10,6 +10,7 @@ const props = defineProps({
     settings: { type: Object, required: true },
     qr: { type: String, default: null },
     messages: { type: Array, default: () => [] },
+    bot: { type: Object, required: true },
 });
 
 const page = usePage();
@@ -18,9 +19,20 @@ const connectionError = computed(() => page.props.errors?.whatsapp);
 const form = useForm({
     enabled: props.settings.enabled,
     templates: Object.fromEntries(props.settings.templates.map((template) => [template.key, template.value ?? ''])),
+    auto_reply: props.bot.auto_reply,
+    greeting: props.bot.greeting ?? '',
+    ignored_numbers: props.bot.ignored_numbers.join('\n'),
 });
 
-const save = () => form.put(route('online.whatsapp.update'), { preserveScroll: true });
+const save = () => form
+    .transform((data) => ({
+        ...data,
+        ignored_numbers: data.ignored_numbers.split('\n').map((number) => number.trim()).filter(Boolean),
+    }))
+    .put(route('online.whatsapp.update'), { preserveScroll: true });
+
+const ignoredNumbersError = computed(() => Object.entries(form.errors).find(([key]) => key.startsWith('ignored_numbers'))?.[1]);
+const conversationStatusClasses = { 'Aguardando atendente': 'text-warn font-semibold', 'Com atendente': 'text-brand-strong', 'Pedido feito': 'text-success' };
 
 const working = ref(false);
 const connect = () => router.post(route('online.whatsapp.connect'), {}, {
@@ -108,8 +120,61 @@ const formatDate = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateS
                 <p v-if="form.errors.templates" class="text-danger text-sm">{{ form.errors.templates }}</p>
             </div>
 
+            <div class="card space-y-4 p-5">
+                <h2 class="font-bold">Atendimento automático</h2>
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.auto_reply" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">Responder clientes automaticamente</span>
+                        <span class="text-muted">O robô cumprimenta, mostra o cardápio e monta o pedido pela conversa. O cliente digita 0 para falar com a loja.</span>
+                    </span>
+                </label>
+
+                <div class="space-y-1">
+                    <label for="bot-greeting" class="block text-sm font-semibold">Mensagem de boas-vindas</label>
+                    <textarea id="bot-greeting" v-model="form.greeting" class="input" rows="3" maxlength="1000" :placeholder="bot.default_greeting" />
+                    <p class="text-muted text-sm">Marcadores: <span class="font-mono">{loja}</span>, <span class="font-mono">{link}</span>. Deixe em branco para usar o texto padrão.</p>
+                    <p v-if="form.errors.greeting" class="text-danger text-sm">{{ form.errors.greeting }}</p>
+                </div>
+
+                <div class="space-y-1">
+                    <label for="bot-ignored" class="block text-sm font-semibold">Números que o robô não responde</label>
+                    <textarea id="bot-ignored" v-model="form.ignored_numbers" class="input font-mono" rows="3" placeholder="(11) 98888-7777" />
+                    <p class="text-muted text-sm">Um número por linha, com DDD. Use para fornecedores, entregadores e a própria equipe.</p>
+                    <p v-if="ignoredNumbersError" class="text-danger text-sm">{{ ignoredNumbersError }}</p>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>
         </form>
+
+        <div class="card mb-4 max-w-4xl p-5">
+            <h2 class="mb-3 font-bold">Conversas recentes</h2>
+            <p v-if="bot.conversations.length === 0" class="text-muted text-sm">Nenhum cliente escreveu ainda.</p>
+            <div v-else class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Número</th>
+                            <th>Situação</th>
+                            <th>Última atividade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="conversation in bot.conversations" :key="conversation.id">
+                            <td>{{ conversation.name ?? '—' }}</td>
+                            <td class="whitespace-nowrap tabular-nums">
+                                <a v-if="conversation.phone" :href="`https://wa.me/55${conversation.phone}`" target="_blank" rel="noopener" class="underline">{{ conversation.phone }}</a>
+                                <span v-else>—</span>
+                            </td>
+                            <td :class="conversationStatusClasses[conversation.status_label]">{{ conversation.status_label }}</td>
+                            <td class="whitespace-nowrap tabular-nums">{{ formatDate(conversation.updated_at) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <div class="card max-w-4xl p-5">
             <h2 class="mb-3 font-bold">Últimas mensagens</h2>

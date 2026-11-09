@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Support\BrazilPhone;
 use App\Support\WhatsAppTemplates;
+use Closure;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -22,6 +24,14 @@ class WhatsAppSettingsRequest extends FormRequest
             'enabled' => ['required', 'boolean'],
             'templates' => ['nullable', 'array'],
             'templates.*' => ['nullable', 'string', 'max:1000'],
+            'auto_reply' => ['sometimes', 'boolean'],
+            'greeting' => ['nullable', 'string', 'max:1000'],
+            'ignored_numbers' => ['sometimes', 'nullable', 'array', 'max:100'],
+            'ignored_numbers.*' => ['required', 'string', 'max:30', function (string $attribute, mixed $value, Closure $fail): void {
+                if (! is_string($value) || BrazilPhone::normalize($value) === null) {
+                    $fail('Número inválido: '.(is_string($value) ? $value : ''));
+                }
+            }],
         ];
     }
 

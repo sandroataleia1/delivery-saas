@@ -4,11 +4,13 @@ namespace App\Actions;
 
 use App\Models\Company;
 use App\Models\WhatsAppSetting;
+use App\Support\BrazilPhone;
+use App\Support\WhatsAppBot\InboundMessage;
 
 class SaveWhatsAppSettings
 {
     /**
-     * @param  array{enabled: bool, templates?: array<string, ?string>|null}  $data
+     * @param  array{enabled: bool, templates?: array<string, ?string>|null, auto_reply?: bool, greeting?: ?string, ignored_numbers?: list<string>|null}  $data
      */
     public function handle(Company $company, array $data): WhatsAppSetting
     {
@@ -22,7 +24,25 @@ class SaveWhatsAppSettings
             'company_id' => $company->id,
             'enabled' => (bool) $data['enabled'],
             'templates' => $overrides,
-        ])->save();
+        ]);
+
+        if (array_key_exists('auto_reply', $data)) {
+            $setting->auto_reply = (bool) $data['auto_reply'];
+        }
+
+        if (array_key_exists('greeting', $data)) {
+            $setting->greeting = trim((string) $data['greeting']) ?: null;
+        }
+
+        if (array_key_exists('ignored_numbers', $data)) {
+            $setting->ignored_numbers = collect($data['ignored_numbers'] ?? [])
+                ->map(fn (string $number) => InboundMessage::withMobileNine(BrazilPhone::normalize($number)))
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $setting->save();
 
         return $setting;
     }
