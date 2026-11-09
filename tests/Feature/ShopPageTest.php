@@ -79,6 +79,12 @@ class ShopPageTest extends TestCase
             ->where('payment_methods', ['cash' => 'Dinheiro', 'pix' => 'Pix', 'credit' => 'Cartão de crédito', 'debit' => 'Cartão de débito']));
     }
 
+    public function test_only_the_staff_system_offers_app_installation(): void
+    {
+        $this->get('/login')->assertOk()->assertSee('rel="manifest"', false);
+        $this->get('/loja/lanchonete')->assertOk()->assertDontSee('rel="manifest"', false);
+    }
+
     public function test_shop_page_exposes_no_sku_cost_or_barcode(): void
     {
         $group = new OptionGroup(['name' => 'Adicionais', 'kind' => 'extra', 'min_choices' => 0, 'max_choices' => 2, 'allows_quantity' => false, 'active' => true]);

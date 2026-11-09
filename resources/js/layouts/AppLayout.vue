@@ -13,6 +13,7 @@ import {
     EllipsisVertical,
     CircleArrowDown,
     CircleArrowUp,
+    Download,
     Contact,
     Globe,
     MessageCircle,
@@ -40,6 +41,7 @@ import {
 } from '@lucide/vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import { usePermissions } from '@/lib/can';
+import { useInstallApp } from '@/lib/installApp';
 
 defineProps({
     title: { type: String, required: true },
@@ -50,6 +52,8 @@ const { can } = usePermissions();
 const menuOpen = ref(false);
 const userMenuOpen = ref(false);
 const userMenu = ref(null);
+const { canInstall, needsIosSteps, install } = useInstallApp();
+const showIosSteps = ref(false);
 
 function closeUserMenu(event) {
     if (event.type === 'keydown' ? event.key === 'Escape' : !userMenu.value?.contains(event.target)) {
@@ -275,8 +279,31 @@ watch(() => page.url, () => (menuOpen.value = false));
                 <div
                     v-if="userMenuOpen"
                     role="menu"
-                    class="bg-sidebar absolute right-3 bottom-full z-50 mb-1 w-44 rounded-lg border border-white/10 p-1 shadow-lg"
+                    class="bg-sidebar absolute right-3 bottom-full z-50 mb-1 w-56 rounded-lg border border-white/10 p-1 shadow-lg"
                 >
+                    <button
+                        v-if="canInstall"
+                        type="button"
+                        role="menuitem"
+                        class="hover:bg-sidebar-hover flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:text-white"
+                        @click="userMenuOpen = false; install()"
+                    >
+                        <Download :size="18" />
+                        Instalar app
+                    </button>
+                    <template v-else-if="needsIosSteps">
+                        <button
+                            type="button"
+                            role="menuitem"
+                            class="hover:bg-sidebar-hover flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:text-white"
+                            :aria-expanded="showIosSteps"
+                            @click="showIosSteps = !showIosSteps"
+                        >
+                            <Download :size="18" />
+                            Instalar app
+                        </button>
+                        <p v-if="showIosSteps" class="px-3 pb-2 text-xs">No Safari, toque em Compartilhar e depois em "Adicionar à Tela de Início".</p>
+                    </template>
                     <Link
                         :href="route('logout')"
                         method="post"
