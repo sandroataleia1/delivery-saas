@@ -6,7 +6,7 @@
         <meta name="robots" content="noindex">
         <title>{{ config('app.name') }}</title>
         @unless (request()->routeIs('shop.*', 'menu.*'))
-            <link rel="manifest" href="/manifest.webmanifest">
+            <link rel="manifest" href="/manifest.json">
             <meta name="theme-color" content="#c8321f">
             <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
             <meta name="apple-mobile-web-app-capable" content="yes">
