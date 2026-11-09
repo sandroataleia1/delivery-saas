@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Actions\MarkProductSoldOut;
 use App\Actions\MoveStock;
+use App\Actions\SavePizzaSetup;
 use App\Actions\SyncRecipe;
 use App\Http\Requests\ProductRequest;
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\Option;
+use App\Models\OptionGroup;
+use App\Models\PizzaSize;
 use App\Models\Product;
 use App\Models\ProductionSector;
 use App\Models\RecipeItem;
@@ -105,14 +109,19 @@ class ProductController extends Controller
         return Inertia::render('products/Form', $this->formProps());
     }
 
-    public function store(ProductRequest $request, MoveStock $moveStock, SyncRecipe $syncRecipe): RedirectResponse
+    public function store(ProductRequest $request, MoveStock $moveStock, SyncRecipe $syncRecipe, SavePizzaSetup $savePizza): RedirectResponse
     {
         $data = $request->validated();
+        $pizza = $this->takePizza($data);
         $newPath = $this->storeUploadedImage($data);
 
         try {
-            DB::transaction(function () use ($data, $moveStock, $syncRecipe, $newPath) {
-                $this->createProduct($data, $newPath, $moveStock, $syncRecipe);
+            DB::transaction(function () use ($data, $pizza, $moveStock, $syncRecipe, $savePizza, $newPath) {
+                $product = $this->createProduct($data, $newPath, $moveStock, $syncRecipe);
+
+                if ($pizza !== null) {
+                    $savePizza->handle($product, $pizza);
+                }
             });
         } catch (\Throwable $e) {
             PublicImage::discard($newPath);
@@ -126,9 +135,10 @@ class ProductController extends Controller
     /**
      * @param  array<string, mixed>  $data
      */
-    private function createProduct(array $data, ?string $imagePath, MoveStock $moveStock, SyncRecipe $syncRecipe): void
+    private function createProduct(array $data, ?string $imagePath, MoveStock $moveStock, SyncRecipe $syncRecipe): Product
     {
         $product = new Product($data);
+        $product->sale_price ??= 0;
         $product->image_path = $imagePath;
         $product->min_stock = $data['min_stock'] ?? 0;
         $product->cost_price = $data['cost_price'] ?? 0;
@@ -141,11 +151,14 @@ class ProductController extends Controller
             $moveStock->handle($product, StockMovement::INITIAL, $initialStock);
         }
         $syncRecipe->handle($product, $data['recipe']);
+
+        return $product;
     }
 
     public function edit(Product $product): Response
     {
-        $product->load('recipeItems.ingredient:id,name,unit,cost_price,stock_quantity');
+        $product->load(['recipeItems.ingredient:id,name,unit,cost_price,stock_quantity', 'pizzaSizes', 'optionGroups.options.prices']);
+        $flavorGroup = $product->optionGroups->firstWhere('kind', OptionGroup::FLAVOR);
 
         return Inertia::render('products/Form', [
             ...$this->formProps(),
@@ -165,13 +178,26 @@ class ProductController extends Controller
                         'stock_quantity' => $item->ingredient->stock_quantity,
                         'quantity' => $item->quantity,
                     ]),
+                'is_pizza' => $product->isPizza(),
+                'pizza' => [
+                    'pizza_pricing' => $product->pizza_pricing ?? 'highest',
+                    'sizes' => $product->pizzaSizes->map(fn (PizzaSize $size) => $size->only('id', 'name', 'slices', 'max_flavors', 'active'))->values(),
+                    'flavors' => ($flavorGroup?->options ?? collect())->map(fn (Option $option) => [
+                        'id' => $option->id,
+                        'name' => $option->name,
+                        'active' => $option->active,
+                        'prices' => $option->prices->mapWithKeys(fn ($price) => [$price->pizza_size_id => $price->price]),
+                    ])->values(),
+                ],
             ],
         ]);
     }
 
-    public function update(ProductRequest $request, Product $product, SyncRecipe $syncRecipe): RedirectResponse
+    public function update(ProductRequest $request, Product $product, SyncRecipe $syncRecipe, SavePizzaSetup $savePizza): RedirectResponse
     {
         $data = $request->validated();
+        $turnsPizzaOff = array_key_exists('is_pizza', $data) && ! $data['is_pizza'];
+        $pizza = $this->takePizza($data);
         $removeImage = (bool) ($data['remove_image'] ?? false);
         $newPath = $this->storeUploadedImage($data);
 
@@ -183,8 +209,13 @@ class ProductController extends Controller
             $product->cost_price = $data['cost_price'] ?? 0;
         }
 
+        // Desligar a pizza mantém tamanhos e sabores guardados: ao religar, voltam como estavam.
+        if ($turnsPizzaOff) {
+            $product->pizza_pricing = null;
+        }
+
         try {
-            DB::transaction(function () use ($product, $data, $syncRecipe, $newPath, $removeImage) {
+            DB::transaction(function () use ($product, $data, $pizza, $syncRecipe, $savePizza, $newPath, $removeImage) {
                 Company::whereKey($product->company_id)->lockForUpdate()->firstOrFail();
                 if ($newPath !== null || $removeImage) {
                     PublicImage::deleteAfterCommit($product->image_path);
@@ -192,6 +223,10 @@ class ProductController extends Controller
                 }
                 $product->save();
                 $syncRecipe->handle($product, $data['recipe']);
+
+                if ($pizza !== null) {
+                    $savePizza->handle($product, $pizza);
+                }
             });
         } catch (\Throwable $e) {
             PublicImage::discard($newPath);
@@ -221,6 +256,20 @@ class ProductController extends Controller
         $product->refresh();
 
         return back()->with('success', $product->active ? 'Produto ativado.' : 'Produto inativado.');
+    }
+
+    /**
+     * Tira `is_pizza`/`pizza` dos dados do produto e devolve a configuração da pizza quando ela está ligada.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function takePizza(array &$data): ?array
+    {
+        $pizza = ($data['is_pizza'] ?? false) ? $data['pizza'] : null;
+        unset($data['is_pizza'], $data['pizza']);
+
+        return $pizza;
     }
 
     /**

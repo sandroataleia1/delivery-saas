@@ -50,8 +50,9 @@ class SavePizzaSetup
                     $this->savePrice($flavor, $sizes[$this->resolveKey($key, $sizes)], $price, $changes);
                 }
 
-                foreach ($sizes as $size) {
-                    $items = $this->recipeFor($row['recipes'] ?? [], $size, $sizes);
+                // Sem a chave `recipes` (cadastro do produto), as fichas do sabor ficam como estão.
+                foreach (array_key_exists('recipes', $row) ? $sizes : [] as $size) {
+                    $items = $this->recipeFor($row['recipes'], $size, $sizes);
                     [$before, $after] = $this->syncRecipe->handle($flavor, $size, $items);
                     $this->noteChange($changes, "{$flavor->name} / {$size->name}", $before, $after);
                 }
@@ -115,8 +116,10 @@ class SavePizzaSetup
             $keptIds[] = $size->id;
             $sizes[isset($row['id']) ? (string) $size->id : 'n'.$position] = $size;
 
-            [$before, $after] = $this->syncRecipe->handle(null, $size, $row['recipe'] ?? []);
-            $this->noteChange($changes, "Ficha base / {$size->name}", $before, $after);
+            if (array_key_exists('recipe', $row)) {
+                [$before, $after] = $this->syncRecipe->handle(null, $size, $row['recipe']);
+                $this->noteChange($changes, "Ficha base / {$size->name}", $before, $after);
+            }
         }
 
         $product->pizzaSizes()->whereNotIn('id', $keptIds)->where('active', true)->get()->each(

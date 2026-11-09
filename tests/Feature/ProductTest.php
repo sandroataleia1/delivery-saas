@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\OptionPrice;
+use App\Models\OptionRecipeItem;
+use App\Models\PizzaSize;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\StockMovement;
@@ -181,5 +184,142 @@ class ProductTest extends TestCase
         $migration->up();
 
         $this->assertSame(['audit.view', 'products.view'], $role->fresh()->permissions);
+    }
+
+    /** @return array<string, mixed> */
+    private function pizzaPayload(array $pizza = []): array
+    {
+        return $this->payload([
+            'name' => 'Pizza',
+            'track_stock' => false,
+            'sale_price' => null,
+            'is_pizza' => true,
+            'pizza' => [
+                'pizza_pricing' => 'highest',
+                'sizes' => [
+                    ['name' => 'Pequena', 'slices' => 4, 'max_flavors' => 1, 'active' => true],
+                    ['name' => 'Grande', 'slices' => 8, 'max_flavors' => 2, 'active' => true],
+                ],
+                'flavors' => [
+                    ['name' => 'Calabresa', 'active' => true, 'prices' => ['n0' => '39.90', 'n1' => '49.90']],
+                ],
+                ...$pizza,
+            ],
+        ]);
+    }
+
+    public function test_cria_pizza_com_tamanhos_e_sabores_pelo_cadastro(): void
+    {
+        $admin = $this->adminOf();
+
+        $this->actingAs($admin)->post('/produtos', $this->pizzaPayload())
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('products.index'));
+
+        $product = Product::sole();
+        $this->assertTrue($product->isPizza());
+        $this->assertSame('highest', $product->pizza_pricing);
+        $this->assertSame(['Pequena', 'Grande'], $product->pizzaSizes()->orderBy('position')->pluck('name')->all());
+        $grande = PizzaSize::where('name', 'Grande')->sole();
+        $this->assertSame('49.90', OptionPrice::where('pizza_size_id', $grande->id)->sole()->price);
+        $this->assertSame($admin->company_id, $grande->company_id);
+    }
+
+    public function test_pizza_por_formulario_multipart_aceita_sabor_inativo_sem_precos(): void
+    {
+        $this->actingAs($this->adminOf())->post('/produtos', $this->pizzaPayload(['flavors' => [
+            ['name' => 'Calabresa', 'active' => '1', 'prices' => ['n0' => '39.90', 'n1' => '49.90']],
+            ['name' => 'Atum', 'active' => '0'],
+        ]]))->assertSessionHasNoErrors();
+
+        $this->assertSame(['Calabresa', 'Atum'], Product::sole()->optionGroups()->sole()->options()->orderBy('position')->pluck('name')->all());
+    }
+
+    public function test_pizza_ativada_exige_tamanho_ativo_e_sabor_com_preco(): void
+    {
+        $this->actingAs($this->adminOf());
+
+        $this->post('/produtos', $this->pizzaPayload(['sizes' => [['name' => 'Pequena', 'max_flavors' => 1, 'active' => false]], 'flavors' => []]))
+            ->assertSessionHasErrors(['pizza.sizes', 'pizza.flavors']);
+        $this->post('/produtos', $this->pizzaPayload(['flavors' => [['name' => 'Calabresa', 'active' => true, 'prices' => ['n0' => '39.90']]]]))
+            ->assertSessionHasErrors('pizza.flavors.0.prices');
+
+        $this->assertSame(0, Product::count());
+    }
+
+    public function test_desativar_pizza_vira_produto_comum_e_guarda_tamanhos_e_sabores(): void
+    {
+        $this->actingAs($this->adminOf())->post('/produtos', $this->pizzaPayload());
+        $product = Product::sole();
+
+        $this->put("/produtos/{$product->id}", $this->payload(['name' => 'Pizza', 'track_stock' => false, 'sale_price' => '30.00', 'is_pizza' => false]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse($product->fresh()->isPizza());
+        $this->assertSame('30.00', $product->fresh()->sale_price);
+        $this->assertSame(2, $product->pizzaSizes()->where('active', true)->count());
+        $this->get("/produtos/{$product->id}/editar")->assertInertia(fn (Assert $page) => $page
+            ->where('product.is_pizza', false)
+            ->where('product.pizza.pizza_pricing', 'highest')
+            ->has('product.pizza.sizes', 2)
+            ->where('product.pizza.flavors.0.name', 'Calabresa'));
+    }
+
+    public function test_editar_pizza_pelo_cadastro_mantem_as_fichas(): void
+    {
+        $admin = $this->adminOf();
+        $flour = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Farinha', 'track_stock' => true]);
+        $this->actingAs($admin)->post('/produtos', $this->pizzaPayload());
+        $product = Product::where('name', 'Pizza')->sole();
+        [$pequena, $grande] = $product->pizzaSizes()->orderBy('position')->get()->all();
+        $flavorId = OptionPrice::where('pizza_size_id', $pequena->id)->sole()->option_id;
+
+        $this->put(route('products.pizza.update', $product), [
+            'pizza_pricing' => 'highest',
+            'sizes' => [
+                ['id' => $pequena->id, 'name' => 'Pequena', 'max_flavors' => 1, 'active' => true, 'recipe' => [['ingredient_id' => $flour->id, 'quantity' => '0.200']]],
+                ['id' => $grande->id, 'name' => 'Grande', 'max_flavors' => 2, 'active' => true, 'recipe' => []],
+            ],
+            'flavors' => [[
+                'id' => $flavorId, 'name' => 'Calabresa', 'active' => true,
+                'prices' => [$pequena->id => '39.90', $grande->id => '49.90'],
+                'recipes' => [$grande->id => [['ingredient_id' => $flour->id, 'quantity' => '0.100']]],
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $this->put("/produtos/{$product->id}", $this->pizzaPayload([
+            'pizza_pricing' => 'average',
+            'sizes' => [
+                ['id' => $pequena->id, 'name' => 'Pequena', 'max_flavors' => 1, 'active' => true],
+                ['id' => $grande->id, 'name' => 'Gigante', 'max_flavors' => 2, 'active' => true],
+            ],
+            'flavors' => [['id' => $flavorId, 'name' => 'Calabresa', 'active' => true, 'prices' => [$pequena->id => '41.00', $grande->id => '55.00']]],
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame('average', $product->fresh()->pizza_pricing);
+        $this->assertSame('Gigante', $grande->fresh()->name);
+        $this->assertSame('55.00', OptionPrice::where('pizza_size_id', $grande->id)->sole()->price);
+        $this->assertSame(2, OptionRecipeItem::count());
+    }
+
+    public function test_pizza_nao_aceita_tamanho_ou_sabor_de_outro_produto(): void
+    {
+        $this->actingAs($this->adminOf())->post('/produtos', $this->pizzaPayload());
+        $other = Product::sole();
+        $size = $other->pizzaSizes()->orderBy('position')->first();
+        $flavorId = OptionPrice::where('pizza_size_id', $size->id)->sole()->option_id;
+        $this->post('/produtos', $this->pizzaPayload())->assertSessionHasNoErrors();
+        $product = Product::whereKeyNot($other->id)->sole();
+
+        $this->put("/produtos/{$product->id}", $this->pizzaPayload([
+            'sizes' => [['id' => $size->id, 'name' => 'Pequena', 'max_flavors' => 1, 'active' => true]],
+            'flavors' => [['name' => 'Calabresa', 'active' => true, 'prices' => [$size->id => '39.90']]],
+        ]))->assertSessionHasErrors('pizza.sizes.0.id');
+        $this->put("/produtos/{$product->id}", $this->pizzaPayload([
+            'sizes' => [['name' => 'Pequena', 'max_flavors' => 1, 'active' => true]],
+            'flavors' => [['id' => $flavorId, 'name' => 'Calabresa', 'active' => true, 'prices' => ['n0' => '39.90']]],
+        ]))->assertSessionHasErrors('pizza.flavors.0.id');
+
+        $this->assertSame($other->id, $size->fresh()->product_id);
     }
 }

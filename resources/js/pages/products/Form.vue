@@ -3,10 +3,12 @@ import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
+import PizzaFields from '@/components/PizzaFields.vue';
 import RecipeEditor from '@/components/RecipeEditor.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney, formatQuantity } from '@/lib/format';
+import { pizzaPayload, pizzaRows } from '@/lib/pizzaForm';
 
 const props = defineProps({
     product: { type: Object, default: null },
@@ -33,6 +35,8 @@ const form = useForm({
     image: null,
     remove_image: false,
     recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
+    is_pizza: props.product?.is_pizza ?? false,
+    pizza: pizzaRows(props.product?.pizza),
 });
 
 // Com estoque controlado, depois de criado o custo só muda pelas entradas.
@@ -55,6 +59,8 @@ function submit() {
         recipe: data.track_stock
             ? []
             : data.recipe.map(({ ingredient_id, quantity }) => ({ ingredient_id, quantity })),
+        is_pizza: data.sellable && data.is_pizza,
+        pizza: data.sellable && data.is_pizza ? pizzaPayload(data.pizza) : undefined,
     }));
 
     // Multipart só com arquivo (o FormData descarta listas vazias); o PUT vira POST com _method.
@@ -75,7 +81,6 @@ function submit() {
         <PageHeader :title="editing ? 'Editar produto' : 'Novo produto'">
             <template v-if="editing">
                 <Link :href="route('options.index')" class="btn btn-secondary">Opções</Link>
-                <Link :href="route('products.pizza.edit', product.id)" class="btn btn-secondary">Pizza</Link>
             </template>
         </PageHeader>
 
@@ -139,7 +144,7 @@ function submit() {
                 </label>
 
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <Field v-if="form.sellable" v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
+                    <Field v-if="form.sellable && !form.is_pizza" v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
                         <DecimalInput :id="id" v-model="form.sale_price" pad required />
                     </Field>
 
@@ -158,6 +163,24 @@ function submit() {
                         <p class="text-muted text-xs">Calculado pelas entradas de mercadorias.</p>
                     </div>
                 </div>
+            </div>
+
+            <div v-if="form.sellable" class="card space-y-4 p-5">
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.is_pizza" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">É pizza (tamanhos e sabores)</span>
+                        <span class="text-muted">O cliente escolhe o tamanho e os sabores; o preço vem do sabor em cada tamanho.</span>
+                    </span>
+                </label>
+
+                <template v-if="form.is_pizza">
+                    <PizzaFields :form="form" />
+                    <p v-if="editing" class="text-muted text-sm">
+                        Fichas técnicas por tamanho e sabor e preço dos adicionais por tamanho ficam em
+                        <Link :href="route('products.pizza.edit', product.id)" class="underline">ajustes avançados da pizza</Link>.
+                    </p>
+                </template>
             </div>
 
             <div class="card space-y-4 p-5">
