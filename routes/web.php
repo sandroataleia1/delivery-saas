@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\Route;
 
 // Webhook da Evolution (WhatsApp): público, protegido pelo segredo da instância.
 Route::post('webhooks/whatsapp/{instance}/{secret}', WhatsAppWebhookController::class)
-    ->middleware('throttle:240,1')
+    ->middleware('throttle:whatsapp-webhook')
     ->name('whatsapp.webhook');
 
 // Cardápio da mesa: público, acessado pelo QR Code.

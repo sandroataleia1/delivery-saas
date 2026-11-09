@@ -74,6 +74,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('online-status', fn (Request $request) => Limit::perMinute(120)
             ->by('online-status|'.hash('sha256', (string) $request->route('slug').'|'.(string) $request->route('token')).'|'.$request->ip()));
 
+        RateLimiter::for('whatsapp-webhook', fn (Request $request) => Limit::perMinute(240)
+            ->by('whatsapp-webhook|'.hash('sha256', (string) $request->route('instance'))));
+
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
 
         WhatsAppOutbox::register();

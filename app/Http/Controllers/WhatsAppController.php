@@ -60,6 +60,7 @@ class WhatsAppController extends Controller
                 'default_greeting' => BotReplies::DEFAULT_INTRO,
                 'ignored_numbers' => $setting?->ignored_numbers ?? [],
                 'conversations' => WhatsAppConversation::where('company_id', $companyId)
+                    ->whereNotNull('last_customer_at')
                     ->latest('updated_at')
                     ->latest('id')
                     ->limit(30)

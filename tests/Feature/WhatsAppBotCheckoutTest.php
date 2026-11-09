@@ -6,7 +6,9 @@ use App\Actions\PlaceOnlineOrder;
 use App\Models\DeliveryZone;
 use App\Models\OnlineOrder;
 use App\Models\Product;
+use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppMessage;
+use App\Support\WhatsAppBot\BotReplies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -214,6 +216,35 @@ class WhatsAppBotCheckoutTest extends TestCase
         $this->assertContains('A loja acabou de fechar.', $this->sentTexts());
         $this->assertStringContainsString('Estamos fechados agora.', $this->lastSent());
         $this->assertSame([], $this->conversation()->context['cart'] ?? []);
+    }
+
+    public function test_house_number_nine_is_an_answer(): void
+    {
+        $this->cokeInCart();
+        $this->customerAnswers(['3', '1', '1', 'Rua das Flores', '9']);
+
+        $this->assertStringStartsWith('Tem complemento', $this->lastSent());
+    }
+
+    public function test_zero_after_sent_order_calls_attendant(): void
+    {
+        $this->cokeInCart();
+        $this->deliveryCheckout();
+        $this->customerSays('1');
+
+        $this->customerSays('0');
+
+        $this->assertSame(BotReplies::ATTENDANT, $this->lastSent());
+        $this->assertNotNull($this->conversation()->waiting_since);
+    }
+
+    public function test_site_order_notification_echo_creates_no_conversation(): void
+    {
+        $this->previousOrder();
+
+        $this->storeSays(WhatsAppMessage::sole()->body);
+
+        $this->assertSame(0, WhatsAppConversation::count());
     }
 
     public function test_pending_limit_per_phone_is_explained(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Option;
 use App\Models\Product;
+use App\Support\WhatsAppBot\OrderFlow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\Support\WhatsAppBotScenario;
@@ -83,10 +84,10 @@ class WhatsAppBotOrderTest extends TestCase
     public function test_simple_product_goes_to_cart_with_catalog_price(): void
     {
         $this->customerAnswers(['Oi', '1', '1', '1']);
-        $this->assertSame('Quantas unidades de Coca? Digite de 1 a 20.', $this->lastSent());
+        $this->assertSame('Quantas unidades de Coca? Digite de 1 a 20.'.OrderFlow::FOOTER_WORD, $this->lastSent());
 
         $this->customerAnswers(['21', '2']);
-        $this->assertSame('Alguma observação para este item? Escreva aqui ou digite pular.', $this->lastSent());
+        $this->assertSame('Alguma observação para este item? Escreva aqui ou digite pular.'.OrderFlow::FOOTER, $this->lastSent());
 
         $this->customerSays('pular');
 
@@ -153,9 +154,54 @@ class WhatsAppBotOrderTest extends TestCase
         $this->assertStringNotContainsString('Portuguesa', $this->lastSent());
     }
 
+    public function test_ninth_item_and_quantity_nine_are_answers_and_voltar_goes_back(): void
+    {
+        $sweets = $this->category('Doces');
+        foreach (range(1, 10) as $number) {
+            $this->product(sprintf('Doce %02d', $number), '3.00', $sweets);
+        }
+
+        $this->customerAnswers(['Oi', '1', '2']);
+        $this->assertStringEndsWith("10 – Doce 10 – R$ 3,00\n\nDigite voltar para voltar · 0 – atendente", $this->lastSent());
+
+        $this->customerSays('9');
+        $this->assertStringStartsWith('Quantas unidades de Doce 09?', $this->lastSent());
+        $this->customerSays('voltar');
+        $this->assertStringStartsWith('Doces:', $this->lastSent());
+
+        $this->customerAnswers(['9', '9', 'pular']);
+
+        $this->assertSame(9, $this->cart()[0]['quantity']);
+        $this->assertSame('Doce 09', $this->cart()[0]['label']);
+    }
+
+    public function test_product_whose_required_group_has_no_available_option_is_not_offered(): void
+    {
+        $salad = $this->product('X-Salada', '20.00', $this->burger->category);
+        $bread = $this->optionGroup($salad, 'Pão', 1, 1);
+        $this->option($bread, 'Brioche', '0', paused: true);
+
+        $this->customerAnswers(['Oi', '1', '2']);
+
+        $this->assertStringStartsWith('Lanches:', $this->lastSent());
+        $this->assertStringNotContainsString('X-Salada', $this->lastSent());
+    }
+
+    public function test_option_paused_before_item_closes_returns_to_product_list(): void
+    {
+        $this->customerAnswers(['Oi', '1', '2', '1', '1']);
+        $this->barbecue->forceFill(['paused' => true])->save();
+
+        $this->customerAnswers(['pular', '1', 'pular']);
+
+        $this->assertContains('Essa combinação não está disponível. Escolha de novo.', $this->sentTexts());
+        $this->assertStringStartsWith('Lanches:', $this->lastSent());
+        $this->assertSame([], $this->cart());
+    }
+
     public function test_nine_goes_back_one_step_and_cancel_clears_cart(): void
     {
-        $this->customerAnswers(['Oi', '1', '1', '1', '9']);
+        $this->customerAnswers(['Oi', '1', '1', '1', 'voltar']);
         $this->assertStringStartsWith('Bebidas:', $this->lastSent());
 
         $this->customerSays('9');
@@ -175,7 +221,7 @@ class WhatsAppBotOrderTest extends TestCase
         $this->assertCount(2, $this->cart());
 
         $this->customerSays('2');
-        $this->assertSame('Qual item quer remover? Digite o número.', $this->lastSent());
+        $this->assertSame('Qual item quer remover? Digite o número.'.OrderFlow::FOOTER, $this->lastSent());
         $this->customerSays('1');
 
         $this->assertCount(1, $this->cart());

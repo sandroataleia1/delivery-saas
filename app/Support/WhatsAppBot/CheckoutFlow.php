@@ -94,7 +94,7 @@ class CheckoutFlow
             self::ADDRESS_REUSE => "Entregar no mesmo endereço do último pedido?\n".$this->addressLine($this->lastAddress() ?? [])."\n1 – sim\n2 – outro endereço".OrderFlow::FOOTER,
             self::ZONE => "Qual o seu bairro?\n".OrderFlow::numbered($this->zones()->map(
                 fn (DeliveryZone $zone) => $zone->name.' – '.(bccomp((string) $zone->fee, '0', 2) > 0 ? 'taxa R$ '.Decimal::currency($zone->fee) : 'entrega grátis'),
-            )->all()).OrderFlow::FOOTER,
+            )->all()).OrderFlow::footer($this->zones()->count()),
             self::STREET => 'Qual a rua?',
             self::NUMBER => 'Qual o número?',
             self::COMPLEMENT => 'Tem complemento (apto, bloco)? Escreva aqui ou digite pular.',
@@ -433,6 +433,16 @@ class CheckoutFlow
         }
 
         return $types === [] ? [DeliveryOrder::PICKUP] : $types;
+    }
+
+    /** O passo aceita 9 como resposta: número da casa, valor do troco ou bairro numa lista de 9 ou mais. */
+    public function acceptsNine(string $state): bool
+    {
+        return match ($state) {
+            self::NUMBER, self::CHANGE => true,
+            self::ZONE => $this->zones()->count() >= 9,
+            default => false,
+        };
     }
 
     /** @return Collection<int, DeliveryZone> */

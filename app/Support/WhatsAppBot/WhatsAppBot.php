@@ -71,9 +71,16 @@ class WhatsAppBot
         }
 
         $turn = new BotTurn($setting, $shop['store'], $shop['company'], $conversation, CarbonImmutable::now());
+        $storeTalkedRecently = (bool) $conversation->last_store_at?->gt(now()->subHours(self::STORE_CONTACT_HOURS));
+
+        if ($pauseEnded && $storeTalkedRecently) {
+            $conversation->forceFill(['state' => self::IDLE])->save();
+
+            return;
+        }
 
         if ($isNew) {
-            if ($conversation->last_store_at?->gt(now()->subHours(self::STORE_CONTACT_HOURS))) {
+            if ($storeTalkedRecently) {
                 return;
             }
 
@@ -83,11 +90,24 @@ class WhatsAppBot
             return;
         }
 
+        if ($conversation->state === CheckoutFlow::DONE && $message->kind === 'text' && self::normalize((string) $message->text) === '0') {
+            $this->reply($turn, $this->answer($turn, '0'));
+
+            return;
+        }
+
         if ($conversation->state === self::IDLE || $conversation->state === CheckoutFlow::DONE) {
             return;
         }
 
         $ordering = OrderFlow::isOrderState($conversation->state);
+
+        if ($pauseEnded && ! $ordering) {
+            $this->reset($conversation);
+            $this->reply($turn, [$this->greeting($turn)]);
+
+            return;
+        }
 
         if ($ordering && $previousMessageAt->lte(now()->subMinutes(self::CART_EXPIRES_MINUTES))) {
             $this->reset($conversation);
@@ -206,12 +226,11 @@ class WhatsAppBot
             return;
         }
 
-        $conversation = $this->conversation($companyId, $message);
-
-        if ($message->text !== null && $this->isOwnEcho($conversation, $message->text)) {
+        if ($message->text !== null && $this->isOwnEcho($companyId, $message->text)) {
             return;
         }
 
+        $conversation = $this->conversation($companyId, $message);
         $conversation->forceFill([
             'last_store_at' => now(),
             'human_until' => now()->addMinutes(self::PAUSE_MINUTES),
@@ -220,17 +239,18 @@ class WhatsAppBot
     }
 
     /**
-     * Texto que o próprio sistema mandou e voltou pelo webhook: resposta do bot (pela conversa, alguns minutos)
-     * ou aviso automático de pedido online (pela empresa, enquanto a fila pode estar reenviando).
+     * Texto que o próprio sistema mandou e voltou pelo webhook: resposta do bot (alguns minutos) ou aviso
+     * automático de pedido online (enquanto a fila pode estar reenviando). Pela empresa, não pela conversa:
+     * o eco pode voltar com outro JID (número em vez de @lid) e não deve criar conversa.
      */
-    private function isOwnEcho(WhatsAppConversation $conversation, string $text): bool
+    private function isOwnEcho(int $companyId, string $text): bool
     {
-        return WhatsAppBotMessage::where('conversation_id', $conversation->id)
+        return WhatsAppBotMessage::where('company_id', $companyId)
             ->where('body', $text)
             ->where('created_at', '>=', now()->subMinutes(self::ECHO_MINUTES))
             ->exists()
             || WhatsAppMessage::withoutGlobalScopes()
-                ->where('company_id', $conversation->company_id)
+                ->where('company_id', $companyId)
                 ->where('body', $text)
                 ->where('created_at', '>=', now()->subMinutes(self::NOTIFICATION_ECHO_MINUTES))
                 ->exists();

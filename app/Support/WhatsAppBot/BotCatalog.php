@@ -23,6 +23,34 @@ class BotCatalog
     private function __construct(private Collection $products, private Collection $categoryNames)
     {
         $this->compositions = ProductComposition::forProducts($products);
+        $this->products = $products->filter(fn (Product $product) => $this->canBeComposed($product->id))->values();
+        $this->categoryNames = $categoryNames->only($this->products->pluck('category_id')->filter()->unique()->all());
+    }
+
+    /** Produto com sabor ou grupo obrigatório sem opções disponíveis suficientes não fecha: fica fora do bot. */
+    private function canBeComposed(int $productId): bool
+    {
+        $composition = $this->composition($productId);
+
+        if ($composition === null) {
+            return true;
+        }
+
+        if ($composition['pizza'] !== null && ($composition['pizza']['sizes'] === [] || $composition['pizza']['flavors'] === [])) {
+            return false;
+        }
+
+        $offered = array_column($composition['groups'], null, 'id');
+
+        foreach ($this->compositions[$productId]['groups'] as $group) {
+            $available = count($offered[$group['id']]['options'] ?? []);
+
+            if ($group['min'] > 0 && ($available === 0 || (! $group['allows_quantity'] && $available < $group['min']))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static function for(int $companyId): self

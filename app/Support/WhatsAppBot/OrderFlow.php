@@ -39,6 +39,17 @@ class OrderFlow
 
     public const FOOTER = "\n\n9 – voltar · 0 – atendente";
 
+    /** Rodapé dos passos em que 9 é uma resposta válida (lista com 9 ou mais opções, quantidade, número da casa). */
+    public const FOOTER_WORD = "\n\nDigite voltar para voltar · 0 – atendente";
+
+    public const BACK_WORD = 'voltar';
+
+    /** Rodapé de uma lista: com 9 ou mais opções o 9 é escolha, e voltar passa a ser pela palavra. */
+    public static function footer(int $optionCount): string
+    {
+        return $optionCount >= 9 ? self::FOOTER_WORD : self::FOOTER;
+    }
+
     private WhatsAppConversation $conversation;
 
     private BotCatalog $catalog;
@@ -97,7 +108,9 @@ class OrderFlow
         $this->load($conversation, $catalog);
         $answer = WhatsAppBot::normalize($text);
 
-        if ($answer === '9' && ! in_array($this->state, [self::CART, self::RESUME], true)) {
+        $wantsBack = $answer === self::BACK_WORD || ($answer === '9' && ! $this->nineIsAnswer());
+
+        if ($wantsBack && ! in_array($this->state, [self::CART, self::RESUME], true)) {
             return $this->save($this->back());
         }
 
@@ -116,6 +129,21 @@ class OrderFlow
         };
 
         return $texts === null ? null : $this->save($texts);
+    }
+
+    /** O passo atual aceita 9 como resposta (então 9 não significa voltar). */
+    private function nineIsAnswer(): bool
+    {
+        return match ($this->state) {
+            self::CATEGORY => count($this->catalog->categories()) >= 9,
+            self::PRODUCT => count($this->catalog->products($this->context['category_id'] ?? -1)) >= 9,
+            self::SIZE => count($this->composition()['pizza']['sizes'] ?? []) >= 9,
+            self::FLAVORS => count($this->flavorsForSize()) >= 9,
+            self::GROUP => count($this->groups()[$this->context['draft']['group'] ?? 0]['options'] ?? []) >= 9,
+            self::QUANTITY => true,
+            self::REMOVE => count($this->context['cart']) >= 9,
+            default => in_array($this->state, CheckoutFlow::STATES, true) && $this->checkout->bind($this->conversation)->acceptsNine($this->state),
+        };
     }
 
     private function load(WhatsAppConversation $conversation, BotCatalog $catalog): void
@@ -309,9 +337,10 @@ class OrderFlow
             while ($this->context['history'] !== [] && end($this->context['history'])['state'] !== self::PRODUCT) {
                 array_pop($this->context['history']);
             }
-            $this->context['draft'] = ['product_id' => $draft['product_id'], 'options' => []];
+            array_pop($this->context['history']);
+            unset($this->context['draft']);
 
-            return ['Essa combinação não está disponível. Vamos escolher de novo.', $this->firstProductStep()];
+            return ['Essa combinação não está disponível. Escolha de novo.', $this->moveTo(self::PRODUCT)];
         }
 
         $name = $composed['product']->name;
@@ -483,10 +512,10 @@ class OrderFlow
             self::SIZE => $this->sizePrompt(),
             self::FLAVORS => $this->flavorsPrompt(),
             self::GROUP => $this->groupPrompt(),
-            self::QUANTITY => 'Quantas unidades de '.$this->catalog->productName($this->context['draft']['product_id'] ?? 0).'? Digite de 1 a '.config('online.max_line_quantity').'.',
-            self::ITEM_NOTES => 'Alguma observação para este item? Escreva aqui ou digite pular.',
+            self::QUANTITY => 'Quantas unidades de '.$this->catalog->productName($this->context['draft']['product_id'] ?? 0).'? Digite de 1 a '.config('online.max_line_quantity').'.'.self::FOOTER_WORD,
+            self::ITEM_NOTES => 'Alguma observação para este item? Escreva aqui ou digite pular.'.self::FOOTER,
             self::CART => $this->cartSummary(),
-            self::REMOVE => 'Qual item quer remover? Digite o número.',
+            self::REMOVE => 'Qual item quer remover? Digite o número.'.self::footer(count($this->context['cart'])),
             self::RESUME => "Você tinha um pedido em andamento.\n1 – continuar o pedido\n2 – começar de novo",
             default => $this->checkout->bind($this->conversation)->prompt($this->state, $this->context),
         };
@@ -494,7 +523,7 @@ class OrderFlow
 
     private function categoryPrompt(): string
     {
-        return "Escolha uma categoria:\n".self::numbered(array_column($this->catalog->categories(), 'name')).self::FOOTER;
+        return "Escolha uma categoria:\n".self::numbered(array_column($this->catalog->categories(), 'name')).self::footer(count($this->catalog->categories()));
     }
 
     private function productPrompt(): string
@@ -505,7 +534,7 @@ class OrderFlow
             $this->catalog->products($categoryId),
         );
 
-        return $this->catalog->categoryName($categoryId).":\n".self::numbered($lines).self::FOOTER;
+        return $this->catalog->categoryName($categoryId).":\n".self::numbered($lines).self::footer(count($lines));
     }
 
     private function sizePrompt(): string
@@ -515,7 +544,7 @@ class OrderFlow
             $this->composition()['pizza']['sizes'] ?? [],
         );
 
-        return "Escolha o tamanho:\n".self::numbered($lines).self::FOOTER;
+        return "Escolha o tamanho:\n".self::numbered($lines).self::footer(count($lines));
     }
 
     private function flavorsPrompt(): string
@@ -525,7 +554,7 @@ class OrderFlow
         $lines = array_map(fn (array $flavor) => $flavor['name'].' – R$ '.Decimal::currency($flavor['prices'][$sizeId]), $this->flavorsForSize());
         $header = $max === 1 ? 'Escolha o sabor:' : "Escolha até {$max} sabores, separados por vírgula (ex.: 1,2):";
 
-        return $header."\n".self::numbered($lines).self::FOOTER;
+        return $header."\n".self::numbered($lines).self::footer(count($lines));
     }
 
     private function groupPrompt(): string
@@ -552,7 +581,7 @@ class OrderFlow
             return bccomp((string) $price, '0', 2) > 0 ? $option['name'].' – + R$ '.Decimal::currency($price) : $option['name'];
         }, $group['options']);
 
-        return "{$group['name']} – {$rule}:\n".self::numbered($lines).self::FOOTER;
+        return "{$group['name']} – {$rule}:\n".self::numbered($lines).self::footer(count($lines));
     }
 
     private function cartSummary(): string

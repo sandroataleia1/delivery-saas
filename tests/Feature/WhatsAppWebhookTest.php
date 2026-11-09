@@ -59,6 +59,19 @@ class WhatsAppWebhookTest extends TestCase
         Queue::assertPushed(ProcessWhatsAppInbound::class, 1);
     }
 
+    public function test_rate_limit_is_counted_per_instance(): void
+    {
+        Queue::fake();
+        WhatsAppSetting::factory()->create(['instance_name' => 'inst-b', 'webhook_secret' => 'segredo-b']);
+
+        foreach (range(1, 240) as $attempt) {
+            $this->postJson('/webhooks/whatsapp/inst-b/segredo-b', $this->payload(['instance' => 'inst-b', 'data' => ['key' => ['id' => "B{$attempt}"]]]));
+        }
+
+        $this->postJson('/webhooks/whatsapp/inst-b/segredo-b', $this->payload(['instance' => 'inst-b', 'data' => ['key' => ['id' => 'B-extra']]]))->assertStatus(429);
+        $this->postJson('/webhooks/whatsapp/inst-a/segredo-a', $this->payload())->assertOk();
+    }
+
     public function test_instance_api_key_sent_by_evolution_is_not_stored(): void
     {
         Queue::fake();

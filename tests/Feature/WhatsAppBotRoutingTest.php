@@ -119,8 +119,18 @@ class WhatsAppBotRoutingTest extends TestCase
         $this->later(60);
         $this->customerSays('hein');
 
-        $this->assertCount(2, $this->sentTexts());
-        $this->assertStringStartsWith('Não entendi.', $this->lastSent());
+        $this->assertCount(1, $this->sentTexts());
+    }
+
+    public function test_greets_again_when_pause_ends_without_store_reply(): void
+    {
+        $this->customerAnswers(['Oi', '0']);
+        $this->later(121);
+
+        $this->customerSays('oi, alguém?');
+
+        $this->assertCount(3, $this->sentTexts());
+        $this->assertStringContainsString(route('shop.show', 'bella'), $this->lastSent());
     }
 
     public function test_store_reply_does_not_overwrite_contact_name(): void
