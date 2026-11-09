@@ -25,11 +25,13 @@ class WhatsAppBot
 
     public const ECHO_MINUTES = 2;
 
+    public const CART_EXPIRES_MINUTES = 120;
+
     public const IDLE = 'idle';
 
     public const GREETED = 'greeted';
 
-    public function __construct(private BotSender $sender) {}
+    public function __construct(private BotSender $sender, private OrderFlow $orderFlow) {}
 
     public function handle(WhatsAppSetting $setting, InboundMessage $message): void
     {
@@ -44,7 +46,8 @@ class WhatsAppBot
         }
 
         $conversation = $this->conversation($setting->company_id, $message);
-        $isNew = $conversation->last_customer_at === null || $conversation->last_customer_at->lte(now()->subHours(self::NEW_CONVERSATION_HOURS));
+        $previousMessageAt = $conversation->last_customer_at;
+        $isNew = $previousMessageAt === null || $previousMessageAt->lte(now()->subHours(self::NEW_CONVERSATION_HOURS));
         $conversation->forceFill([
             'last_customer_at' => now(),
             'phone' => $message->phone ?? $conversation->phone,
@@ -55,6 +58,12 @@ class WhatsAppBot
 
         if (! $setting->auto_reply || $shop === null || $conversation->human_until?->isFuture()) {
             return;
+        }
+
+        $pauseEnded = $conversation->human_until !== null;
+
+        if ($pauseEnded) {
+            $conversation->forceFill(['human_until' => null])->save();
         }
 
         $turn = new BotTurn($setting, $shop['store'], $shop['company'], $conversation, CarbonImmutable::now());
@@ -74,13 +83,28 @@ class WhatsAppBot
             return;
         }
 
+        $ordering = OrderFlow::isOrderState($conversation->state);
+
+        if ($ordering && $previousMessageAt->lte(now()->subMinutes(self::CART_EXPIRES_MINUTES))) {
+            $this->reset($conversation);
+            $this->reply($turn, [$this->greeting($turn)]);
+
+            return;
+        }
+
+        if ($ordering && $pauseEnded && $conversation->state !== OrderFlow::RESUME) {
+            $this->reply($turn, $this->orderFlow->offerResume($conversation, BotCatalog::for($setting->company_id)));
+
+            return;
+        }
+
         if ($message->kind !== 'text') {
             $this->reply($turn, [BotReplies::MEDIA]);
 
             return;
         }
 
-        $this->reply($turn, $this->answer($turn, self::normalize((string) $message->text)));
+        $this->reply($turn, $this->answer($turn, (string) $message->text));
     }
 
     /** Texto do cliente comparável: sem acentos, minúsculo e sem espaços sobrando. */
@@ -92,9 +116,10 @@ class WhatsAppBot
     /**
      * @return list<string>
      */
-    private function answer(BotTurn $turn, string $text): array
+    private function answer(BotTurn $turn, string $raw): array
     {
         $conversation = $turn->conversation;
+        $text = self::normalize($raw);
 
         if ($text === '0') {
             $conversation->forceFill([
@@ -112,7 +137,25 @@ class WhatsAppBot
             return [$this->greeting($turn)];
         }
 
-        return $this->misunderstood($conversation);
+        if ($conversation->state === self::GREETED) {
+            return $text === '1' && $this->canOrder($turn)
+                ? $this->orderFlow->start($conversation, BotCatalog::for($conversation->company_id))
+                : $this->misunderstood($conversation);
+        }
+
+        $texts = $this->orderFlow->handle($conversation, $raw, BotCatalog::for($conversation->company_id));
+
+        if ($texts === null) {
+            return $this->misunderstood($conversation);
+        }
+
+        return $conversation->state === self::GREETED ? [$this->greeting($turn)] : $texts;
+    }
+
+    /** Pedido pela conversa: só com a loja aberta e o telefone do cliente conhecido. */
+    private function canOrder(BotTurn $turn): bool
+    {
+        return $turn->conversation->phone !== null && StoreSchedule::isOpen($turn->store, $turn->now);
     }
 
     /**

@@ -2,9 +2,14 @@
 
 namespace Tests\Support;
 
+use App\Actions\SavePizzaSetup;
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\OnlineStore;
 use App\Models\OnlineStoreHour;
+use App\Models\Option;
+use App\Models\OptionGroup;
+use App\Models\Product;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppSetting;
 use Carbon\CarbonImmutable;
@@ -49,6 +54,75 @@ trait WhatsAppBotScenario
         ]);
 
         return [$company, $store, $setting];
+    }
+
+    protected function category(string $name, ?Company $company = null): Category
+    {
+        return Category::factory()->create(['company_id' => ($company ?? $this->company)->id, 'name' => $name]);
+    }
+
+    /** @param  array<string, mixed>  $attributes */
+    protected function product(string $name, string $price, ?Category $category, array $attributes = []): Product
+    {
+        return Product::factory()->create([
+            'company_id' => $category?->company_id ?? $this->company->id, 'name' => $name, 'sale_price' => $price,
+            'category_id' => $category?->id, 'track_stock' => false, ...$attributes,
+        ]);
+    }
+
+    /**
+     * Pizza "highest": Broto (1 sabor) e Grande (até 2), sabores Calabresa e Quatro queijos, e Portuguesa pausada.
+     *
+     * @return array{pizza: Product, broto: int, grande: int}
+     */
+    protected function pizza(Category $category): array
+    {
+        $pizza = $this->product('Pizza', '0', $category);
+        app(SavePizzaSetup::class)->handle($pizza, [
+            'pizza_pricing' => 'highest',
+            'sizes' => [
+                ['name' => 'Broto', 'slices' => 4, 'max_flavors' => 1, 'active' => true, 'recipe' => []],
+                ['name' => 'Grande', 'slices' => 8, 'max_flavors' => 2, 'active' => true, 'recipe' => []],
+            ],
+            'flavors' => [
+                ['name' => 'Calabresa', 'active' => true, 'prices' => ['n0' => '39.90', 'n1' => '49.90'], 'recipes' => []],
+                ['name' => 'Quatro queijos', 'active' => true, 'prices' => ['n0' => '44.90', 'n1' => '59.90'], 'recipes' => []],
+                ['name' => 'Portuguesa', 'active' => true, 'prices' => ['n0' => '41.90', 'n1' => '55.90'], 'recipes' => []],
+            ],
+        ]);
+        Option::where('company_id', $pizza->company_id)->where('name', 'Portuguesa')->update(['paused' => true]);
+        $sizes = $pizza->pizzaSizes()->orderBy('position')->pluck('id');
+
+        return ['pizza' => $pizza, 'broto' => $sizes[0], 'grande' => $sizes[1]];
+    }
+
+    protected function optionGroup(Product $product, string $name, int $min, int $max, bool $quantity = false): OptionGroup
+    {
+        $group = new OptionGroup(['name' => $name, 'kind' => 'extra', 'min_choices' => $min, 'max_choices' => $max, 'allows_quantity' => $quantity, 'active' => true]);
+        $group->company_id = $product->company_id;
+        $group->save();
+        $group->products()->attach($product->id, ['company_id' => $product->company_id, 'position' => $product->optionGroups()->count()]);
+
+        return $group;
+    }
+
+    protected function option(OptionGroup $group, string $name, string $price, bool $paused = false): Option
+    {
+        $option = new Option(['name' => $name, 'price' => $price, 'active' => true, 'position' => $group->options()->count()]);
+        $option->company_id = $group->company_id;
+        $option->option_group_id = $group->id;
+        $option->paused = $paused;
+        $option->save();
+
+        return $option;
+    }
+
+    /** @param  list<string>  $answers */
+    protected function customerAnswers(array $answers): void
+    {
+        foreach ($answers as $answer) {
+            $this->customerSays($answer);
+        }
     }
 
     protected function at(string $local): void
