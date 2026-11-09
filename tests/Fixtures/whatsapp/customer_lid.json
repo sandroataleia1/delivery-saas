@@ -1,0 +1,24 @@
+{
+    "data": {
+        "key": {
+            "id": "SYNTHETIC0LID0WITHOUT0PHONE",
+            "fromMe": false,
+            "remoteJid": "123456789012345@lid",
+            "participant": null,
+            "addressingMode": "lid"
+        },
+        "source": "android",
+        "status": "DELIVERY_ACK",
+        "message": {
+            "conversation": "Oi"
+        },
+        "pushName": "Cliente Teste",
+        "messageType": "conversation",
+        "messageTimestamp": 1794248882
+    },
+    "event": "messages.upsert",
+    "sender": "551130000000@s.whatsapp.net",
+    "instance": "inst-a",
+    "date_time": "2026-11-09T15:28:02.499Z",
+    "_comment": "Sintético: derivado de customer_text.json sem remoteJidAlt (contato @lid sem número resolvido)."
+}
