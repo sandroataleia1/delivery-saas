@@ -10,14 +10,17 @@ const props = defineProps({
     product: { type: Object, required: true },
     composition: { type: Object, required: true },
     withNotes: { type: Boolean, default: true },
+    // Vindo da lista por tamanho: abre com o tamanho e o sabor tocados já marcados.
+    initialSizeId: { type: Number, default: null },
+    initialFlavorId: { type: Number, default: null },
 });
 
 const emit = defineEmits(['add', 'cancel']);
 
 const MAX_OPTION_QUANTITY = 10;
 
-const sizeId = ref(null);
-const flavorIds = ref([]);
+const sizeId = ref(props.initialSizeId);
+const flavorIds = ref(props.initialFlavorId ? [props.initialFlavorId] : []);
 const quantities = ref({});
 const notes = ref('');
 

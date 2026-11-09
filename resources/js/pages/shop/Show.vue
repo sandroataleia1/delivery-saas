@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { Head, useHttp } from '@inertiajs/vue3';
 import { Clock, Minus, Plus, Receipt, ShoppingBag, X } from '@lucide/vue';
 import ItemComposer from '@/components/ItemComposer.vue';
+import PizzaMenuSections from '@/components/PizzaMenuSections.vue';
 import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney } from '@/lib/format';
 import { fromCents, newUuid, toCents } from '@/lib/money';
@@ -54,6 +55,8 @@ const total = computed(() => totalCents(cart.value, feeCents.value));
 const minOrderCents = computed(() => toCents(props.store.min_order));
 const belowMinimum = computed(() => count.value > 0 && subtotal.value < minOrderCents.value);
 const isComposed = (product) => Boolean(props.composition?.[product.id]);
+const pizzaOf = (product) => props.composition?.[product.id]?.pizza ?? null;
+const composerStart = ref({});
 const quantityOf = (product) => cart.value.filter((item) => item.product_id === product.id).reduce((sum, item) => sum + item.quantity, 0);
 const topErrors = computed(() => Object.entries(http.errors).filter(([key]) => !/^items\.\d+(\.|$)/.test(key)).map(([, message]) => message));
 /** O horário é do carregamento da página: quem decide se a loja abriu é o servidor, que responde "A loja está fechada agora.". */
@@ -72,11 +75,20 @@ function add(product) {
         return;
     }
     if (isComposed(product)) {
+        composerStart.value = {};
         composing.value = product;
 
         return;
     }
     cart.value = addLine(cart.value, { product_id: product.id, name: product.name, unit_cents: toCents(product.sale_price), quantity: 1, notes: '', key: String(product.id), label: null, fields: {} });
+}
+
+function pickPizza(product, { sizeId, flavorId }) {
+    if (product.sold_out) {
+        return;
+    }
+    composerStart.value = { sizeId, flavorId };
+    composing.value = product;
 }
 
 function addComposed({ selection, unitCents, label, notes }) {
@@ -198,7 +210,9 @@ onUnmounted(() => http.cancel());
         <main class="mx-auto max-w-2xl px-4 py-3">
             <p v-if="visible.length === 0" class="text-muted py-12 text-center">Cardápio indisponível no momento.</p>
             <ul class="space-y-2">
-                <li v-for="product in visible" :key="product.id" class="card flex items-center gap-3 p-3" :class="{ 'opacity-60': product.sold_out }">
+                <template v-for="product in visible" :key="product.id">
+                <PizzaMenuSections v-if="pizzaOf(product)" :product="product" :pizza="pizzaOf(product)" @pick="pickPizza(product, $event)" />
+                <li v-else class="card flex items-center gap-3 p-3" :class="{ 'opacity-60': product.sold_out }">
                     <img v-if="product.image_url" :src="product.image_url" alt="" loading="lazy" class="size-20 shrink-0 rounded-lg object-cover" />
                     <div class="min-w-0 flex-1">
                         <p class="font-semibold">{{ product.name }}</p>
@@ -211,6 +225,7 @@ onUnmounted(() => http.cancel());
                     </div>
                     <button type="button" class="btn btn-primary size-10 shrink-0 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="product.sold_out" @click="add(product)"><Plus :size="18" /></button>
                 </li>
+                </template>
             </ul>
         </main>
 
@@ -221,7 +236,7 @@ onUnmounted(() => http.cancel());
             </button>
         </div>
 
-        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" @add="addComposed" @cancel="composing = null" />
+        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" :initial-size-id="composerStart.sizeId" :initial-flavor-id="composerStart.flavorId" @add="addComposed" @cancel="composing = null" />
 
         <div v-if="sheet" class="fixed inset-0 z-30 bg-black/40" @click.self="sheet = null">
             <section class="bg-surface absolute inset-x-0 bottom-0 mx-auto max-h-[90dvh] max-w-2xl overflow-y-auto rounded-t-2xl px-4 py-4">
