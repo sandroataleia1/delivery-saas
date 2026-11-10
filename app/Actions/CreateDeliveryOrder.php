@@ -78,17 +78,19 @@ class CreateDeliveryOrder
     /**
      * Núcleo comum ao balcão e ao aceite da loja online: numera, grava o pedido com as linhas
      * já compostas e encaminha cada linha à produção. Não trava nada: quem chama já está numa
-     * transação com a empresa travada.
+     * transação com a empresa travada. Sem usuário, o registro sai como aceite automático.
      *
      * @param  array{client_uuid: string, type: string, street?: ?string, number_address?: ?string, complement?: ?string, district?: ?string, reference?: ?string, delivery_fee: string, payment_method: string, change_for?: ?string, notes?: ?string}  $header
      * @param  array<int, array{product_id: int, product_name: string, unit: string, quantity: mixed, unit_price: string, options: mixed, options_label: ?string, total: string, notes: ?string}>  $lines
      */
-    public function persist(User $user, Customer $customer, array $header, array $lines, ?int $onlineOrderId = null): DeliveryOrder
+    public function persist(?User $user, Customer $customer, array $header, array $lines, ?int $onlineOrderId = null): DeliveryOrder
     {
+        $companyId = (int) $customer->company_id;
+        $actorName = $user?->name ?? AcceptOnlineOrder::AUTOMATIC;
         $order = new DeliveryOrder;
         $order->forceFill([
-            'company_id' => $user->company_id,
-            'number' => (int) DeliveryOrder::where('company_id', $user->company_id)->max('number') + 1,
+            'company_id' => $companyId,
+            'number' => (int) DeliveryOrder::withoutGlobalScopes()->where('company_id', $companyId)->max('number') + 1,
             'client_uuid' => $header['client_uuid'],
             'customer_id' => $customer->id,
             'type' => $header['type'],
@@ -106,14 +108,14 @@ class CreateDeliveryOrder
             'change_for' => $header['change_for'] ?? null,
             'notes' => $header['notes'] ?? null,
             'online_order_id' => $onlineOrderId,
-            'user_id' => $user->id,
-            'user_name' => $user->name,
+            'user_id' => $user?->id,
+            'user_name' => $actorName,
         ])->save();
 
-        $rows = array_map(fn (array $line) => ['company_id' => $user->company_id, ...$line], $lines);
+        $rows = array_map(fn (array $line) => ['company_id' => $companyId, ...$line], $lines);
 
         foreach ($order->items()->createMany($rows) as $item) {
-            (new DispatchProduction)->handle($item);
+            (new DispatchProduction)->handle($item, $actorName);
         }
 
         return $order;

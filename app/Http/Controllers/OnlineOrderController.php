@@ -49,6 +49,7 @@ class OnlineOrderController extends Controller
             'store' => $store ? [
                 'label' => StoreSchedule::label($store, CarbonImmutable::now()),
                 'paused' => $store->isPaused(),
+                'auto_accept' => $store->auto_accept,
                 'link' => route('shop.show', $store->slug),
             ] : null,
             'operation' => array_intersect_key($policy->resolve($company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),

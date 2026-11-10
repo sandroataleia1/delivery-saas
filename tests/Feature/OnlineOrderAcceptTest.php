@@ -13,11 +13,13 @@ use App\Models\OnlineStoreHour;
 use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Product;
+use App\Models\ProductionSector;
 use App\Models\ProductionWork;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -297,5 +299,68 @@ class OnlineOrderAcceptTest extends TestCase
         $this->get(route('deliveries.show', $delivery))->assertInertia(fn (Assert $page) => $page->where('order.online_number', 3));
         $this->get(route('deliveries.ticket', $delivery))->assertInertia(fn (Assert $page) => $page->where('order.online_number', 3));
         $this->get(route('deliveries.board'))->assertInertia(fn (Assert $page) => $page->where('orders.0.online_number', 3));
+    }
+
+    private function autoAccept(bool $enabled, ?User $user = null)
+    {
+        return $this->actingAs($user ?? $this->admin)->put(route('online.auto-accept'), ['enabled' => $enabled]);
+    }
+
+    /** O cliente da loja não está logado: o pedido nasce sem usuário autenticado. */
+    private function placeAsGuest(): OnlineOrder
+    {
+        Auth::forgetUser();
+
+        return $this->place();
+    }
+
+    public function test_auto_accept_accepts_new_orders_and_dispatches_production(): void
+    {
+        $this->autoAccept(true)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertTrue($this->store->fresh()->auto_accept);
+
+        $online = $this->placeAsGuest()->fresh();
+
+        $this->assertSame(OnlineOrder::ACCEPTED, $online->status);
+        $this->assertNull($online->decided_by_id);
+        $this->assertSame('Automático', $online->decided_by_name);
+        $delivery = DeliveryOrder::where('online_order_id', $online->id)->sole();
+        $this->assertNull($delivery->user_id);
+        $this->assertSame('Automático', $delivery->user_name);
+        $this->assertSame(DeliveryOrder::RECEIVED, $delivery->status);
+        $this->assertSame(2, ProductionWork::whereIn('delivery_order_item_id', $delivery->items()->pluck('id'))->count());
+        $this->assertSame(['Automático'], ProductionWork::query()->join('production_events', 'production_events.production_work_id', '=', 'production_works.id')->distinct()->pluck('actor_name')->all());
+    }
+
+    public function test_auto_accept_leaves_order_pending_when_it_cannot_accept(): void
+    {
+        $this->autoAccept(true)->assertSessionHasNoErrors();
+        ProductionSector::whereKey($this->admin->company->default_production_sector_id)->update(['active' => false]);
+
+        $online = $this->placeAsGuest()->fresh();
+
+        $this->assertSame(OnlineOrder::PENDING, $online->status);
+        $this->assertSame(0, DeliveryOrder::count());
+        $this->assertSame(0, ProductionWork::count());
+    }
+
+    public function test_auto_accept_off_keeps_orders_waiting(): void
+    {
+        $this->autoAccept(true)->assertSessionHasNoErrors();
+        $this->autoAccept(false)->assertSessionHasNoErrors();
+
+        $this->assertFalse($this->store->fresh()->auto_accept);
+        $this->assertSame(OnlineOrder::PENDING, $this->placeAsGuest()->fresh()->status);
+    }
+
+    public function test_auto_accept_requires_active_default_sector_and_permission(): void
+    {
+        $this->admin->company->forceFill(['default_production_sector_id' => null])->save();
+        $this->autoAccept(true)->assertSessionHasErrors(['auto_accept' => 'Cadastre um setor de produção padrão ativo antes de ativar o aceite automático.']);
+
+        $clerk = $this->userWith(['deliveries.operate'], $this->admin->company);
+        $this->autoAccept(true, $clerk)->assertForbidden();
+
+        $this->assertFalse($this->store->fresh()->auto_accept);
     }
 }

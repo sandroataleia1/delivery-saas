@@ -26,12 +26,13 @@ use Illuminate\Validation\ValidationException;
  * Recebe o pedido da loja online pública. Nada aqui tem usuário logado nem escopo de tenant:
  * toda consulta filtra company_id e todo registro novo recebe company_id explicitamente.
  * O pedido fica pendente até a equipe aceitar; nada de entrega, produção, venda ou estoque.
+ * Com o aceite automático da loja ligado, o pedido novo é aceito logo depois do commit.
  */
 class PlaceOnlineOrder
 {
     public const GUEST = 'Cliente (loja online)';
 
-    public function __construct(private ItemComposer $composer) {}
+    public function __construct(private ItemComposer $composer, private AcceptOnlineOrder $acceptOrder) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -65,7 +66,7 @@ class PlaceOnlineOrder
             'notes' => trim($line['notes'] ?? '') ?: null, ...ItemSelection::raw($line),
         ], array_values($data['items']));
 
-        return DB::transaction(function () use ($store, $companyId, $data, $isDelivery, $phone, $name, $address, $changeFor, $notes, $lines, $rawSelections, $hash): array {
+        $placed = DB::transaction(function () use ($store, $companyId, $data, $isDelivery, $phone, $name, $address, $changeFor, $notes, $lines, $rawSelections, $hash): array {
             $company = Company::whereKey($companyId)->lockForUpdate()->first();
             abort_unless($company && $company->active, 404);
 
@@ -168,6 +169,12 @@ class PlaceOnlineOrder
 
             return ['order' => $order, 'token' => $token];
         });
+
+        if ($placed['order']->wasRecentlyCreated && $this->acceptOrder->handleAutomatic($placed['order'])) {
+            $placed['order']->refresh();
+        }
+
+        return $placed;
     }
 
     /**

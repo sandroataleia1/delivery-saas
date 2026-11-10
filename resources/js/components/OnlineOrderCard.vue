@@ -32,6 +32,8 @@ const statusClass = { accepted: 'text-ok', rejected: 'text-danger', expired: 'te
 const processing = ref(false);
 const errors = ref({});
 const rejecting = ref(false);
+// O aceite pode parar na loja, no item ou na produção (setor não configurado): mostra qualquer um deles.
+const acceptError = computed(() => errors.value.online_order ?? errors.value.production ?? errors.value.items ?? null);
 const reason = ref('');
 
 function send(url, data, onDone) {
@@ -123,7 +125,10 @@ const time = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit
             <Link v-if="can('deliveries.operate')" :href="route('deliveries.show', order.delivery.id)" class="btn btn-secondary">Ver entrega</Link>
         </div>
 
-        <p v-if="errors.online_order" class="text-danger mt-3 text-sm" role="alert">{{ errors.online_order }}</p>
+        <p v-if="acceptError" class="text-danger mt-3 text-sm" role="alert">
+            {{ acceptError }}
+            <Link v-if="errors.production && can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
+        </p>
 
         <div v-if="!decided" class="mt-4 flex flex-wrap gap-2">
             <button type="button" class="btn btn-primary" :disabled="processing || expired" @click="accept">Aceitar</button>

@@ -112,6 +112,22 @@ function dispatch() {
 
 const advanceError = computed(() => advanceForm.errors.order ?? advanceForm.errors.production ?? null);
 
+const autoAccepting = ref(false);
+const autoAcceptError = ref(null);
+function toggleAutoAccept(event) {
+    const checkbox = event.target;
+    autoAccepting.value = true;
+    autoAcceptError.value = null;
+    router.put(route('online.auto-accept'), { enabled: checkbox.checked }, {
+        preserveScroll: true,
+        onError: (bag) => {
+            autoAcceptError.value = bag.auto_accept ?? Object.values(bag)[0] ?? null;
+            checkbox.checked = props.store.auto_accept;
+        },
+        onFinish: () => (autoAccepting.value = false),
+    });
+}
+
 const pausing = ref(false);
 function togglePause() {
     pausing.value = true;
@@ -139,6 +155,19 @@ function togglePause() {
 
         <template v-else>
             <p class="text-muted mb-3 text-sm">Link da loja: <a :href="store.link" target="_blank" rel="noopener" class="text-brand-strong break-all underline">{{ store.link }}</a></p>
+            <div class="card mb-3 p-4">
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input type="checkbox" class="accent-brand mt-0.5 size-4" :checked="store.auto_accept" :disabled="autoAccepting" @change="toggleAutoAccept" />
+                    <span>
+                        <span class="block font-semibold">Aceitar pedidos automaticamente</span>
+                        <span class="text-muted">Cada pedido novo vira entrega e vai direto para a produção. Se algum item estiver indisponível, o pedido fica em análise para a equipe decidir.</span>
+                    </span>
+                </label>
+                <p v-if="autoAcceptError" class="text-danger mt-2 text-sm" role="alert">
+                    {{ autoAcceptError }}
+                    <Link v-if="can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
+                </p>
+            </div>
             <p v-if="store.paused" class="text-warn mb-3 text-sm font-semibold" role="status">A loja está pausada: os clientes não conseguem enviar novos pedidos.</p>
             <p v-if="whatsapp && !whatsapp.connected" class="text-warn mb-3 text-sm font-semibold" role="alert">
                 WhatsApp desconectado: os clientes não estão recebendo as mensagens dos pedidos.

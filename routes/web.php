@@ -273,6 +273,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('loja-online/pedidos', [OnlineOrderController::class, 'index'])->name('online.orders');
             Route::post('loja-online/pausa', [OnlineStoreController::class, 'pause'])->name('online.pause');
             Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
+            Route::put('loja-online/aceite-automatico', [OnlineStoreController::class, 'autoAccept'])->name('online.auto-accept');
             Route::post('loja-online/pedidos/{onlineOrder}/aceitar', [OnlineOrderController::class, 'accept'])->name('online.orders.accept');
             Route::post('loja-online/pedidos/{onlineOrder}/recusar', [OnlineOrderController::class, 'reject'])->name('online.orders.reject');
             Route::post('loja-online/pedidos/{onlineOrder}/pronto', [OnlineOrderController::class, 'ready'])->middleware('can:production.operate')->name('online.orders.ready');

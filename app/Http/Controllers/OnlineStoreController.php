@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\PauseOnlineStore;
 use App\Actions\SaveOnlineStore;
+use App\Actions\SetOnlineAutoAccept;
 use App\Http\Requests\OnlineStoreRequest;
 use App\Models\OnlineStore;
 use App\Support\StoreSchedule;
@@ -49,6 +50,14 @@ class OnlineStoreController extends Controller
         $action->pause($data['reason'] ?? null);
 
         return back()->with('success', 'Loja pausada.');
+    }
+
+    public function autoAccept(Request $request, SetOnlineAutoAccept $action): RedirectResponse
+    {
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+        $action->handle($data['enabled']);
+
+        return back()->with('success', $data['enabled'] ? 'Aceite automático ligado.' : 'Aceite automático desligado.');
     }
 
     public function resume(PauseOnlineStore $action): RedirectResponse

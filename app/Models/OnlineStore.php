@@ -19,6 +19,7 @@ class OnlineStore extends Model
     {
         return [
             'enabled' => 'boolean',
+            'auto_accept' => 'boolean',
             'accepts_delivery' => 'boolean',
             'accepts_pickup' => 'boolean',
             'min_order' => 'decimal:2',
