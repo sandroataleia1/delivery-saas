@@ -97,10 +97,11 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
         Route::middleware('can:production.configure')->group(function () {
-            Route::get('producao/setores', [ProductionSectorController::class, 'index'])->name('production.sectors');
-            Route::post('producao/setores', [ProductionSectorController::class, 'store'])->name('production.sectors.store');
-            Route::put('producao/setores/{sector}', [ProductionSectorController::class, 'update'])->name('production.sectors.update');
-            Route::delete('producao/setores/{sector}', [ProductionSectorController::class, 'destroy'])->name('production.sectors.destroy');
+            Route::get('setores', [ProductionSectorController::class, 'index'])->name('production.sectors');
+            Route::post('setores', [ProductionSectorController::class, 'store'])->name('production.sectors.store');
+            Route::put('setores/{sector}', [ProductionSectorController::class, 'update'])->name('production.sectors.update');
+            Route::delete('setores/{sector}', [ProductionSectorController::class, 'destroy'])->name('production.sectors.destroy');
+            Route::redirect('producao/setores', '/setores');
         });
         Route::patch('produtos/{product}/esgotado', [ProductController::class, 'availability'])->middleware('can:products.manage')->name('products.availability');
         Route::get('producao', [ProductionController::class, 'index'])->middleware('can:production.view')->name('production.index');

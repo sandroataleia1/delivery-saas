@@ -241,7 +241,7 @@ function togglePause() {
                             </label>
                             <p v-if="autoAcceptError" class="text-danger mt-2" role="alert">
                                 {{ autoAcceptError }}
-                                <Link v-if="can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
+                                <Link v-if="can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores</Link>
                             </p>
                         </div>
                     </div>

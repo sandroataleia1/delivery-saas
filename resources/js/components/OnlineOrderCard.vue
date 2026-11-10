@@ -127,7 +127,7 @@ const time = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit
 
         <p v-if="acceptError" class="text-danger mt-3 text-sm" role="alert">
             {{ acceptError }}
-            <Link v-if="errors.production && can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
+            <Link v-if="errors.production && can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores</Link>
         </p>
 
         <div v-if="!decided" class="mt-4 flex flex-wrap gap-2">

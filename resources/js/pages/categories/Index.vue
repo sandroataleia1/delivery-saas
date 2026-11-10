@@ -61,7 +61,7 @@ function destroy() {
             <label for="category-name" class="mb-1.5 block text-sm font-semibold">
                 {{ editing ? `Editar ${editing.name}` : 'Nova categoria' }}
             </label>
-            <label class="mb-3 block text-sm">Setor de produção
+            <label class="mb-3 block text-sm">Setor
                 <select v-model="form.production_sector_id" class="input"><option :value="null">Padrão da empresa</option><option v-for="sector in sectors" :key="sector.id" :value="sector.id">{{ sector.name }}</option></select>
             </label>
             <p v-if="form.errors.production_sector_id" class="text-danger" role="alert">{{ form.errors.production_sector_id }}</p>

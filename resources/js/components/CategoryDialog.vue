@@ -50,7 +50,7 @@ function submit() {
             <p v-if="form.errors.name" class="text-danger mt-1.5 text-sm" role="alert">{{ form.errors.name }}</p>
 
             <template v-if="sectors.length">
-                <label for="category-dialog-sector" class="mt-3 mb-1.5 block text-sm font-semibold">Setor de produção</label>
+                <label for="category-dialog-sector" class="mt-3 mb-1.5 block text-sm font-semibold">Setor</label>
                 <select id="category-dialog-sector" v-model="form.production_sector_id" class="input">
                     <option :value="null">Padrão da empresa</option>
                     <option v-for="sector in sectors" :key="sector.id" :value="sector.id">{{ sector.name }}</option>

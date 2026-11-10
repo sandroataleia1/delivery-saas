@@ -89,7 +89,7 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
             can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
             can('deliveries.manage') && { label: 'Bairros de entrega', href: route('deliveries.zones'), match: '/entregas/bairros', icon: MapPin },
             can('tables.manage') && { label: 'Mesas do salão', href: route('tables.manage'), match: '/mesas/gerenciar', icon: LayoutGrid },
-            can('production.configure') && { label: 'Setores de produção', href: route('production.sectors'), match: '/producao/setores', icon: ChefHat },
+            can('production.configure') && { label: 'Setores', href: route('production.sectors'), match: '/setores', icon: ChefHat },
             can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },
             can('roles.view') && { label: 'Perfis de acesso', href: route('roles.index'), match: '/perfis', icon: ShieldCheck },
         ],
@@ -140,7 +140,7 @@ const topItems = computed(() => (user.value.is_super_admin
         can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
         can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
         can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
-        can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', exclude: '/producao/setores', icon: Store },
+        can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', icon: Store },
         can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
         can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
     ].filter(Boolean)));

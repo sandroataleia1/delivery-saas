@@ -23,11 +23,11 @@ class ProductionEndpointsTest extends TestCase
     {
         $admin = $this->adminOf();
         $this->actingAs($admin);
-        $this->post('/producao/setores', ['name' => 'Cozinha', 'active' => true, 'is_default' => true])->assertSessionHasNoErrors();
+        $this->post('/setores', ['name' => 'Cozinha', 'active' => true, 'is_default' => true])->assertSessionHasNoErrors();
         $sector = ProductionSector::sole();
         $this->assertSame($sector->id, $admin->company->fresh()->default_production_sector_id);
         $other = $this->adminOf();
-        $this->actingAs($other)->put('/producao/setores/'.$sector->id, ['name' => 'Invadido', 'active' => true])->assertNotFound();
+        $this->actingAs($other)->put('/setores/'.$sector->id, ['name' => 'Invadido', 'active' => true])->assertNotFound();
         $this->assertSame('Cozinha', $sector->fresh()->name);
         $this->actingAs($this->userWith([], $admin->company))->get('/producao')->assertForbidden();
     }
@@ -47,7 +47,7 @@ class ProductionEndpointsTest extends TestCase
         $foreign = $this->adminOf();
         $this->actingAs($foreign)->post('/producao/'.$work->id.'/etapa', ['target' => 'preparing', 'expected_version' => 0])->assertNotFound();
         $this->assertSame('waiting', $work->fresh()->status);
-        $this->actingAs($admin)->put('/producao/setores/'.$sector->id, ['name' => $sector->name, 'active' => false])->assertSessionHasErrors('active');
+        $this->actingAs($admin)->put('/setores/'.$sector->id, ['name' => $sector->name, 'active' => false])->assertSessionHasErrors('active');
         $this->assertTrue($sector->fresh()->active);
     }
 
@@ -63,9 +63,9 @@ class ProductionEndpointsTest extends TestCase
         app(AddOrderItems::class)->handle($order, [['product_id' => $product->id, 'quantity' => '1']], (string) Str::uuid());
         $work = ProductionWork::sole();
         $sector = ProductionSector::findOrFail($work->production_sector_id);
-        $this->put('/producao/setores/'.$sector->id, ['name' => 'Nome novo', 'active' => true])->assertSessionHasNoErrors();
+        $this->put('/setores/'.$sector->id, ['name' => 'Nome novo', 'active' => true])->assertSessionHasNoErrors();
         $this->assertNotSame('Nome novo', $work->fresh()->sector_name);
-        $this->delete('/producao/setores/'.$sector->id)->assertSessionHasErrors('sector');
+        $this->delete('/setores/'.$sector->id)->assertSessionHasErrors('sector');
         $this->assertNotNull($sector->fresh());
     }
 
