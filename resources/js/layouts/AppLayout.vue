@@ -81,12 +81,9 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
     {
         name: 'Vendas',
         items: [
-            can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
             can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', exclude: '/producao/setores', icon: Store },
-            can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
             can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
             can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
-            can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
             can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
         ],
     },
@@ -138,7 +135,13 @@ const topItems = computed(() => (user.value.is_super_admin
         { label: 'Empresas', href: route('admin.companies.index'), match: '/admin/empresas', icon: Building2 },
         { label: 'Auditoria', href: route('admin.audit.index'), match: '/admin/auditoria', icon: History },
     ]
-    : [{ label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House }]));
+    // Acesso rápido: o que se usa o dia todo fica sempre à mostra, fora dos grupos.
+    : [
+        { label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House },
+        can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
+        can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
+        can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
+    ].filter(Boolean)));
 
 // Quem tem poucos itens, como garçom e entregador, vê tudo aberto.
 const isCollapsible = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, 0) > 10);
@@ -224,6 +227,7 @@ watch(() => page.url, () => (menuOpen.value = false));
                 >
                     <component :is="item.icon" :size="18" />
                     {{ item.label }}
+                    <span v-if="item.badge" class="bg-danger ml-auto rounded-full px-2 text-xs font-bold text-white" :aria-label="`${item.badge} pendente(s)`">{{ item.badge }}</span>
                 </Link>
 
                 <section v-for="group in groups" :key="group.name" class="mt-3">
