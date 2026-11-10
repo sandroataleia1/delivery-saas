@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Company;
+use App\Models\ProductionSector;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,6 +65,10 @@ class RegisterTest extends TestCase
         $this->assertFalse($owner->is_super_admin);
         $this->assertTrue(Hash::check('senha12345', $owner->password));
         $this->assertSame(5, Role::where('company_id', $company->id)->count());
+        $sector = ProductionSector::where('company_id', $company->id)->sole();
+        $this->assertSame('Cozinha', $sector->name);
+        $this->assertTrue($sector->active);
+        $this->assertSame($sector->id, $company->default_production_sector_id);
 
         $this->get('/')->assertOk();
     }
