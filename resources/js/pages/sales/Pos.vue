@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChevronDown, List, Lock, Minus, Plus, Trash2 } from '@lucide/vue';
 import CashControls from '@/components/CashControls.vue';
+import UpdateBanner from '@/components/UpdateBanner.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
@@ -360,5 +361,6 @@ onBeforeUnmount(() => document.removeEventListener('click', closeCashMenuOutside
         <SaleCompleteDialog :sale="receipt" @close="receipt = null" />
 
         <CashControls ref="cashControls" :session="cash" />
+        <UpdateBanner hint="O carrinho continua guardado depois de atualizar." />
     </div>
 </template>

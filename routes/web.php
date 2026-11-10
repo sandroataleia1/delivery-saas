@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
+use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -65,6 +66,9 @@ Route::middleware('public.page')->group(function () {
     Route::get('loja/{slug}/pedido/{token}', [ShopController::class, 'track'])->middleware('throttle:online-status')->name('shop.track');
     Route::get('loja/{slug}/pedido/{token}/status', [ShopController::class, 'status'])->middleware('throttle:online-status')->name('shop.status');
 });
+
+// Versão no ar: as telas abertas comparam com a delas para avisar que há atualização.
+Route::get('versao', AppVersionController::class)->middleware('throttle:60,1')->name('app.version');
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'create'])->name('login');

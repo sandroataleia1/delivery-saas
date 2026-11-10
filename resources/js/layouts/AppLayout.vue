@@ -40,6 +40,7 @@ import {
     X,
 } from '@lucide/vue';
 import FlashMessages from '@/components/FlashMessages.vue';
+import UpdateBanner from '@/components/UpdateBanner.vue';
 import { usePermissions } from '@/lib/can';
 import { useInstallApp } from '@/lib/installApp';
 
@@ -190,6 +191,7 @@ watch(() => page.url, () => (menuOpen.value = false));
     <div class="min-h-dvh lg:pl-64 print:pl-0">
         <Head :title="title" />
         <FlashMessages />
+        <UpdateBanner />
 
         <div v-if="menuOpen" class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="menuOpen = false" />
 
