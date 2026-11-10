@@ -143,20 +143,18 @@ const topItems = computed(() => (user.value.is_super_admin
         can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
     ].filter(Boolean)));
 
-// Quem tem poucos itens, como garçom e entregador, vê tudo aberto.
-const isCollapsible = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, 0) > 10);
+// Quem tem poucos itens, como garçom e entregador, vê tudo aberto (o acesso rápido conta, menos o Início).
+const isCollapsible = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, topItems.value.length - 1) > 10);
 
-const STORAGE_KEY = 'menu-sections-v2';
+// O menu não lembra grupos abertos entre visitas: só abre o grupo da página atual ou o que a pessoa abrir agora.
+const openSections = ref(new Set());
 
-function loadOpenSections() {
-    try {
-        return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? []);
-    } catch {
-        return new Set();
-    }
+try {
+    localStorage.removeItem('menu-sections');
+    localStorage.removeItem('menu-sections-v2');
+} catch {
+    // Sem armazenamento não há o que limpar.
 }
-
-const openSections = ref(loadOpenSections());
 
 function isOpen(group) {
     return !isCollapsible.value || openSections.value.has(group.name) || group.items.some(isActive);
@@ -172,12 +170,6 @@ function toggle(group) {
     }
 
     openSections.value = next;
-
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-    } catch {
-        // Sem armazenamento, o menu só não lembra das seções abertas.
-    }
 }
 
 function isActive(item) {
