@@ -14,4 +14,7 @@ interface ApiService {
 
     @POST("logout")
     suspend fun logout(): Response<Unit>
+
+    @GET("tables")
+    suspend fun tables(): TablesEnvelope
 }
