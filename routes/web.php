@@ -150,13 +150,14 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('relatorios/produtos', [ReportController::class, 'products'])->name('reports.products');
             Route::get('relatorios/estoque', [ReportController::class, 'stock'])->name('reports.stock');
             Route::get('relatorios/entregas', [ReportController::class, 'deliveries'])->name('reports.deliveries');
+            Route::get('relatorios/entregadores', [ReportController::class, 'couriers'])->name('reports.couriers');
         });
         Route::middleware('can:reports.finance')->group(function () {
             Route::get('relatorios/financeiro', [ReportController::class, 'finance'])->name('reports.finance');
             Route::get('relatorios/caixa', [ReportController::class, 'cash'])->name('reports.cash');
         });
         Route::get('relatorios/{report}/exportar', [ReportController::class, 'export'])
-            ->whereIn('report', ['vendas', 'produtos', 'financeiro', 'estoque', 'caixa', 'entregas'])
+            ->whereIn('report', ['vendas', 'produtos', 'financeiro', 'estoque', 'caixa', 'entregas', 'entregadores'])
             ->name('reports.export');
 
         Route::middleware('can:customers.view')->group(function () {

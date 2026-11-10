@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Bill;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\Courier;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
@@ -249,6 +250,82 @@ class ReportTest extends TestCase
                 ->where('operators.0.total', '-15.00')
                 ->has('sessions', 3)
         );
+    }
+
+    private function courierOrder(array $attributes): DeliveryOrder
+    {
+        static $number = 100;
+        $number++;
+        $customer = Customer::factory()->create(['company_id' => $attributes['company_id'] ?? $this->admin->company_id]);
+
+        $order = new DeliveryOrder;
+        $order->forceFill([
+            'company_id' => $this->admin->company_id,
+            'number' => $number,
+            'client_uuid' => fake()->uuid(),
+            'customer_id' => $customer->id,
+            'type' => DeliveryOrder::DELIVERY,
+            'status' => DeliveryOrder::DELIVERED,
+            'customer_name' => 'Cliente '.$number,
+            'district' => 'Centro',
+            'subtotal' => '30',
+            'delivery_fee' => '5',
+            'payment_method' => 'pix',
+            'courier_name' => 'Zé',
+            'user_name' => 'Ana',
+            'dispatched_at' => now()->subMinutes(20),
+            'delivered_at' => now(),
+            ...$attributes,
+        ])->saveQuietly();
+
+        return $order;
+    }
+
+    public function test_relatorio_por_entregador_no_intervalo_de_dias(): void
+    {
+        $ze = Courier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Zé']);
+        $courierUser = $this->userWith(['deliveries.courier'], $this->admin->company);
+        $this->courierOrder(['delivery_courier_id' => $ze->id, 'delivery_fee' => '6']);
+        $this->courierOrder(['delivery_courier_id' => $ze->id, 'delivery_fee' => '4', 'dispatched_at' => now()->subDays(2), 'delivered_at' => now()->subDays(2)->addMinutes(10)]);
+        $this->courierOrder(['delivery_courier_id' => $ze->id, 'status' => DeliveryOrder::RETURNED, 'delivered_at' => null, 'return_reason' => 'Ausente']);
+        $this->courierOrder(['delivery_courier_id' => $ze->id, 'dispatched_at' => now()->subDays(10)]);
+        $this->courierOrder(['courier_id' => $courierUser->id, 'courier_name' => $courierUser->name]);
+
+        $from = now()->subDays(3)->format('Y-m-d');
+        $to = now()->format('Y-m-d');
+
+        $this->actingAs($this->admin)->get(route('reports.couriers', ['from' => $from, 'to' => $to, 'courier' => 'c'.$ze->id]))
+            ->assertInertia(fn (Assert $page) => $page->component('reports/Couriers')
+                ->where('courier', 'c'.$ze->id)
+                ->where('summary.delivered', 2)
+                ->where('summary.returned', 1)
+                ->where('summary.fees', '10.00')
+                ->where('summary.total', '70.00')
+                ->has('orders', 3)
+                ->where('orders.2.return_reason', 'Ausente')
+                ->where('couriers', fn ($couriers) => collect($couriers)->contains(fn ($c) => $c['key'] === 'c'.$ze->id) && collect($couriers)->contains(fn ($c) => $c['key'] === 'u'.$courierUser->id)));
+
+        $this->get(route('reports.couriers', ['from' => $from, 'to' => $to]))
+            ->assertInertia(fn (Assert $page) => $page->where('courier', null)->has('orders', 0)->has('ranking', 2)
+                ->where('ranking.0.key', 'c'.$ze->id)->where('ranking.0.delivered', 2)->where('ranking.0.returned', 1)
+                ->where('ranking.1.key', 'u'.$courierUser->id)->where('ranking.1.delivered', 1));
+
+        $csv = $this->get(route('reports.export', ['report' => 'entregadores', 'from' => $from, 'to' => $to, 'courier' => 'c'.$ze->id]))->assertOk()->streamedContent();
+        $this->assertSame(4, substr_count(trim($csv), "\n") + 1);
+        $this->assertStringContainsString('Ausente', $csv);
+    }
+
+    public function test_relatorio_por_entregador_nao_mostra_outra_empresa_e_exige_permissao(): void
+    {
+        $other = $this->adminOf();
+        $foreign = Courier::factory()->create(['company_id' => $other->company_id]);
+        $this->courierOrder(['company_id' => $other->company_id, 'delivery_courier_id' => $foreign->id]);
+
+        $this->actingAs($this->admin)->get(route('reports.couriers', ['courier' => 'c'.$foreign->id]))
+            ->assertInertia(fn (Assert $page) => $page->has('orders', 0)->where('summary.delivered', 0));
+        $this->get(route('reports.couriers', ['courier' => 'x1']))->assertSessionHasErrors('courier');
+
+        $this->actingAs($this->userWith(['deliveries.operate'], $this->admin->company))->get(route('reports.couriers'))->assertForbidden();
     }
 
     public function test_entregas_por_entregador_e_tempo(): void
