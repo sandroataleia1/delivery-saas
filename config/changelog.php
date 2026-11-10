@@ -19,7 +19,7 @@ return [
             ],
             [
                 'title' => 'Cadastro de entregadores',
-                'text' => 'Em Entregas → Entregadores, cadastre quem faz as entregas (com ou sem acesso ao sistema) e escolha o entregador ao despachar.',
+                'text' => 'Em Entregas → Entregadores, toque em "Novo entregador" para cadastrar quem faz as entregas (com ou sem acesso ao sistema) e escolha o entregador ao despachar.',
                 'can' => 'deliveries.manage',
             ],
             [
