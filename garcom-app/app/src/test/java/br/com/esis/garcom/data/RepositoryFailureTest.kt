@@ -6,6 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
 import retrofit2.Response
 
 /** Respostas que não são JSON (Wi-Fi com portal, proxy) e falhas do armazenamento não podem fechar o app. */
@@ -16,11 +19,17 @@ class RepositoryFailureTest {
         val onLogin: () -> LoginResponse = { error("não usado") },
         val onMe: () -> WaiterEnvelope = { error("não usado") },
         val onTables: () -> TablesEnvelope = { error("não usado") },
+        val onOrder: () -> OrderEnvelope = { error("não usado") },
     ) : ApiService {
         override suspend fun login(body: LoginRequest): LoginResponse = onLogin()
         override suspend fun me(): WaiterEnvelope = onMe()
         override suspend fun logout(): Response<Unit> = Response.success(Unit)
         override suspend fun tables(): TablesEnvelope = onTables()
+        override suspend fun menu(): MenuDto = error("não usado")
+        override suspend fun order(id: Long): OrderEnvelope = onOrder()
+        override suspend fun openTable(tableId: Long, body: OpenTableRequest): OrderEnvelope = error("não usado")
+        override suspend fun addItems(orderId: Long, body: AddItemsRequest): OrderEnvelope = error("não usado")
+        override suspend fun quote(orderId: Long, body: ItemRequest): QuoteDto = error("não usado")
     }
 
     private class FakeSession(
@@ -45,6 +54,29 @@ class RepositoryFailureTest {
     }
 
     private fun auth(api: ApiService, session: FakeSession) = ApiAuthRepository(api, session, session, "Moto G")
+
+    private fun httpError(code: Int, body: String) =
+        HttpException(Response.error<Unit>(code, body.toResponseBody("application/json".toMediaType())))
+
+    @Test
+    fun rejeicao_422_traz_a_mensagem_do_servidor() = runTest {
+        val repository = ApiOrderRepository(FakeApi(onOrder = { throw httpError(422, """{"message":"X está esgotado."}""") }))
+
+        assertEquals(ApiResult.Rejected("X está esgotado."), repository.order(1))
+    }
+
+    @Test
+    fun comanda_de_outra_empresa_vira_nao_encontrada() = runTest {
+        val repository = ApiOrderRepository(FakeApi(onOrder = { throw httpError(404, "{}") }))
+
+        assertEquals(ApiResult.NotFound, repository.order(1))
+    }
+
+    @Test
+    fun status_de_item_desconhecido_vira_none() {
+        assertEquals(ItemStatus.NONE, ItemStatus.fromApi("algo_novo"))
+        assertEquals(ItemStatus.READY, ItemStatus.fromApi("ready"))
+    }
 
     @Test
     fun salao_com_resposta_que_nao_e_json_mostra_aviso() = runTest {

@@ -18,10 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.esis.garcom.data.ApiAuthRepository
 import br.com.esis.garcom.data.ApiClient
+import br.com.esis.garcom.data.ApiMenuRepository
+import br.com.esis.garcom.data.ApiOrderRepository
 import br.com.esis.garcom.data.ApiService
 import br.com.esis.garcom.data.ApiTableRepository
 import br.com.esis.garcom.data.AuthRepository
 import br.com.esis.garcom.data.KeystoreSessionStore
+import br.com.esis.garcom.data.MenuRepository
+import br.com.esis.garcom.data.OrderRepository
 import br.com.esis.garcom.data.SessionEvents
 import br.com.esis.garcom.data.TableRepository
 import br.com.esis.garcom.data.Waiter
@@ -36,6 +40,8 @@ class AppGraph private constructor(context: Context) {
     val api: ApiService = ApiClient.service(session)
     val auth: AuthRepository = ApiAuthRepository(api, session, session, "${Build.MANUFACTURER} ${Build.MODEL}")
     val tables: TableRepository = ApiTableRepository(api)
+    val orders: OrderRepository = ApiOrderRepository(api)
+    val menu: MenuRepository = ApiMenuRepository(api)
 
     companion object {
         @Volatile

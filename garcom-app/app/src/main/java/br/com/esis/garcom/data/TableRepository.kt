@@ -33,6 +33,8 @@ data class FloorTable(
     val total: String?,
     val minutes: Int?,
     val pendingCount: Int = 0,
+    /** Comanda aberta na mesa; nula quando a mesa está livre. */
+    val orderId: Long? = null,
 )
 
 sealed interface TablesResult {
@@ -67,11 +69,13 @@ data class TableDto(
         total = order?.total,
         minutes = order?.minutes,
         pendingCount = order?.pendingCount ?: 0,
+        orderId = order?.id,
     )
 }
 
 @Serializable
 data class TableOrderDto(
+    val id: Long? = null,
     val waiter: String? = null,
     val total: String? = null,
     val minutes: Int? = null,
