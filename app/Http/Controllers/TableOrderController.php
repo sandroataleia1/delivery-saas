@@ -13,13 +13,13 @@ use App\Http\Requests\CloseTableOrderRequest;
 use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
-use App\Models\Product;
 use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\Printing\PrintQueue;
 use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
+use App\Support\TableMenu;
 use App\Support\TableOperationLock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,11 +54,7 @@ class TableOrderController extends Controller
 
         $order->load(['diningTable', 'items.production']);
 
-        $products = Product::query()
-            ->where('active', true)
-            ->where('sellable', true)->where('sold_out', false)
-            ->orderBy('name')
-            ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']);
+        $products = TableMenu::products();
 
         return Inertia::render('tables/Order', [
             'order' => [
