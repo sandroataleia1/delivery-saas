@@ -121,6 +121,7 @@ class WhatsAppWebhookTest extends TestCase
     public function test_connect_registers_webhook_with_secret_url(): void
     {
         Http::fake([
+            'evo.test/instance/connectionState/*' => Http::response(['instance' => ['state' => 'connecting']]),
             'evo.test/instance/connect/*' => Http::response(['base64' => 'QR']),
             'evo.test/webhook/set/*' => Http::response(['webhook' => []]),
         ]);

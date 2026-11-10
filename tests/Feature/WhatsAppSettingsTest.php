@@ -61,23 +61,50 @@ class WhatsAppSettingsTest extends TestCase
             ->has('settings.templates', 9));
     }
 
-    public function test_reconnect_uses_existing_instance(): void
+    public function test_reconnect_while_pairing_reuses_instance(): void
     {
-        Http::fake(['evo.test/instance/connect/*' => Http::response(['base64' => 'QR2'])]);
+        Http::fake([
+            'evo.test/instance/connectionState/*' => Http::response(['instance' => ['state' => 'connecting']]),
+            'evo.test/instance/connect/*' => Http::response(['base64' => 'QR2']),
+        ]);
         $admin = $this->adminOf();
-        WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'close']);
+        WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'connecting']);
 
         $this->actingAs($admin)->post('/loja-online/whatsapp/conectar')->assertRedirect();
 
         Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/instance/connect/inst-a'));
         Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'instance/create'));
+        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'instance/delete'));
         $this->assertSame('QR2', Cache::get('whatsapp-qr:'.$admin->company_id));
+    }
+
+    public function test_reconnect_after_session_closed_replaces_stale_instance(): void
+    {
+        Http::fake([
+            'evo.test/instance/connectionState/*' => Http::response(['instance' => ['state' => 'close']]),
+            'evo.test/instance/delete/*' => Http::response(['status' => 'SUCCESS']),
+            'evo.test/instance/create' => Http::response(['hash' => 'TOK2', 'qrcode' => ['base64' => 'QR3']]),
+        ]);
+        $admin = $this->adminOf();
+        WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'close', 'webhook_secret' => 'old-secret']);
+
+        $this->actingAs($admin)->post('/loja-online/whatsapp/conectar')->assertRedirect()->assertSessionHasNoErrors();
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE' && str_ends_with($request->url(), '/instance/delete/inst-a') && $request->hasHeader('apikey', 'KEY'));
+        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), '/instance/connect/'));
+        $setting = WhatsAppSetting::where('company_id', $admin->company_id)->firstOrFail();
+        $this->assertNotSame('inst-a', $setting->instance_name);
+        $this->assertSame('TOK2', $setting->instance_token);
+        $this->assertNotSame('old-secret', $setting->webhook_secret);
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/webhook/set/'.$setting->instance_name)
+            && $request['webhook']['url'] === route('whatsapp.webhook', [$setting->instance_name, $setting->webhook_secret]));
+        $this->assertSame('QR3', Cache::get('whatsapp-qr:'.$admin->company_id));
     }
 
     public function test_reconnect_recreates_instance_missing_on_server(): void
     {
         Http::fake([
-            'evo.test/instance/connect/*' => Http::response('not found', 404),
+            'evo.test/instance/connectionState/*' => Http::response('not found', 404),
             'evo.test/instance/create' => Http::response(['hash' => 'TOK2', 'qrcode' => ['base64' => 'QR3']]),
         ]);
         $admin = $this->adminOf();
@@ -95,7 +122,10 @@ class WhatsAppSettingsTest extends TestCase
 
     public function test_disconnect_clears_instance_missing_on_server(): void
     {
-        Http::fake(['evo.test/instance/logout/*' => Http::response('not found', 404)]);
+        Http::fake([
+            'evo.test/instance/logout/*' => Http::response('not found', 404),
+            'evo.test/instance/delete/*' => Http::response('not found', 404),
+        ]);
         $admin = $this->adminOf();
         WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'instance_token' => 'T', 'state' => 'open']);
         Cache::put('whatsapp-qr:'.$admin->company_id, 'QR', 60);
@@ -176,17 +206,39 @@ class WhatsAppSettingsTest extends TestCase
         $this->put('/loja-online/whatsapp', ['enabled' => true])->assertForbidden();
     }
 
-    public function test_disconnect_logs_out(): void
+    public function test_disconnect_logs_out_and_deletes_instance(): void
     {
-        Http::fake(['evo.test/instance/logout/*' => Http::response(['status' => 'SUCCESS'])]);
+        Http::fake([
+            'evo.test/instance/logout/*' => Http::response(['status' => 'SUCCESS']),
+            'evo.test/instance/delete/*' => Http::response(['status' => 'SUCCESS']),
+        ]);
         $admin = $this->adminOf();
-        $setting = WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'state' => 'open']);
+        $setting = WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'state' => 'open', 'webhook_secret' => 'old-secret']);
         Cache::put('whatsapp-qr:'.$admin->company_id, 'QR', 60);
 
-        $this->actingAs($admin)->delete('/loja-online/whatsapp/conexao')->assertRedirect();
+        $this->actingAs($admin)->delete('/loja-online/whatsapp/conexao')->assertRedirect()->assertSessionHasNoErrors();
 
         Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/instance/logout/inst-a'));
-        $this->assertSame('close', $setting->fresh()->state);
+        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE' && str_ends_with($request->url(), '/instance/delete/inst-a') && $request->hasHeader('apikey', 'KEY'));
+        $setting->refresh();
+        $this->assertSame('close', $setting->state);
+        $this->assertNull($setting->instance_name);
+        $this->assertNull($setting->instance_token);
+        $this->assertNull($setting->webhook_secret);
         $this->assertNull(Cache::get('whatsapp-qr:'.$admin->company_id));
+    }
+
+    public function test_disconnect_keeps_instance_when_delete_fails(): void
+    {
+        Http::fake([
+            'evo.test/instance/logout/*' => Http::response(['status' => 'SUCCESS']),
+            'evo.test/instance/delete/*' => Http::response('boom', 500),
+        ]);
+        $admin = $this->adminOf();
+        $setting = WhatsAppSetting::factory()->create(['company_id' => $admin->company_id, 'instance_name' => 'inst-a', 'state' => 'open']);
+
+        $this->actingAs($admin)->delete('/loja-online/whatsapp/conexao')->assertSessionHasErrors('whatsapp');
+
+        $this->assertSame('inst-a', $setting->fresh()->instance_name);
     }
 }

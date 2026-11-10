@@ -60,6 +60,12 @@ class EvolutionClient
         $this->send('DELETE', '/instance/logout/'.rawurlencode($name), $token);
     }
 
+    /** Apaga a instância no servidor (chave global): a próxima conexão começa do zero, sem sessão velha. */
+    public function deleteInstance(string $name): void
+    {
+        $this->send('DELETE', '/instance/delete/'.rawurlencode($name), (string) config('services.evolution.key'));
+    }
+
     /** Envia um texto e devolve o id da mensagem no WhatsApp, quando a Evolution informa. */
     public function sendText(string $name, string $token, string $number, string $text): ?string
     {

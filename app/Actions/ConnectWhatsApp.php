@@ -14,7 +14,11 @@ class ConnectWhatsApp
 {
     public function __construct(private EvolutionClient $evolution) {}
 
-    /** Cria a instância da loja, se faltar, e guarda o QR para a tela exibir. */
+    /**
+     * Cria a instância da loja, se faltar, e guarda o QR para a tela exibir.
+     * Instância com a sessão fechada (celular desconectado) é apagada e recriada: reaproveitá-la
+     * deixava o bot sem ouvir as mensagens depois de reconectar.
+     */
     public function handle(Company $company): void
     {
         if (! $this->evolution->configured()) {
@@ -29,8 +33,12 @@ class ConnectWhatsApp
 
             if (filled($setting->instance_name) && filled($setting->instance_token)) {
                 try {
-                    $qr = $this->evolution->connect($setting->instance_name, $setting->instance_token);
-                    $needsInstance = false;
+                    if ($this->evolution->state($setting->instance_name, $setting->instance_token) === 'close') {
+                        $this->evolution->deleteInstance($setting->instance_name);
+                    } else {
+                        $qr = $this->evolution->connect($setting->instance_name, $setting->instance_token);
+                        $needsInstance = false;
+                    }
                 } catch (EvolutionException $e) {
                     if (! in_array($e->status, [401, 404], true)) {
                         throw $e;
@@ -45,6 +53,7 @@ class ConnectWhatsApp
                     'company_id' => $company->id,
                     'instance_name' => $name,
                     'instance_token' => $created['token'],
+                    'webhook_secret' => null,
                 ])->save();
                 $qr = $created['qr'];
             }
