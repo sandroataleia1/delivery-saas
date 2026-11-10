@@ -9,8 +9,8 @@ use App\Actions\CloseTableOrder;
 use App\Actions\OpenTable;
 use App\Actions\SendToKitchen;
 use App\Actions\TransferTable;
+use App\Http\Requests\AddOrderItemsRequest;
 use App\Http\Requests\CloseTableOrderRequest;
-use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
 use App\Models\ProductionWork;
@@ -31,8 +31,6 @@ use Inertia\Response;
 
 class TableOrderController extends Controller
 {
-    use ValidatesComposition;
-
     public function open(Request $request, DiningTable $table, OpenTable $openTable): RedirectResponse
     {
         $data = $request->validate(
@@ -102,21 +100,9 @@ class TableOrderController extends Controller
         ]);
     }
 
-    public function addItems(Request $request, TableOrder $order, AddOrderItems $addItems): RedirectResponse
+    public function addItems(AddOrderItemsRequest $request, TableOrder $order, AddOrderItems $addItems): RedirectResponse
     {
-        $data = $request->validate([
-            'client_uuid' => ['required', 'uuid'],
-            'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.product_id' => [
-                'bail',
-                'required',
-                'integer',
-                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
-            ],
-            'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
-            'items.*.notes' => ['nullable', 'string', 'max:120'],
-            ...$this->compositionRules('items.*'),
-        ], [], ['items' => 'itens', 'items.*.product_id' => 'produto', 'items.*.quantity' => 'quantidade', 'items.*.notes' => 'observação']);
+        $data = $request->validated();
 
         $addItems->handle($order, $data['items'], $data['client_uuid']);
 

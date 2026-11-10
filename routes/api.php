@@ -21,6 +21,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('can:tables.operate')->group(function () {
             Route::post('tables/{table}/open', [TableOrderController::class, 'open'])->name('api.v1.tables.open');
             Route::get('orders/{order}', [TableOrderController::class, 'show'])->name('api.v1.orders.show');
+            Route::post('orders/{order}/items', [TableOrderController::class, 'addItems'])->name('api.v1.orders.items');
+            Route::post('orders/{order}/quote', [TableOrderController::class, 'quote'])->name('api.v1.orders.quote');
         });
     });
 });

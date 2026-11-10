@@ -71,6 +71,15 @@ class TableTest extends TestCase
         ];
     }
 
+    public function test_web_tambem_recusa_produto_esgotado(): void
+    {
+        $order = $this->openTable();
+        $this->soda->forceFill(['sold_out' => true])->save();
+
+        $this->launch($order)->assertSessionHasErrors(['items.0.product_id' => 'Refrigerante está esgotado.']);
+        $this->assertSame(0, $order->items()->count());
+    }
+
     public function test_abrir_mesa_e_lancar_itens(): void
     {
         $order = $this->openTable();
