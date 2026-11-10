@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\AddOrderItems;
 use App\Actions\CreateDeliveryOrder;
 use App\Actions\OpenTable;
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\DiningTable;
@@ -12,6 +13,7 @@ use App\Models\Printer;
 use App\Models\PrintJob;
 use App\Models\Product;
 use App\Models\ProductionSector;
+use App\Models\ProductionWork;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +210,111 @@ class PrintingTest extends TestCase
 
         $this->assertSame(['192.168.0.50', '\\\\CAIXA\\Balcao'], Printer::orderBy('id')->pluck('address')->all());
         $this->assertNull(Printer::where('connection', Printer::WINDOWS)->value('port'));
+    }
+
+    public function test_manual_kitchen_mode_prints_nothing_on_launch(): void
+    {
+        [$admin, $sector] = $this->restaurant();
+        $sector->forceFill(['printer_id' => Printer::factory()->create(['company_id' => $admin->company_id])->id])->save();
+        $admin->company->forceFill(['auto_print_kitchen' => false])->save();
+        $product = Product::factory()->create(['company_id' => $admin->company_id]);
+        $order = app(OpenTable::class)->handle(DiningTable::factory()->create(['company_id' => $admin->company_id]), 1, $admin);
+
+        app(AddOrderItems::class)->handle($order, [['product_id' => $product->id, 'quantity' => '1']], (string) Str::uuid());
+
+        $this->assertSame(1, ProductionWork::count());
+        $this->assertSame(0, PrintJob::count());
+    }
+
+    public function test_manual_order_mode_prints_nothing_on_creation_but_button_still_prints(): void
+    {
+        [$admin] = $this->restaurant();
+        $printer = Printer::factory()->create(['company_id' => $admin->company_id]);
+        $admin->company->forceFill(['order_printer_id' => $printer->id, 'auto_print_orders' => false])->save();
+        $product = Product::factory()->create(['company_id' => $admin->company_id]);
+        $customer = Customer::factory()->create(['company_id' => $admin->company_id]);
+
+        $order = app(CreateDeliveryOrder::class)->handle(['client_uuid' => (string) Str::uuid(), 'customer_id' => $customer->id, 'type' => 'pickup', 'payment_method' => 'pix', 'items' => [['product_id' => $product->id, 'quantity' => '1']]]);
+        $this->assertSame(0, PrintJob::count());
+
+        $this->post(route('deliveries.print', $order))->assertSessionHasNoErrors();
+        $this->assertSame(1, PrintJob::count());
+    }
+
+    public function test_production_panel_prints_the_ticket_of_the_item_origin_and_sector(): void
+    {
+        [$admin, $sector] = $this->restaurant();
+        $printer = Printer::factory()->create(['company_id' => $admin->company_id]);
+        $sector->forceFill(['printer_id' => $printer->id])->save();
+        $admin->company->forceFill(['auto_print_kitchen' => false])->save();
+        $burger = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Hamburguer']);
+        $fries = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Batata']);
+        $other = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Outra Mesa']);
+        $order = app(OpenTable::class)->handle(DiningTable::factory()->create(['company_id' => $admin->company_id]), 1, $admin);
+        $otherOrder = app(OpenTable::class)->handle(DiningTable::factory()->create(['company_id' => $admin->company_id]), 1, $admin);
+        app(AddOrderItems::class)->handle($order, [['product_id' => $burger->id, 'quantity' => '1'], ['product_id' => $fries->id, 'quantity' => '1']], (string) Str::uuid());
+        app(AddOrderItems::class)->handle($otherOrder, [['product_id' => $other->id, 'quantity' => '1']], (string) Str::uuid());
+        $work = ProductionWork::where('product_name', 'Hamburguer')->sole();
+
+        $this->actingAs($this->userWith(['production.view'], $admin->company))->post(route('production.print', $work))->assertSessionHasNoErrors();
+
+        $job = PrintJob::sole();
+        $ticket = base64_decode($job->payload);
+        $this->assertSame($printer->id, $job->printer_id);
+        $this->assertStringContainsString('Hamburguer', $ticket);
+        $this->assertStringContainsString('Batata', $ticket);
+        $this->assertStringNotContainsString('Outra Mesa', $ticket);
+    }
+
+    public function test_manual_kitchen_print_requires_a_printer_and_stays_in_the_company(): void
+    {
+        [$admin] = $this->restaurant();
+        $admin->company->forceFill(['auto_print_kitchen' => false])->save();
+        $product = Product::factory()->create(['company_id' => $admin->company_id]);
+        $order = app(OpenTable::class)->handle(DiningTable::factory()->create(['company_id' => $admin->company_id]), 1, $admin);
+        app(AddOrderItems::class)->handle($order, [['product_id' => $product->id, 'quantity' => '1']], (string) Str::uuid());
+        $work = ProductionWork::sole();
+
+        $this->post(route('production.print', $work))->assertSessionHasErrors('print');
+        $this->post(route('orders.print', $order))->assertSessionHasErrors('print');
+
+        $this->actingAs($this->productionAdminOf());
+        $this->post(route('production.print', $work))->assertNotFound();
+        $this->post(route('orders.print', $order))->assertNotFound();
+        $this->actingAs($this->userWith([], $admin->company))->post(route('production.print', $work))->assertForbidden();
+        $this->assertSame(0, PrintJob::count());
+    }
+
+    public function test_table_order_prints_open_items_one_ticket_per_sector(): void
+    {
+        [$admin, $kitchen] = $this->restaurant();
+        $kitchenPrinter = Printer::factory()->create(['company_id' => $admin->company_id]);
+        $barPrinter = Printer::factory()->create(['company_id' => $admin->company_id]);
+        $kitchen->forceFill(['printer_id' => $kitchenPrinter->id])->save();
+        $bar = ProductionSector::factory()->create(['company_id' => $admin->company_id]);
+        $bar->forceFill(['printer_id' => $barPrinter->id])->save();
+        $drinks = Category::factory()->create(['company_id' => $admin->company_id, 'production_sector_id' => $bar->id]);
+        $admin->company->forceFill(['auto_print_kitchen' => false])->save();
+        $burger = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Hamburguer']);
+        $soda = Product::factory()->create(['company_id' => $admin->company_id, 'name' => 'Refrigerante', 'category_id' => $drinks->id]);
+        $order = app(OpenTable::class)->handle(DiningTable::factory()->create(['company_id' => $admin->company_id]), 1, $admin);
+        app(AddOrderItems::class)->handle($order, [['product_id' => $burger->id, 'quantity' => '1'], ['product_id' => $soda->id, 'quantity' => '1']], (string) Str::uuid());
+
+        $this->post(route('orders.print', $order))->assertSessionHasNoErrors();
+
+        $this->assertEqualsCanonicalizing([$kitchenPrinter->id, $barPrinter->id], PrintJob::pluck('printer_id')->all());
+    }
+
+    public function test_print_modes_are_saved_with_destinations(): void
+    {
+        $admin = $this->adminOf();
+        $this->actingAs($admin);
+
+        $this->put(route('printers.destinations'), ['auto_print_orders' => false, 'auto_print_kitchen' => true])->assertSessionHasNoErrors();
+
+        $company = $admin->company->fresh();
+        $this->assertFalse($company->auto_print_orders);
+        $this->assertTrue($company->auto_print_kitchen);
     }
 
     public function test_destinations_and_actions_stay_inside_the_company(): void

@@ -28,6 +28,8 @@ class Company extends Model
             'active' => 'boolean',
             'service_fee_percent' => 'decimal:2',
             'qr_menu_enabled' => 'boolean',
+            'auto_print_orders' => 'boolean',
+            'auto_print_kitchen' => 'boolean',
         ];
     }
 

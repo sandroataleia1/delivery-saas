@@ -9,10 +9,12 @@ use App\Models\Company;
 use App\Models\ProductionEvent;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
+use App\Support\Printing\PrintQueue;
 use App\Support\RestaurantOperationPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -37,6 +39,23 @@ class ProductionController extends Controller
         $action->handle($work, $request->integer('expected_version'), $request->validated('target'));
 
         return back()->with('success', 'Etapa registrada.');
+    }
+
+    /** Imprime a comanda do pedido e setor deste item, com tudo o que ainda está em preparo. */
+    public function print(ProductionWork $work, PrintQueue $printQueue): HttpResponse
+    {
+        $works = ProductionWork::query()
+            ->where('production_sector_id', $work->production_sector_id)
+            ->where('origin_label', $work->origin_label)
+            ->whereNull('delivered_at')->whereNull('cancelled_at')
+            ->orderBy('id')
+            ->get();
+
+        if ($printQueue->queueKitchen($works->isEmpty() ? collect([$work]) : $works) === 0) {
+            throw ValidationException::withMessages(['print' => "O setor {$work->sector_name} não tem impressora ativa. Configure em Impressoras."]);
+        }
+
+        return back()->with('success', 'Comanda enviada para a impressora.');
     }
 
     public function reconcile(Request $request, ProductionWork $work, ReconcileProduction $action): HttpResponse

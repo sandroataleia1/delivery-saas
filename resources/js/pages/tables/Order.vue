@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, HandCoins, Minus, Plus, Receipt, Trash2, Undo2, X } from '@lucide/vue';
+import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, HandCoins, Minus, Plus, Printer, Receipt, Trash2, Undo2, X } from '@lucide/vue';
 import MenuReceiptAlerts from '@/components/MenuReceiptAlerts.vue';
 import MenuReceiptDecisions from '@/components/MenuReceiptDecisions.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -134,6 +134,12 @@ watch(() => props.ticketBatch, (batch) => {
 
 function sendToKitchen() {
     kitchenForm.post(route('orders.kitchen', props.order.id), { preserveScroll: true });
+}
+
+const printForm = useForm({});
+
+function printKitchen() {
+    printForm.post(route('orders.print', props.order.id), { preserveScroll: true });
 }
 
 /** A mesa pediu a conta: no mapa ela fica "em fechamento" até fechar ou voltar a consumir. */
@@ -332,6 +338,11 @@ function close() {
                             <ArrowRightLeft :size="16" />
                             Transferir
                         </button>
+                        <button type="button" class="btn btn-secondary col-span-2" :disabled="printForm.processing" @click="printKitchen">
+                            <Printer :size="16" />
+                            Imprimir na produção
+                        </button>
+                        <p v-if="printForm.errors.print" class="text-danger col-span-2 text-sm" role="alert">{{ printForm.errors.print }}</p>
                         <button
                             type="button"
                             class="btn col-span-2"

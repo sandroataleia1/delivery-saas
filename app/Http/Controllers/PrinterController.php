@@ -30,6 +30,7 @@ class PrinterController extends Controller
             'printers' => Printer::orderBy('name')->get(['id', 'name', 'connection', 'address', 'port', 'columns', 'active']),
             'sectors' => ProductionSector::orderBy('name')->get(['id', 'name', 'active', 'printer_id']),
             'orderPrinterId' => $company->order_printer_id,
+            'autoPrint' => ['orders' => $company->auto_print_orders, 'kitchen' => $company->auto_print_kitchen],
             'agent' => [
                 'installed' => $company->print_agent_token !== null,
                 'online' => $company->print_agent_seen_at?->gt(now()->subSeconds(self::AGENT_ONLINE_SECONDS)) ?? false,
@@ -83,9 +84,14 @@ class PrinterController extends Controller
             'order_printer_id' => $printerRule,
             'sectors' => ['array'],
             'sectors.*' => $printerRule,
+            'auto_print_orders' => ['sometimes', 'boolean'],
+            'auto_print_kitchen' => ['sometimes', 'boolean'],
         ]);
 
-        Company::findOrFail($request->user()->company_id)->forceFill(['order_printer_id' => $data['order_printer_id'] ?? null])->save();
+        Company::findOrFail($request->user()->company_id)->forceFill([
+            'order_printer_id' => $data['order_printer_id'] ?? null,
+            ...array_intersect_key($data, array_flip(['auto_print_orders', 'auto_print_kitchen'])),
+        ])->save();
 
         foreach ($data['sectors'] ?? [] as $sectorId => $printerId) {
             ProductionSector::whereKey($sectorId)->first()?->forceFill(['printer_id' => $printerId])->save();

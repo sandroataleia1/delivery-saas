@@ -10,6 +10,7 @@ const props = defineProps({
     printers: { type: Array, required: true },
     sectors: { type: Array, required: true },
     orderPrinterId: { type: Number, default: null },
+    autoPrint: { type: Object, required: true },
     agent: { type: Object, required: true },
     jobs: { type: Array, required: true },
 });
@@ -62,6 +63,8 @@ function test(printer) {
 
 const destinations = useForm({
     order_printer_id: props.orderPrinterId,
+    auto_print_orders: props.autoPrint.orders,
+    auto_print_kitchen: props.autoPrint.kitchen,
     sectors: Object.fromEntries(props.sectors.map((sector) => [sector.id, sector.printer_id])),
 });
 function saveDestinations() {
@@ -120,6 +123,21 @@ function retry(job) {
                             <option v-for="printer in printers" :key="printer.id" :value="printer.id">{{ printer.name }}</option>
                         </select>
                     </Field>
+                    <fieldset class="border-line space-y-3 rounded-lg border p-3">
+                        <legend class="px-1 text-sm font-semibold">Quando imprimir</legend>
+                        <Field v-slot="{ id }" label="Pedido completo" hint="No manual, use o botão Na impressora no pedido." :error="destinations.errors.auto_print_orders">
+                            <select :id="id" v-model="destinations.auto_print_orders" class="input">
+                                <option :value="true">Automático: sai assim que o pedido entra</option>
+                                <option :value="false">Manual: só quando clicar em imprimir</option>
+                            </select>
+                        </Field>
+                        <Field v-slot="{ id }" label="Comandas dos setores" hint="No manual, use Imprimir no painel de produção ou Imprimir na produção na mesa." :error="destinations.errors.auto_print_kitchen">
+                            <select :id="id" v-model="destinations.auto_print_kitchen" class="input">
+                                <option :value="true">Automático: sai assim que o item é lançado</option>
+                                <option :value="false">Manual: só quando clicar em imprimir</option>
+                            </select>
+                        </Field>
+                    </fieldset>
                     <button class="btn btn-primary" :disabled="destinations.processing">Salvar destinos</button>
                 </form>
             </section>

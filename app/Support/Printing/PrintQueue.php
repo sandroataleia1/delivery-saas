@@ -8,6 +8,7 @@ use App\Models\Printer;
 use App\Models\PrintJob;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -42,10 +43,38 @@ class PrintQueue
         });
     }
 
-    /** Imprime o pedido completo na impressora de pedidos da empresa, se houver uma. */
+    /** Imprime o pedido completo na impressora de pedidos, se houver uma e a impressão for automática. */
     public function order(DeliveryOrder $order): void
     {
-        DB::afterCommit(fn () => $this->safely(fn () => $this->queueOrder($order)));
+        DB::afterCommit(fn () => $this->safely(function () use ($order) {
+            if (Company::findOrFail($order->company_id)->auto_print_orders) {
+                $this->queueOrder($order);
+            }
+        }));
+    }
+
+    /**
+     * Impressão pedida na tela: uma comanda por pedido e setor com os itens informados.
+     * Retorna quantas comandas entraram na fila; setores sem impressora ativa ficam de fora.
+     *
+     * @param  Collection<int, ProductionWork>  $works
+     */
+    public function queueKitchen(Collection $works): int
+    {
+        $queued = 0;
+
+        foreach ($this->kitchenGroups($works) as $group) {
+            $first = $group->first();
+            $sector = ProductionSector::withoutGlobalScopes()->where('company_id', $first->company_id)->find($first->production_sector_id);
+            $printer = $this->activePrinter($first->company_id, $sector?->printer_id);
+
+            if ($printer) {
+                $this->push($printer, $first->sector_name.' · '.$first->origin_label, Tickets::kitchen($first->sector_name, $first->origin_label, $group, $printer->columns));
+                $queued++;
+            }
+        }
+
+        return $queued;
     }
 
     /** Reimpressão pedida na tela. Retorna falso quando a empresa não tem impressora de pedidos ativa. */
@@ -70,22 +99,25 @@ class PrintQueue
 
     private function flushKitchen(): void
     {
-        $works = $this->committed;
+        $works = collect($this->committed);
         $this->committed = [];
 
-        $groups = collect($works)->groupBy(fn (ProductionWork $work) => $work->company_id.'|'.$work->production_sector_id.'|'.$work->origin_label);
-
-        foreach ($groups as $group) {
+        foreach ($this->kitchenGroups($works) as $group) {
             $this->safely(function () use ($group) {
-                $first = $group->first();
-                $sector = ProductionSector::withoutGlobalScopes()->where('company_id', $first->company_id)->find($first->production_sector_id);
-                $printer = $this->activePrinter($first->company_id, $sector?->printer_id);
-
-                if ($printer) {
-                    $this->push($printer, $first->sector_name.' · '.$first->origin_label, Tickets::kitchen($first->sector_name, $first->origin_label, $group, $printer->columns));
+                if (Company::findOrFail($group->first()->company_id)->auto_print_kitchen) {
+                    $this->queueKitchen($group);
                 }
             });
         }
+    }
+
+    /**
+     * @param  Collection<int, ProductionWork>  $works
+     * @return Collection<string, Collection<int, ProductionWork>>
+     */
+    private function kitchenGroups(Collection $works): Collection
+    {
+        return $works->groupBy(fn (ProductionWork $work) => $work->company_id.'|'.$work->production_sector_id.'|'.$work->origin_label);
     }
 
     private function activePrinter(int $companyId, ?int $printerId): ?Printer

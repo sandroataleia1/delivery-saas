@@ -106,6 +106,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         Route::patch('produtos/{product}/esgotado', [ProductController::class, 'availability'])->middleware('can:products.manage')->name('products.availability');
         Route::get('producao', [ProductionController::class, 'index'])->middleware('can:production.view')->name('production.index');
         Route::post('producao/{work}/etapa', [ProductionController::class, 'transition'])->name('production.transition');
+        Route::post('producao/{work}/imprimir', [ProductionController::class, 'print'])->middleware('can:production.view')->name('production.print');
         Route::post('producao/{work}/reconciliar', [ProductionController::class, 'reconcile'])->middleware('can:production.manage')->name('production.reconcile');
         Route::post('producao/avisos/{event}/ciencia', [ProductionController::class, 'acknowledge'])->middleware('can:production.operate')->name('production.acknowledge');
 
@@ -118,6 +119,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('mesas/comandas/{order}/cozinha/{batch}', [TableOrderController::class, 'ticket'])->whereNumber('batch')->name('orders.ticket');
             Route::post('mesas/comandas/{order}/transferir', [TableOrderController::class, 'transfer'])->name('orders.transfer');
             Route::post('mesas/comandas/{order}/conta', [TableOrderController::class, 'requestBill'])->name('orders.bill');
+            Route::post('mesas/comandas/{order}/imprimir', [TableOrderController::class, 'print'])->name('orders.print');
         });
         Route::middleware('can:tables.confirm')->group(function () {
             Route::post('mesas/recebimentos/{receipt}/confirmar', [MenuOrderReceiptController::class, 'confirm'])->name('receipts.confirm');

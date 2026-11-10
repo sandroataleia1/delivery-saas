@@ -14,8 +14,10 @@ use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
 use App\Models\Product;
+use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\Printing\PrintQueue;
 use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
 use App\Support\TableOperationLock;
@@ -175,6 +177,26 @@ class TableOrderController extends Controller
         $transferTable->handle($order, DiningTable::findOrFail($data['dining_table_id']));
 
         return back()->with('success', 'Comanda transferida.');
+    }
+
+    /** Imprime na produção as comandas dos itens ainda não entregues desta mesa, uma por setor. */
+    public function print(TableOrder $order, PrintQueue $printQueue): RedirectResponse
+    {
+        $works = ProductionWork::query()
+            ->whereIn('table_order_item_id', $order->activeItems()->select('id'))
+            ->whereNull('delivered_at')->whereNull('cancelled_at')
+            ->orderBy('id')
+            ->get();
+
+        if ($works->isEmpty()) {
+            throw ValidationException::withMessages(['print' => 'Não há itens em preparo para imprimir.']);
+        }
+
+        if ($printQueue->queueKitchen($works) === 0) {
+            throw ValidationException::withMessages(['print' => 'Os setores destes itens não têm impressora ativa. Configure em Impressoras.']);
+        }
+
+        return back()->with('success', 'Comanda enviada para a impressora.');
     }
 
     /**

@@ -8,6 +8,8 @@ const props = defineProps({ works: Array, notices: Array, sectors: Array, filter
 const { can } = usePermissions();
 const form = useForm({ expected_version: 0, target: '' });
 const reconciliation = useForm({ observed: 'waiting', reason: '' });
+const printForm = useForm({});
+const printWork = (work) => printForm.post(route('production.print', work.id), { preserveScroll: true });
 const selected = ref(null);
 const now = ref(Date.now());
 const refreshedAt = ref(Date.now());
@@ -50,6 +52,7 @@ onUnmounted(() => { clearInterval(timer); audio?.close(); });
         <p v-if="stale" class="mb-3 rounded-lg bg-red-50 p-3 font-semibold text-red-800" role="alert">Sem atualização há mais de 30 segundos. Confira a conexão antes de operar.</p>
         <p v-if="audioError" class="text-danger mb-3" role="alert">{{ audioError }}</p>
         <p v-for="(error, key) in form.errors" :key="key" class="text-danger mb-3" role="alert">{{ error }}</p>
+        <p v-if="printForm.errors.print" class="text-danger mb-3" role="alert">{{ printForm.errors.print }}</p>
         <section v-if="notices.length" class="mb-5 space-y-3" aria-label="Cancelamentos aguardando ciência">
             <article v-for="notice in notices" :key="notice.id" class="rounded-xl border-2 border-red-400 bg-red-50 p-4 text-red-950">
                 <h2 class="font-bold">Cancelado — {{ notice.item.quantity }} {{ notice.item.unit }} {{ notice.item.product_name }}<span v-if="notice.item.options_label" class="text-muted block text-sm font-normal">{{ notice.item.options_label }}</span></h2>
@@ -73,7 +76,7 @@ onUnmounted(() => { clearInterval(timer); audio?.close(); });
                 <h2 class="mb-3 flex items-center justify-between text-lg font-bold">{{ column.label }} <span class="text-muted">{{ lines(column.state).length }}</span></h2>
                 <p v-if="!lines(column.state).length" class="text-muted p-3 text-sm">Nenhum item nesta etapa.</p>
                 <article v-for="work in lines(column.state)" :key="work.id" class="card mb-3 space-y-3 p-4">
-                    <div class="flex flex-wrap justify-between gap-2 text-sm"><span class="font-bold">{{ work.origin_label }}</span><span :class="minutes(work) >= operation.late_after_minutes ? 'text-danger font-bold' : 'text-muted'">{{ minutes(work) }} min</span></div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-sm"><span class="font-bold">{{ work.origin_label }}</span><span class="flex items-center gap-2"><span :class="minutes(work) >= operation.late_after_minutes ? 'text-danger font-bold' : 'text-muted'">{{ minutes(work) }} min</span><button type="button" class="btn btn-ghost min-h-8 px-2 py-1 text-xs" :disabled="printForm.processing" :title="`Imprimir a comanda de ${work.origin_label}`" @click="printWork(work)">Imprimir</button></span></div>
                     <p class="text-xl font-bold">{{ work.quantity }} {{ work.unit }} {{ work.product_name }}</p><p v-if="work.options_label" class="text-muted text-sm">{{ work.options_label }}</p><p class="text-muted text-sm">{{ work.sector_name }}</p>
                     <p v-if="work.notes" class="rounded-lg bg-amber-50 p-2 font-semibold text-amber-950">{{ work.notes }}</p>
                     <button v-if="column.state !== 'ready' && can('production.operate')" class="btn btn-primary w-full" :disabled="form.processing || stale" @click="transition(work, column.state === 'waiting' ? 'preparing' : 'ready')">{{ column.state === 'waiting' ? 'Iniciar preparo' : 'Marcar pronto' }}</button>
