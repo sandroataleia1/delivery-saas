@@ -1,11 +1,12 @@
 package br.com.esis.garcom.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -80,11 +81,17 @@ private val AppTypography = Typography().run {
     )
 }
 
+/** Se o app está no tema escuro. As telas leem daqui, não do celular, para seguir a escolha do app. */
+val LocalDarkTheme = staticCompositionLocalOf { false }
+
+/** O app abre sempre no tema claro; o escuro fica pronto para quando houver a opção nas configurações. */
 @Composable
-fun GarcomTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
-        typography = AppTypography,
-        content = content,
-    )
+fun GarcomTheme(darkTheme: Boolean = false, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = AppTypography,
+            content = content,
+        )
+    }
 }

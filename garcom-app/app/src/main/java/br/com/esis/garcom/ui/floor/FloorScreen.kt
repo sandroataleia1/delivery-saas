@@ -4,7 +4,6 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +62,7 @@ import br.com.esis.garcom.R
 import br.com.esis.garcom.data.FloorTable
 import br.com.esis.garcom.data.Waiter
 import br.com.esis.garcom.ui.theme.Brand
+import br.com.esis.garcom.ui.theme.LocalDarkTheme
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
@@ -262,7 +262,7 @@ private fun EmptyMessage(text: String) {
 
 @Composable
 private fun TableCard(table: FloorTable, onClick: () -> Unit) {
-    val style = table.status.style(isSystemInDarkTheme())
+    val style = table.status.style(LocalDarkTheme.current)
     val info = tableInfo(table)
 
     Surface(
