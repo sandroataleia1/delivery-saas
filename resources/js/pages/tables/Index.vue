@@ -50,7 +50,6 @@ const areas = computed(() => [...new Set(props.tables.map((table) => table.area)
 const inArea = computed(() => props.tables.filter((table) => area.value === null || table.area === area.value));
 const visible = computed(() => inArea.value.filter((table) => status.value === null || statusOf(table) === status.value));
 const counts = computed(() => Object.fromEntries(Object.keys(STATUSES).map((key) => [key, inArea.value.filter((table) => statusOf(table) === key).length])));
-const occupied = computed(() => props.tables.filter((table) => table.order).length);
 
 function toggleStatus(key) {
     status.value = status.value === key ? null : key;
@@ -77,7 +76,7 @@ function open() {
 
 <template>
     <AppLayout title="Mesas">
-        <PageHeader title="Mesas" :subtitle="`${occupied} de ${tables.length} ocupadas`">
+        <PageHeader title="Mesas">
             <Link v-if="can('tables.manage')" :href="route('tables.manage')" class="btn btn-secondary">
                 <Settings :size="16" />
                 Gerenciar mesas
@@ -105,16 +104,14 @@ function open() {
                 v-for="(info, key) in STATUSES"
                 :key="key"
                 type="button"
-                class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors"
+                class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-left transition-colors"
                 :class="status === key ? 'border-ink bg-surface shadow-sm' : 'border-line bg-surface hover:border-muted'"
                 :aria-pressed="status === key"
                 @click="toggleStatus(key)"
             >
-                <span class="size-3 shrink-0 rounded-full" :class="info.dot" aria-hidden="true" />
-                <span class="min-w-0">
-                    <span class="block text-xl leading-tight font-bold tabular-nums">{{ counts[key] }}</span>
-                    <span class="text-muted block truncate text-xs">{{ info.label }}</span>
-                </span>
+                <span class="size-2.5 shrink-0 rounded-full" :class="info.dot" aria-hidden="true" />
+                <span class="text-lg leading-none font-bold tabular-nums">{{ counts[key] }}</span>
+                <span class="text-muted min-w-0 truncate text-xs">{{ info.label }}</span>
             </button>
         </div>
 

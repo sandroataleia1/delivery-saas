@@ -136,8 +136,7 @@ onUnmounted(() => {
         <template v-if="operation.sound_alerts">
             <button v-if="!wanted && soundControls" type="button" class="btn btn-secondary" @click="enable">Ativar som de novos pedidos</button>
             <template v-else-if="wanted">
-                <span v-if="unlocked && soundControls" class="text-muted">Som de novos pedidos ativado</span>
-                <span v-else-if="!unlocked" class="text-warn font-semibold" role="status">Toque em qualquer lugar da tela para liberar o som</span>
+                <span v-if="!unlocked" class="text-warn font-semibold" role="status">Toque em qualquer lugar da tela para liberar o som</span>
                 <button v-if="soundControls" type="button" class="text-muted cursor-pointer underline" @click="disable">Desativar som</button>
             </template>
         </template>
