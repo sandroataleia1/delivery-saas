@@ -18,6 +18,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -171,6 +172,19 @@ class PrintingTest extends TestCase
         $this->postJson("/print-agent/jobs/{$other->id}/printed", [], $headers)->assertNotFound();
         $this->postJson("/print-agent/jobs/{$other->id}/failed", ['error' => 'x'], $headers)->assertNotFound();
         $this->assertSame(PrintJob::PENDING, $other->fresh()->status);
+    }
+
+    public function test_printers_page_shows_agent_online_after_agent_checks_in(): void
+    {
+        $admin = $this->adminOf();
+        $token = $this->installAgent($admin->company);
+        $this->getJson('/print-agent/jobs', ['Authorization' => 'Bearer '.$token])->assertOk();
+
+        $this->actingAs($admin)->get(route('printers.index'))->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('agent.installed', true)
+                ->where('agent.online', true)
+                ->where('agent.seen_at', now()->format('d/m/Y H:i')));
     }
 
     public function test_downloading_agent_embeds_new_token_and_revokes_old_one(): void

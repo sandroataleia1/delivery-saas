@@ -30,6 +30,7 @@ class Company extends Model
             'qr_menu_enabled' => 'boolean',
             'auto_print_orders' => 'boolean',
             'auto_print_kitchen' => 'boolean',
+            'print_agent_seen_at' => 'datetime',
         ];
     }
 
