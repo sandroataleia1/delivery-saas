@@ -128,4 +128,17 @@ class OnlineOrderPanelTest extends TestCase
         $this->actingAs($admin)->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page->where('onlinePendingCount', 1));
         $this->actingAs($courier)->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page->where('onlinePendingCount', null));
     }
+
+    public function test_menu_counts_follow_new_online_orders_for_permitted_users(): void
+    {
+        $admin = $this->productionAdminOf();
+        $this->makeOrder($admin->company_id, 1);
+        $this->makeOrder($this->productionAdminOf()->company_id, 1);
+
+        $this->actingAs($admin)->getJson(route('nav.counts'))->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonPath('online', 1);
+        $this->makeOrder($admin->company_id, 2);
+        $this->getJson(route('nav.counts'))->assertJsonPath('online', 2);
+
+        $this->actingAs($this->userWith(['deliveries.operate'], $admin->company))->getJson(route('nav.counts'))->assertOk()->assertExactJson(['online' => null, 'tables' => null]);
+    }
 }

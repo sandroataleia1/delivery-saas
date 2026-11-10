@@ -44,6 +44,7 @@ import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import UpdateBanner from '@/components/UpdateBanner.vue';
 import { usePermissions } from '@/lib/can';
 import { useInstallApp } from '@/lib/installApp';
+import { useNavCounts } from '@/lib/navCounts';
 
 defineProps({
     title: { type: String, required: true },
@@ -56,6 +57,8 @@ const userMenuOpen = ref(false);
 const userMenu = ref(null);
 const sidebarNav = ref(null);
 const { canInstall, needsIosSteps, install } = useInstallApp();
+const navCounts = useNavCounts();
+const pendingTotal = computed(() => (can('tables.operate') ? navCounts.tables.value ?? 0 : 0) + (navCounts.online.value ?? 0));
 const showIosSteps = ref(false);
 
 function closeUserMenu(event) {
@@ -139,11 +142,11 @@ const topItems = computed(() => (user.value.is_super_admin
     // Acesso rápido: o que se usa o dia todo fica sempre à mostra, fora dos grupos.
     : [
         { label: 'Início', href: route('dashboard'), match: '/', exact: true, icon: House },
-        can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
-        can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
+        can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair, badge: navCounts.tables.value },
+        can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: navCounts.online.value },
         can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
         can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', icon: Store },
-        can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
+        can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas', '/entregas/entregadores'], icon: Motorcycle },
         can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
     ].filter(Boolean)));
 
@@ -324,8 +327,9 @@ watch(() => page.url, () => (menuOpen.value = false));
         </aside>
 
         <header class="border-line bg-surface sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-4 lg:hidden print:hidden">
-            <button type="button" class="cursor-pointer" aria-label="Abrir menu" @click="menuOpen = true">
+            <button type="button" class="relative cursor-pointer" :aria-label="pendingTotal ? `Abrir menu, ${pendingTotal} pedido(s) aguardando` : 'Abrir menu'" @click="menuOpen = true">
                 <Menu :size="22" />
+                <span v-if="pendingTotal" class="bg-danger absolute -top-1.5 -right-2 min-w-4 rounded-full px-1 text-center text-[10px] leading-4 font-bold text-white">{{ pendingTotal }}</span>
             </button>
             <span class="truncate font-bold">{{ company?.trade_name ?? 'Delivery SaaS' }}</span>
         </header>

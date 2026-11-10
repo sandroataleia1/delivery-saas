@@ -150,6 +150,23 @@ class MenuReceiptTest extends TestCase
         $this->actingAs($this->userWith(['tables.operate'], $company))->getJson(route('receipts.pending'))->assertForbidden();
     }
 
+    public function test_menu_counts_pending_table_orders_of_own_company(): void
+    {
+        [$company, $table, $product, $data] = $this->menu();
+        $admin = $this->productionAdminOf($company);
+        $this->actingAs($admin)->getJson(route('nav.counts'))->assertJsonPath('tables', 0);
+
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+        $this->postJson('/m/'.$table->qr_token, [...$data, 'client_uuid' => (string) Str::uuid()])->assertCreated();
+        $this->actingAs($admin)->postJson(route('receipts.reject', MenuOrderReceipt::orderByDesc('id')->first()), ['reason' => 'Tarde'])->assertOk();
+
+        $this->getJson(route('nav.counts'))->assertJsonPath('tables', 1);
+        $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page->where('tablePendingCount', 1));
+        $this->actingAs($this->productionAdminOf())->getJson(route('nav.counts'))->assertJsonPath('tables', 0);
+        $this->actingAs($this->userWith(['tables.operate'], $company))->getJson(route('nav.counts'))->assertJsonPath('tables', null);
+        $this->get(route('dashboard'))->assertInertia(fn (AssertableInertia $page) => $page->where('tablePendingCount', null));
+    }
+
     private function menu(): array
     {
         $company = Company::factory()->create(['qr_menu_enabled' => true]);

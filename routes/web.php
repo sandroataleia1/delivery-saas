@@ -18,6 +18,7 @@ use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
 use App\Http\Controllers\MenuOrderReceiptController;
+use App\Http\Controllers\NavCountController;
 use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\OnlineStoreController;
 use App\Http\Controllers\OptionController;
@@ -98,6 +99,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+        Route::get('contadores', NavCountController::class)->middleware('throttle:60,1')->name('nav.counts');
         Route::middleware('can:production.configure')->group(function () {
             Route::get('setores', [ProductionSectorController::class, 'index'])->name('production.sectors');
             Route::post('setores', [ProductionSectorController::class, 'store'])->name('production.sectors.store');
