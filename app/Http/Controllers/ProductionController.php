@@ -34,6 +34,61 @@ class ProductionController extends Controller
             'sectors' => ProductionSector::orderBy('name')->get(['id', 'name', 'active']), 'filters' => $filter]);
     }
 
+    /**
+     * Painel de tela cheia de um setor (ex.: TV da cozinha): só o que ainda falta preparar
+     * naquele setor, agrupado por pedido, do mais antigo para o mais novo.
+     */
+    public function panel(Request $request): Response
+    {
+        $filter = $request->validate(['setor' => ['nullable', 'integer', Rule::exists('production_sectors', 'id')->where('company_id', $request->user()->company_id)]], [], ['setor' => 'setor']);
+        $sector = isset($filter['setor']) ? ProductionSector::findOrFail($filter['setor']) : null;
+
+        $orders = $sector === null ? collect() : ProductionWork::query()
+            ->where('production_sector_id', $sector->id)
+            ->whereIn('status', ['waiting', 'preparing'])
+            ->whereNull('delivered_at')->whereNull('cancelled_at')
+            ->where(fn ($query) => $query->where('legacy', false)->orWhereNotNull('reconciled_at'))
+            ->orderBy('created_at')->orderBy('id')
+            ->get()
+            ->groupBy('origin_label')
+            ->map(fn ($works, string $origin) => [
+                'origin' => $origin,
+                'created_at' => $works->first()->created_at,
+                'items' => $works->map(fn (ProductionWork $work) => $work->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'notes', 'status', 'version', 'created_at'))->values()->all(),
+            ])
+            ->values();
+
+        return Inertia::render('production/Panel', [
+            'sector' => $sector?->only('id', 'name'),
+            'sectors' => ProductionSector::where('active', true)->orderBy('name')->get(['id', 'name']),
+            'orders' => $orders,
+            'operation' => array_intersect_key((new RestaurantOperationPolicy)->resolve($request->user()->company), array_flip(['sound_alerts', 'late_after_minutes'])),
+        ]);
+    }
+
+    /** "Tudo pronto" de um pedido no painel: leva cada item até pronto, ou não muda nenhum. */
+    public function panelReady(Request $request, TransitionProduction $action): HttpResponse
+    {
+        $data = $request->validate([
+            'works' => ['required', 'array', 'min:1', 'max:100'],
+            'works.*.id' => ['required', 'integer', 'distinct', Rule::exists('production_works', 'id')->where('company_id', $request->user()->company_id)],
+            'works.*.version' => ['required', 'integer', 'min:0'],
+        ]);
+
+        DB::transaction(function () use ($data, $action) {
+            foreach ($data['works'] as $line) {
+                $work = ProductionWork::findOrFail($line['id']);
+                $version = (int) $line['version'];
+                if ($work->status === 'waiting') {
+                    $action->handle($work, $version++, 'preparing');
+                }
+                $action->handle($work, $version, 'ready');
+            }
+        });
+
+        return back()->with('success', 'Pedido pronto.');
+    }
+
     public function transition(ProductionTransitionRequest $request, ProductionWork $work, TransitionProduction $action): HttpResponse
     {
         $action->handle($work, $request->integer('expected_version'), $request->validated('target'));

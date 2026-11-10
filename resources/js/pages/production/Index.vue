@@ -45,6 +45,7 @@ onUnmounted(() => { clearInterval(timer); audio?.close(); });
         <div class="mb-4 flex flex-wrap items-center gap-3">
             <label class="text-sm font-semibold" for="production-sector">Setor</label>
             <select id="production-sector" class="input max-w-xs" :value="filters.sector || ''" @change="filter"><option value="">Todos os setores</option><option v-for="sector in sectors" :key="sector.id" :value="sector.id">{{ sector.name }}{{ sector.active ? '' : ' (inativo)' }}</option></select>
+            <Link class="btn btn-primary" :href="route('production.panel', filters.sector ? { setor: filters.sector } : {})">Painel tela cheia</Link>
             <Link v-if="can('production.configure')" class="btn btn-secondary" :href="route('production.sectors')">Configurar setores</Link>
             <button v-if="operation.sound_alerts && !audioEnabled" class="btn btn-secondary" @click="enableAudio">Ativar som</button>
             <span v-else-if="audioEnabled && operation.sound_alerts" class="text-muted text-sm">Som ativado nesta tela</span>

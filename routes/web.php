@@ -109,6 +109,8 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
         });
         Route::patch('produtos/{product}/esgotado', [ProductController::class, 'availability'])->middleware('can:products.manage')->name('products.availability');
         Route::get('producao', [ProductionController::class, 'index'])->middleware('can:production.view')->name('production.index');
+        Route::get('producao/painel', [ProductionController::class, 'panel'])->middleware('can:production.view')->name('production.panel');
+        Route::post('producao/painel/pronto', [ProductionController::class, 'panelReady'])->middleware(['can:production.view', 'can:production.operate'])->name('production.panel.ready');
         Route::post('producao/{work}/etapa', [ProductionController::class, 'transition'])->name('production.transition');
         Route::post('producao/{work}/imprimir', [ProductionController::class, 'print'])->middleware('can:production.view')->name('production.print');
         Route::post('producao/{work}/reconciliar', [ProductionController::class, 'reconcile'])->middleware('can:production.manage')->name('production.reconcile');
