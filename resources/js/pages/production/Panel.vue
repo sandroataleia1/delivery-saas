@@ -108,16 +108,47 @@ function beep() {
     oscillator.start();
     oscillator.stop(audio.currentTime + 0.25);
 }
+const SOUND_KEY = 'production-panel-sound';
 async function enableAudio() {
     try {
         audio ??= new (window.AudioContext || window.webkitAudioContext)();
         await audio.resume();
         audioEnabled.value = true;
+        localStorage.setItem(SOUND_KEY, '1');
         beep();
     } catch {
         audioEnabled.value = false;
     }
 }
+
+/*
+ * O navegador só libera som depois de um toque na página, a cada carregamento.
+ * Quem já ativou não precisa achar o botão: o som volta sozinho no primeiro
+ * toque em qualquer lugar da tela (ou na hora, se o navegador já permitir).
+ */
+const GESTURES = ['pointerdown', 'keydown'];
+function resumeOnGesture() {
+    GESTURES.forEach((name) => document.removeEventListener(name, resumeOnGesture, true));
+    audio?.resume().then(() => { audioEnabled.value = audio.state === 'running'; }).catch(() => {});
+}
+onMounted(() => {
+    let wanted = false;
+    try { wanted = localStorage.getItem(SOUND_KEY) === '1'; } catch { /* sem armazenamento */ }
+    if (!wanted || !props.operation.sound_alerts) {
+        return;
+    }
+    try {
+        audio = new (window.AudioContext || window.webkitAudioContext)();
+    } catch {
+        return;
+    }
+    audio.onstatechange = () => { audioEnabled.value = audio.state === 'running'; };
+    audioEnabled.value = audio.state === 'running';
+    if (!audioEnabled.value) {
+        GESTURES.forEach((name) => document.addEventListener(name, resumeOnGesture, true));
+    }
+});
+onUnmounted(() => GESTURES.forEach((name) => document.removeEventListener(name, resumeOnGesture, true)));
 watch(() => props.orders.flatMap((order) => order.items.map((item) => item.id)), (ids, previous) => {
     const fresh = ids.some((id) => !seen.has(id));
     ids.forEach((id) => seen.add(id));

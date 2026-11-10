@@ -9,6 +9,17 @@
 
 return [
     [
+        'id' => '2026-11-10.5',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Som do painel da cozinha lembrado',
+                'text' => 'Depois de ativar o som uma vez, o painel lembra: ao recarregar a página, o som volta no primeiro toque em qualquer lugar da tela.',
+                'can' => 'production.view',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.4',
         'date' => '10/11/2026',
         'items' => [
