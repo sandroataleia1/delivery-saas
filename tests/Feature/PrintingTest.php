@@ -187,6 +187,49 @@ class PrintingTest extends TestCase
                 ->where('agent.seen_at', now()->format('d/m/Y H:i')));
     }
 
+    public function test_search_asks_agent_for_windows_printers_and_shows_what_it_reports(): void
+    {
+        $admin = $this->adminOf();
+        $token = $this->installAgent($admin->company);
+        $headers = ['Authorization' => 'Bearer '.$token];
+        $this->getJson('/print-agent/jobs', $headers)->assertOk()->assertJsonPath('refresh_printers', false);
+
+        $this->actingAs($admin)->post(route('printers.discover'))->assertRedirect();
+        $this->getJson('/print-agent/jobs', $headers)->assertJsonPath('refresh_printers', true);
+        $this->get(route('printers.index'))->assertInertia(fn (AssertableInertia $page) => $page->where('discovered.searching', true));
+
+        $this->postJson('/print-agent/printers', ['printers' => [
+            ['name' => 'EPSON TM-T20', 'share' => '\\\\CAIXA\\Cozinha', 'default' => true],
+            ['name' => '\\\\BALCAO\\Bar', 'share' => null, 'default' => false],
+        ]], $headers)->assertOk();
+
+        $this->getJson('/print-agent/jobs', $headers)->assertJsonPath('refresh_printers', false);
+        $this->get(route('printers.index'))->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('discovered.searching', false)
+            ->where('discovered.printers', [
+                ['name' => 'EPSON TM-T20', 'share' => '\\\\CAIXA\\Cozinha', 'default' => true],
+                ['name' => '\\\\BALCAO\\Bar', 'share' => null, 'default' => false],
+            ]));
+    }
+
+    public function test_printer_report_is_validated_and_needs_agent_key(): void
+    {
+        $company = Company::factory()->create();
+        $headers = ['Authorization' => 'Bearer '.$this->installAgent($company)];
+
+        $this->postJson('/print-agent/printers', ['printers' => [['name' => "Bad\nName"]]], $headers)->assertUnprocessable();
+        $this->postJson('/print-agent/printers', ['printers' => [['name' => str_repeat('a', 256)]]], $headers)->assertUnprocessable();
+        $this->postJson('/print-agent/printers', ['printers' => [['name' => 'Ok']]])->assertUnauthorized();
+        $this->assertNull($company->fresh()->print_agent_printers);
+    }
+
+    public function test_searching_printers_requires_company_manage(): void
+    {
+        $user = $this->userWith(['production.view']);
+
+        $this->actingAs($user)->post(route('printers.discover'))->assertForbidden();
+    }
+
     public function test_downloading_agent_embeds_new_token_and_revokes_old_one(): void
     {
         $admin = $this->adminOf();

@@ -27,12 +27,37 @@ class PrintAgentController extends Controller
             return $jobs;
         });
 
-        return response()->json(['jobs' => $jobs->map(fn (PrintJob $job) => [
-            'id' => $job->id,
-            'title' => $job->title,
-            'payload' => $job->payload,
-            'printer' => $job->printer->target(),
-        ])->values()]);
+        return response()->json([
+            'jobs' => $jobs->map(fn (PrintJob $job) => [
+                'id' => $job->id,
+                'title' => $job->title,
+                'payload' => $job->payload,
+                'printer' => $job->printer->target(),
+            ])->values(),
+            'refresh_printers' => $company->printerSearchPending(),
+        ]);
+    }
+
+    /** O agente conta quais impressoras o Windows tem (instaladas e compartilhadas). */
+    public function printers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'printers' => ['present', 'array', 'max:100'],
+            'printers.*.name' => ['required', 'string', 'max:255', 'not_regex:/[\x00-\x1F"]/'],
+            'printers.*.share' => ['nullable', 'string', 'max:255', 'not_regex:/[\x00-\x1F"]/'],
+            'printers.*.default' => ['nullable', 'boolean'],
+        ]);
+
+        $this->company($request)->forceFill([
+            'print_agent_printers' => array_map(fn (array $printer) => [
+                'name' => $printer['name'],
+                'share' => $printer['share'] ?? null,
+                'default' => (bool) ($printer['default'] ?? false),
+            ], $data['printers']),
+            'print_agent_printers_at' => now(),
+        ])->saveQuietly();
+
+        return response()->json(['ok' => true]);
     }
 
     public function printed(Request $request, int $job): JsonResponse

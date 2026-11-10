@@ -4,6 +4,7 @@
 # e envia para as impressoras termicas da loja:
 #   - impressora de rede: direto no IP, porta 9100;
 #   - impressora do Windows: pelo nome ou pelo caminho \\COMPUTADOR\Compartilhamento.
+# Tambem informa ao sistema as impressoras instaladas neste Windows, para escolher no cadastro.
 #
 # Como usar: clique com o botao direito neste arquivo e escolha "Executar com o PowerShell".
 # Ele se instala nesta conta do Windows, passa a abrir sozinho ao ligar o computador
@@ -134,9 +135,23 @@ function Invoke-Api([string]$method, [string]$path, $body = $null) {
     }
     if ($null -ne $body) {
         $params.ContentType = 'application/json; charset=utf-8'
-        $params.Body = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress))
+        $params.Body = [Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $body -Compress -Depth 5))
     }
     Invoke-RestMethod @params
+}
+
+function Send-Printers {
+    try {
+        $list = @(Get-CimInstance Win32_Printer | Sort-Object Name | Select-Object -First 100 | ForEach-Object {
+            $share = $null
+            if ($_.Shared -and $_.ShareName) { $share = "\\$env:COMPUTERNAME\$($_.ShareName)" }
+            @{ name = [string]$_.Name; share = $share; default = [bool]$_.Default }
+        })
+        Invoke-Api 'POST' 'printers' @{ printers = $list } | Out-Null
+        Write-Log "Lista de impressoras enviada ao sistema: $($list.Count)"
+    } catch {
+        Write-Log "Nao foi possivel enviar a lista de impressoras: $($_.Exception.Message)"
+    }
 }
 
 function Start-Agent {
@@ -147,12 +162,14 @@ function Start-Agent {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Add-Type -TypeDefinition $RawPrinterSource
     Write-Log "Agente iniciado. Servidor: $Server"
+    Send-Printers
     $waitSeconds = 3
 
     while ($true) {
         try {
             $response = Invoke-Api 'GET' 'jobs'
             $waitSeconds = 3
+            if ($response.refresh_printers) { Send-Printers }
             foreach ($job in $response.jobs) {
                 try {
                     $bytes = [Convert]::FromBase64String($job.payload)

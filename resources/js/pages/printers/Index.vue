@@ -12,10 +12,11 @@ const props = defineProps({
     orderPrinterId: { type: Number, default: null },
     autoPrint: { type: Object, required: true },
     agent: { type: Object, required: true },
+    discovered: { type: Object, required: true },
     jobs: { type: Array, required: true },
 });
 
-usePoll(5000, { only: ['agent', 'jobs'] });
+usePoll(5000, { only: ['agent', 'jobs', 'discovered'] });
 
 const paperOptions = [
     { value: 48, label: '80 mm (48 colunas)' },
@@ -55,6 +56,24 @@ function save() {
 const removing = ref(null);
 function remove() {
     router.delete(route('printers.destroy', removing.value.id), { preserveScroll: true, onFinish: () => (removing.value = null) });
+}
+
+/** Pede ao agente as impressoras do Windows; a lista chega pelo polling em poucos segundos. */
+const searching = ref(false);
+function searchPrinters() {
+    searching.value = true;
+    router.post(route('printers.discover'), {}, {
+        preserveScroll: true,
+        onSuccess: () => router.reload({ only: ['discovered'] }),
+        onFinish: () => (searching.value = false),
+    });
+}
+
+function choosePrinter(address, printer) {
+    form.address = address;
+    if (!form.name) {
+        form.name = printer.name.replace(/^\\\\[^\\]+\\/, '').slice(0, 60);
+    }
 }
 
 function test(printer) {
@@ -167,6 +186,40 @@ function retry(job) {
                         <Field v-if="isNetwork" v-slot="{ id }" label="Porta" required :error="form.errors.port">
                             <input :id="id" v-model.number="form.port" type="number" min="1" max="65535" class="input" required />
                         </Field>
+                    </div>
+                    <div v-if="!isNetwork" class="border-line space-y-3 rounded-lg border p-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" class="btn btn-secondary" :disabled="!agent.online || searching || discovered.searching" @click="searchPrinters">
+                                {{ discovered.searching ? 'Buscando...' : 'Buscar impressoras' }}
+                            </button>
+                            <span v-if="!agent.online" class="text-muted text-sm">Ligue o agente de impressão no computador da loja para buscar.</span>
+                            <span v-else-if="discovered.searching" class="text-muted text-sm" role="status">
+                                Procurando no computador do agente. Se não aparecer em alguns segundos, baixe e instale o agente de novo.
+                            </span>
+                            <span v-else-if="discovered.found_at" class="text-muted text-sm">Lista de {{ discovered.found_at }}</span>
+                        </div>
+                        <p v-if="discovered.found_at && !discovered.searching && discovered.printers.length === 0" class="text-muted text-sm">Nenhuma impressora instalada no Windows.</p>
+                        <ul v-if="discovered.printers.length" class="divide-line divide-y text-sm">
+                            <li v-for="printer in discovered.printers" :key="printer.name" class="flex flex-wrap items-center gap-2 py-2">
+                                <span class="min-w-0 flex-1 break-words">
+                                    {{ printer.name }}
+                                    <span v-if="printer.default" class="badge bg-canvas text-muted ml-1">padrão</span>
+                                </span>
+                                <button type="button" class="btn btn-ghost min-h-8 px-2 py-1 text-xs" :aria-pressed="form.address === printer.name" @click="choosePrinter(printer.name, printer)">
+                                    {{ form.address === printer.name ? 'Selecionada' : 'Usar' }}
+                                </button>
+                                <button
+                                    v-if="printer.share"
+                                    type="button"
+                                    class="btn btn-ghost min-h-8 px-2 py-1 text-xs"
+                                    :title="`Usar pelo compartilhamento ${printer.share}`"
+                                    :aria-pressed="form.address === printer.share"
+                                    @click="choosePrinter(printer.share, printer)"
+                                >
+                                    {{ form.address === printer.share ? 'Selecionada (compartilhada)' : 'Usar compartilhada' }}
+                                </button>
+                            </li>
+                        </ul>
                     </div>
                     <Field v-slot="{ id }" label="Papel" required :error="form.errors.columns">
                         <select :id="id" v-model.number="form.columns" class="input">

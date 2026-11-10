@@ -36,6 +36,11 @@ class PrinterController extends Controller
                 'online' => $company->print_agent_seen_at?->gt(now()->subSeconds(self::AGENT_ONLINE_SECONDS)) ?? false,
                 'seen_at' => $company->print_agent_seen_at?->format('d/m/Y H:i'),
             ],
+            'discovered' => [
+                'printers' => $company->print_agent_printers ?? [],
+                'searching' => $company->printerSearchPending(),
+                'found_at' => $company->print_agent_printers_at?->format('d/m/Y H:i'),
+            ],
             'jobs' => PrintJob::with('printer:id,name')->latest('id')->limit(20)->get()->map(fn (PrintJob $job) => [
                 'id' => $job->id,
                 'title' => $job->title,
@@ -111,6 +116,14 @@ class PrinterController extends Controller
      * Baixa o agente já com o endereço do sistema e uma chave nova.
      * A chave anterior deixa de valer: só o último agente baixado imprime.
      */
+    /** Pede ao agente a lista de impressoras do Windows; ela chega na próxima consulta dele (segundos). */
+    public function discover(Request $request): RedirectResponse
+    {
+        Company::findOrFail($request->user()->company_id)->forceFill(['print_agent_printers_requested_at' => now()])->saveQuietly();
+
+        return back();
+    }
+
     public function agent(Request $request): HttpResponse
     {
         $token = Str::random(48);

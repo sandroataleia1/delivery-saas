@@ -31,6 +31,9 @@ class Company extends Model
             'auto_print_orders' => 'boolean',
             'auto_print_kitchen' => 'boolean',
             'print_agent_seen_at' => 'datetime',
+            'print_agent_printers' => 'array',
+            'print_agent_printers_at' => 'datetime',
+            'print_agent_printers_requested_at' => 'datetime',
         ];
     }
 
@@ -49,15 +52,22 @@ class Company extends Model
         return $this->getKey();
     }
 
+    /** Alguém pediu a busca de impressoras e o agente ainda não respondeu. */
+    public function printerSearchPending(): bool
+    {
+        return $this->print_agent_printers_requested_at !== null
+            && ($this->print_agent_printers_at === null || $this->print_agent_printers_at->lt($this->print_agent_printers_requested_at));
+    }
+
     public function auditLabel(): string
     {
         return $this->trade_name;
     }
 
-    /** O sinal de vida do agente de impressão muda a cada poucos segundos e a chave nunca aparece. */
+    /** O sinal de vida e a lista de impressoras do agente mudam sozinhos; a chave nunca aparece. */
     protected function auditExclude(): array
     {
-        return ['print_agent_token', 'print_agent_seen_at'];
+        return ['print_agent_token', 'print_agent_seen_at', 'print_agent_printers', 'print_agent_printers_at', 'print_agent_printers_requested_at'];
     }
 
     /** Regras de especialidade e endereço, iguais no cadastro e na edição. */

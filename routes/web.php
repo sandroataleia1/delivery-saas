@@ -50,6 +50,7 @@ Route::middleware(['throttle:print-agent', 'print.agent'])->prefix('print-agent'
     Route::get('jobs', [PrintAgentController::class, 'jobs'])->name('jobs');
     Route::post('jobs/{job}/printed', [PrintAgentController::class, 'printed'])->whereNumber('job')->name('printed');
     Route::post('jobs/{job}/failed', [PrintAgentController::class, 'failed'])->whereNumber('job')->name('failed');
+    Route::post('printers', [PrintAgentController::class, 'printers'])->name('printers');
 });
 
 // Cardápio da mesa: público, acessado pelo QR Code.
@@ -313,6 +314,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('impressoras', [PrinterController::class, 'store'])->name('printers.store');
             Route::put('impressoras/destinos', [PrinterController::class, 'destinations'])->name('printers.destinations');
             Route::get('impressoras/agente', [PrinterController::class, 'agent'])->name('printers.agent');
+            Route::post('impressoras/buscar', [PrinterController::class, 'discover'])->name('printers.discover');
             Route::post('impressoras/fila/{job}/reenviar', [PrinterController::class, 'retry'])->name('printers.retry');
             Route::put('impressoras/{printer}', [PrinterController::class, 'update'])->whereNumber('printer')->name('printers.update');
             Route::delete('impressoras/{printer}', [PrinterController::class, 'destroy'])->whereNumber('printer')->name('printers.destroy');
