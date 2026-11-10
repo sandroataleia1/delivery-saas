@@ -26,6 +26,12 @@
     --color-danger-soft: #fbe6e4;
 }
 
+/* Barra de rolagem discreta para fundos escuros, como a sidebar. */
+@utility scrollbar-dark {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+
 @layer base {
     body {
         @apply bg-canvas text-ink font-sans antialiased;

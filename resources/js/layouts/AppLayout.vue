@@ -52,6 +52,7 @@ const { can } = usePermissions();
 const menuOpen = ref(false);
 const userMenuOpen = ref(false);
 const userMenu = ref(null);
+const sidebarNav = ref(null);
 const { canInstall, needsIosSteps, install } = useInstallApp();
 const showIosSteps = ref(false);
 
@@ -64,6 +65,8 @@ function closeUserMenu(event) {
 onMounted(() => {
     document.addEventListener('click', closeUserMenu);
     document.addEventListener('keydown', closeUserMenu);
+    // A cada página o menu volta ao topo: traz o item atual para a vista.
+    sidebarNav.value?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' });
 });
 onBeforeUnmount(() => {
     document.removeEventListener('click', closeUserMenu);
@@ -210,7 +213,7 @@ watch(() => page.url, () => (menuOpen.value = false));
                 </button>
             </div>
 
-            <nav class="flex-1 overflow-y-auto px-3 py-2" aria-label="Menu principal">
+            <nav ref="sidebarNav" class="scrollbar-dark min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2" aria-label="Menu principal">
                 <Link
                     v-for="item in topItems"
                     :key="item.href"
@@ -253,33 +256,33 @@ watch(() => page.url, () => (menuOpen.value = false));
                 </section>
             </nav>
 
-            <div ref="userMenu" class="relative flex items-center gap-1 border-t border-white/10 p-3">
+            <div ref="userMenu" class="relative flex items-center gap-1 border-t border-white/10 px-2 py-1.5">
                 <Link
                     :href="route('account.edit')"
-                    class="hover:bg-sidebar-hover flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                    class="hover:bg-sidebar-hover flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1 transition-colors"
                 >
-                    <UserCog :size="18" class="shrink-0" />
-                    <span class="min-w-0">
-                        <span class="block truncate text-sm font-semibold text-white">{{ user.name }}</span>
-                        <span class="block truncate text-xs">{{ user.is_super_admin ? 'Super administrador' : user.role }}</span>
+                    <UserCog :size="16" class="shrink-0" />
+                    <span class="min-w-0 leading-tight">
+                        <span class="block truncate text-[13px] font-semibold text-white">{{ user.name }}</span>
+                        <span class="block truncate text-[11px]">{{ user.is_super_admin ? 'Super administrador' : user.role }}</span>
                     </span>
                 </Link>
                 <button
                     type="button"
-                    class="hover:bg-sidebar-hover shrink-0 cursor-pointer rounded-lg p-2 transition-colors hover:text-white"
+                    class="hover:bg-sidebar-hover shrink-0 cursor-pointer rounded-lg p-1.5 transition-colors hover:text-white"
                     :class="{ 'bg-sidebar-hover text-white': userMenuOpen }"
                     aria-label="Opções do usuário"
                     aria-haspopup="menu"
                     :aria-expanded="userMenuOpen"
                     @click="userMenuOpen = !userMenuOpen"
                 >
-                    <EllipsisVertical :size="18" />
+                    <EllipsisVertical :size="16" />
                 </button>
 
                 <div
                     v-if="userMenuOpen"
                     role="menu"
-                    class="bg-sidebar absolute right-3 bottom-full z-50 mb-1 w-56 rounded-lg border border-white/10 p-1 shadow-lg"
+                    class="bg-sidebar absolute right-2 bottom-full z-50 mb-1 w-56 rounded-lg border border-white/10 p-1 shadow-lg"
                 >
                     <button
                         v-if="canInstall"
