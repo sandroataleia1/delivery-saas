@@ -29,8 +29,8 @@ class CashReport
                 'with_difference' => $sessions->filter(fn (CashSession $session) => (float) $session->difference !== 0.0)->count(),
                 'short' => Money::of($sessions->filter(fn (CashSession $session) => $session->difference < 0)->sum('difference')),
                 'over' => Money::of($sessions->filter(fn (CashSession $session) => $session->difference > 0)->sum('difference')),
-                'withdrawals' => Money::of($movements[CashMovement::WITHDRAWAL] ?? 0),
-                'deposits' => Money::of($movements[CashMovement::DEPOSIT] ?? 0),
+                'withdrawals' => Money::of(CashMovement::netTotals($movements)['withdrawals']),
+                'deposits' => Money::of(CashMovement::netTotals($movements)['deposits']),
             ],
             // Mesmo operador sempre com falta é o sinal que este relatório existe para mostrar.
             'operators' => $sessions->groupBy('user_name')

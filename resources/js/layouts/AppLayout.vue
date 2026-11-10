@@ -30,7 +30,6 @@ import {
     Package,
     PackagePlus,
     Printer,
-    Receipt,
     ShieldCheck,
     ShoppingCart,
     Store,
@@ -98,7 +97,6 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
         name: 'Financeiro',
         items: [
             can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
-            can('sales.view') && { label: 'Histórico de vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
             can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
             can('finance.view') && { label: 'Contas a pagar', href: route('bills.index', 'pagar'), match: '/financeiro/pagar', icon: CircleArrowUp },
             can('finance.view') && { label: 'Contas a receber', href: route('bills.index', 'receber'), match: '/financeiro/receber', icon: CircleArrowDown },
@@ -114,7 +112,13 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
     {
         name: 'Gestão',
         items: [
-            (can('reports.view') || can('reports.finance')) && { label: 'Relatórios', href: route('reports.index'), match: '/relatorios', icon: ChartColumn },
+            // Quem só consulta vendas cai direto na lista venda a venda, que fica junto dos relatórios.
+            (can('reports.view') || can('reports.finance') || can('sales.view')) && {
+                label: 'Relatórios',
+                href: can('reports.view') || can('reports.finance') ? route('reports.index') : route('sales.index'),
+                match: ['/relatorios', '/vendas'],
+                icon: ChartColumn,
+            },
             can('audit.view') && { label: 'Auditoria', href: route('audit.index'), match: '/auditoria', icon: History },
             can('company.manage') && { label: 'Loja online', href: route('online.settings'), match: '/loja-online/configuracao', icon: Globe },
             can('company.manage') && { label: 'WhatsApp', href: route('online.whatsapp'), match: '/loja-online/whatsapp', icon: MessageCircle },
@@ -176,7 +180,7 @@ function isActive(item) {
         return false;
     }
 
-    return item.exact ? path === item.match : path.startsWith(item.match);
+    return [item.match].flat().some((prefix) => (item.exact ? path === prefix : path.startsWith(prefix)));
 }
 
 watch(() => page.url, () => (menuOpen.value = false));

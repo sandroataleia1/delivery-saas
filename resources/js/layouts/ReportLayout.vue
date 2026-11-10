@@ -24,6 +24,7 @@ const tabs = computed(() => [
     can('reports.finance') && { label: 'Caixa', slug: 'caixa', route: 'reports.cash' },
     can('reports.view') && { label: 'Estoque', slug: 'estoque', route: 'reports.stock' },
     can('reports.view') && { label: 'Entregas', slug: 'entregas', route: 'reports.deliveries' },
+    can('sales.view') && { label: 'Venda a venda', slug: 'historico', route: 'sales.index' },
 ].filter(Boolean));
 
 const heading = computed(() => (props.slug === 'financeiro' ? 'Relatório financeiro' : `Relatório de ${props.title.toLowerCase()}`));

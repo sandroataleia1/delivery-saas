@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Actions\CloseCashSession;
 use App\Actions\OpenCashSession;
 use App\Actions\RecordCashMovement;
+use App\Actions\ReverseCashMovement;
 use App\Models\Bill;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Reports\BillLedger;
+use App\Support\CashPanel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,19 +26,9 @@ class CashController extends Controller
     {
         $user = $request->user();
         $session = CashSession::query()->openFor($user)->first();
-        $summary = $session?->calculateSummary();
 
         return Inertia::render('cash/Index', [
-            'session' => $session ? [
-                'id' => $session->id,
-                'number' => $session->number,
-                'opened_at' => $session->opened_at->format('d/m/Y H:i'),
-                'opening_amount' => $session->opening_amount,
-                'sales_count' => $summary['sales_count'],
-                // Fechamento às cegas: o esperado só aparece para quem gerencia o caixa.
-                'expected_cash' => $user->hasPermission('cash.manage') ? $summary['expected_cash'] : null,
-                'movements' => $this->movements($session),
-            ] : null,
+            'session' => $session ? CashPanel::present($session, $user) : null,
         ]);
     }
 
@@ -68,6 +60,21 @@ class CashController extends Controller
         $recordMovement->handle($session, $data['type'], (string) $data['amount'], $data['reason']);
 
         return back()->with('success', __("cash.movements.{$data['type']}").' registrado.');
+    }
+
+    /** Estorna sangria ou suprimento do caixa aberto. Só quem opera o caixa, ou o gerente, estorna. */
+    public function reverse(Request $request, CashMovement $cashMovement, ReverseCashMovement $reverseMovement): RedirectResponse
+    {
+        $user = $request->user();
+        $session = CashSession::findOrFail($cashMovement->cash_session_id);
+
+        abort_unless($session->user_id === $user->id || $user->hasPermission('cash.manage'), 403);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:255']], [], ['reason' => 'motivo']);
+
+        $reversal = $reverseMovement->handle($cashMovement, $data['reason']);
+
+        return back()->with('success', __("cash.movements.{$reversal->type}").' registrado.');
     }
 
     public function close(Request $request, CashSession $cashSession, CloseCashSession $closeSession): RedirectResponse
@@ -158,7 +165,7 @@ class CashController extends Controller
                         'total' => $total,
                     ])->values()
                     : [],
-                'movements' => $this->movements($cashSession),
+                'movements' => CashPanel::movements($cashSession),
             ],
             'canClose' => $canManage && $cashSession->isOpen(),
         ]);
@@ -233,8 +240,7 @@ class CashController extends Controller
             'billsPaid' => $billsPaid,
             'billsReceived' => $billsReceived,
             'balance' => bcsub(bcadd($net, $billsReceived, 2), $billsPaid, 2),
-            'deposits' => $money($movements[CashMovement::DEPOSIT] ?? 0),
-            'withdrawals' => $money($movements[CashMovement::WITHDRAWAL] ?? 0),
+            ...CashMovement::netTotals($movements),
             'refunds' => $money($movements[CashMovement::REFUND] ?? 0),
             'differences' => $closedToday->reduce(fn (string $sum, CashSession $session) => bcadd($sum, (string) $session->difference, 2), '0.00'),
             'sessions' => $sessions->map(fn (CashSession $session) => [
@@ -247,19 +253,5 @@ class CashController extends Controller
                 'difference' => $session->difference,
             ])->values(),
         ]);
-    }
-
-    private function movements(CashSession $session): array
-    {
-        return $session->movements()->latest('id')->get()->map(fn (CashMovement $movement) => [
-            'id' => $movement->id,
-            'type' => $movement->type,
-            'label' => __("cash.movements.{$movement->type}"),
-            'is_inflow' => $movement->isInflow(),
-            'amount' => $movement->amount,
-            'reason' => $movement->reason,
-            'user' => $movement->user_name,
-            'date' => $movement->created_at->format('d/m H:i'),
-        ])->all();
     }
 }

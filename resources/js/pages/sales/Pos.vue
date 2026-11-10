@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Minus, Plus, Trash2 } from '@lucide/vue';
+import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChevronDown, List, Lock, Minus, Plus, Trash2 } from '@lucide/vue';
+import CashControls from '@/components/CashControls.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
@@ -20,7 +21,7 @@ const props = defineProps({
     composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
-    cashNumber: { type: Number, required: true },
+    cash: { type: Object, required: true },
     completed: { type: Object, default: null },
 });
 
@@ -204,6 +205,23 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
+
+const cashControls = ref(null);
+const cashMenuOpen = ref(false);
+
+function cashAction(action) {
+    cashMenuOpen.value = false;
+    action(cashControls.value);
+}
+
+function closeCashMenuOutside(event) {
+    if (!event.target.closest('[data-cash-menu]')) {
+        cashMenuOpen.value = false;
+    }
+}
+
+watch(cashMenuOpen, (open) => (open ? document.addEventListener('click', closeCashMenuOutside) : document.removeEventListener('click', closeCashMenuOutside)));
+onBeforeUnmount(() => document.removeEventListener('click', closeCashMenuOutside));
 </script>
 
 <template>
@@ -217,7 +235,38 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 <span class="max-sm:hidden">Sair do PDV</span>
             </Link>
             <span class="min-w-0 flex-1 truncate text-center font-bold">{{ page.props.auth.company.trade_name }}</span>
-            <Link :href="route('cash.index')" class="text-sidebar-text text-sm hover:text-white">Caixa #{{ cashNumber }}</Link>
+            <div class="relative" data-cash-menu>
+                <button
+                    type="button"
+                    class="text-sidebar-text flex h-10 items-center gap-1 rounded-lg px-2 text-sm font-semibold hover:bg-white/10 hover:text-white"
+                    :aria-expanded="cashMenuOpen"
+                    aria-controls="cash-menu"
+                    @click="cashMenuOpen = !cashMenuOpen"
+                    @keydown.escape="cashMenuOpen = false"
+                >
+                    Caixa #{{ cash.number }}
+                    <ChevronDown :size="16" />
+                </button>
+                <div v-if="cashMenuOpen" id="cash-menu" class="bg-surface text-ink border-line absolute right-0 z-30 mt-1 w-56 rounded-xl border p-1 shadow-xl">
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.start('withdrawal'))">
+                        <ArrowUpFromLine :size="16" class="text-muted" />
+                        Sangria
+                    </button>
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.start('deposit'))">
+                        <ArrowDownToLine :size="16" class="text-muted" />
+                        Suprimento
+                    </button>
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.openEntries())">
+                        <List :size="16" class="text-muted" />
+                        Ver lançamentos
+                    </button>
+                    <hr class="border-line my-1" />
+                    <button type="button" class="hover:bg-canvas text-danger flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.startClose())">
+                        <Lock :size="16" />
+                        Fechar caixa
+                    </button>
+                </div>
+            </div>
             <span class="text-sidebar-text text-sm max-sm:hidden">{{ page.props.auth.user.name }}</span>
         </header>
 
@@ -309,5 +358,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
         <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" :with-notes="false" @add="addComposed" @cancel="composing = null" />
 
         <SaleCompleteDialog :sale="receipt" @close="receipt = null" />
+
+        <CashControls ref="cashControls" :session="cash" />
     </div>
 </template>

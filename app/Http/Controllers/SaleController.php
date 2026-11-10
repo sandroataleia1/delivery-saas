@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Support\CashPanel;
 use App\Support\ProductComposition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,7 +42,7 @@ class SaleController extends Controller
             ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']);
 
         return Inertia::render('sales/Pos', [
-            'cashNumber' => $session->number,
+            'cash' => CashPanel::present($session, $user),
             'products' => $products,
             'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),

@@ -335,6 +335,90 @@ class CashTest extends TestCase
         $this->assertSame('Fechado', $closing->new_values['status']);
     }
 
+    public function test_estorno_de_sangria_e_suprimento_corrige_o_esperado(): void
+    {
+        $session = $this->open($this->cashier, '100');
+        $this->post('/caixa/movimentos', ['type' => 'deposit', 'amount' => '30', 'reason' => 'Troco']);
+        $this->post('/caixa/movimentos', ['type' => 'withdrawal', 'amount' => '40', 'reason' => 'Cofre']);
+        [$deposit, $withdrawal] = CashMovement::orderBy('id')->get()->all();
+
+        $this->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Valor errado'])->assertSessionHasNoErrors();
+
+        $reversal = CashMovement::latest('id')->first();
+        $this->assertSame(CashMovement::WITHDRAWAL_REVERSAL, $reversal->type);
+        $this->assertSame($withdrawal->id, $reversal->reverses_movement_id);
+        $this->assertSame('40.00', $reversal->amount);
+        $this->assertSame('Valor errado', $reversal->reason);
+        $this->assertSame('130.00', $session->calculateSummary()['expected_cash']);
+        $this->assertSame('0.00', $session->calculateSummary()['withdrawals']);
+
+        $this->post("/caixa/movimentos/{$deposit->id}/estornar", ['reason' => 'Não entrou'])->assertSessionHasNoErrors();
+
+        $summary = $session->calculateSummary();
+        $this->assertSame('100.00', $summary['expected_cash']);
+        $this->assertSame('0.00', $summary['deposits']);
+        $this->actingAs($this->admin)->get('/caixa/fluxo')->assertInertia(fn (Assert $page) => $page->where('deposits', '0.00')->where('withdrawals', '0.00'));
+    }
+
+    public function test_estorno_exige_motivo_vale_uma_vez_e_so_para_sangria_ou_suprimento(): void
+    {
+        $session = $this->open($this->cashier, '100');
+        $this->post('/caixa/movimentos', ['type' => 'withdrawal', 'amount' => '10', 'reason' => 'Cofre']);
+        $withdrawal = CashMovement::sole();
+
+        $this->post("/caixa/movimentos/{$withdrawal->id}/estornar", [])->assertSessionHasErrors('reason');
+        $this->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Erro'])->assertSessionHasNoErrors();
+        $this->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Erro'])->assertSessionHasErrors('movement');
+        $reversal = CashMovement::latest('id')->first();
+        $this->post("/caixa/movimentos/{$reversal->id}/estornar", ['reason' => 'Erro'])->assertSessionHasErrors('movement');
+
+        $this->assertSame(2, CashMovement::count());
+        $this->assertSame('100.00', $session->calculateSummary()['expected_cash']);
+    }
+
+    public function test_estorno_de_suprimento_nao_deixa_a_gaveta_negativa(): void
+    {
+        $this->open($this->cashier, '0');
+        $this->post('/caixa/movimentos', ['type' => 'deposit', 'amount' => '50', 'reason' => 'Troco']);
+        $deposit = CashMovement::sole();
+        $this->post('/caixa/movimentos', ['type' => 'withdrawal', 'amount' => '50', 'reason' => 'Cofre']);
+
+        $this->post("/caixa/movimentos/{$deposit->id}/estornar", ['reason' => 'Erro'])->assertSessionHasErrors('amount');
+
+        $this->assertSame(2, CashMovement::count());
+    }
+
+    public function test_estorno_so_no_caixa_aberto_de_quem_opera(): void
+    {
+        $session = $this->open($this->cashier, '100');
+        $this->post('/caixa/movimentos', ['type' => 'withdrawal', 'amount' => '10', 'reason' => 'Cofre']);
+        $withdrawal = CashMovement::sole();
+        $colleague = $this->userWith(['cash.operate'], $this->admin->company);
+
+        $this->actingAs($colleague)->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Erro'])->assertForbidden();
+        $this->actingAs($this->adminOf())->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Erro'])->assertNotFound();
+
+        $this->actingAs($this->cashier)->post("/caixa/{$session->id}/fechar", ['counted_cash' => '90'])->assertSessionHasNoErrors();
+        $this->post("/caixa/movimentos/{$withdrawal->id}/estornar", ['reason' => 'Erro'])->assertSessionHasErrors('amount');
+
+        $this->assertSame(1, CashMovement::count());
+    }
+
+    public function test_pdv_traz_o_caixa_com_lancamentos_e_vendas(): void
+    {
+        $this->open($this->cashier, '100');
+        $this->sell([['method' => 'cash', 'amount' => '20']]);
+        $this->post('/caixa/movimentos', ['type' => 'withdrawal', 'amount' => '10', 'reason' => 'Cofre']);
+
+        $this->get('/pdv')->assertInertia(fn (Assert $page) => $page
+            ->where('cash.number', 1)
+            ->where('cash.expected_cash', null)
+            ->where('cash.movements.0.label', 'Sangria')
+            ->where('cash.movements.0.reversible', true)
+            ->where('cash.sales.0.total', '20.00')
+            ->where('cash.sales.0.cancelled', false));
+    }
+
     public function test_isolamento_entre_empresas(): void
     {
         $session = $this->open($this->cashier, '100');

@@ -196,6 +196,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('caixa', [CashController::class, 'index'])->name('cash.index');
             Route::post('caixa/abrir', [CashController::class, 'open'])->name('cash.open');
             Route::post('caixa/movimentos', [CashController::class, 'movement'])->name('cash.movement');
+            Route::post('caixa/movimentos/{cashMovement}/estornar', [CashController::class, 'reverse'])->whereNumber('cashMovement')->name('cash.movement.reverse');
             Route::get('caixa/historico', [CashController::class, 'sessions'])->name('cash.sessions');
             Route::get('caixa/{cashSession}', [CashController::class, 'show'])->whereNumber('cashSession')->name('cash.show');
             Route::post('caixa/{cashSession}/fechar', [CashController::class, 'close'])->name('cash.close');
