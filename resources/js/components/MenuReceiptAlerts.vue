@@ -1,7 +1,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
-const props = defineProps({ ids: { type: Array, required: true }, operation: { type: Object, required: true }, lastUpdated: { type: Number, required: true } });
+const props = defineProps({
+    ids: { type: Array, required: true },
+    operation: { type: Object, required: true },
+    lastUpdated: { type: Number, required: true },
+    /** Falso quando a página leva os botões de som para outro lugar (ex.: painel de configurações). */
+    soundControls: { type: Boolean, default: true },
+});
 
 /** Lembra neste navegador que o som foi ativado, para não pedir o botão de novo a cada recarga. */
 const STORAGE_KEY = 'order-sound-enabled';
@@ -114,6 +120,8 @@ watch(() => props.ids, (ids) => {
     }
 }, { immediate: true });
 
+defineExpose({ wanted, unlocked, enable, disable });
+
 onUnmounted(() => {
     clearInterval(timer);
     stopWaitingForGesture();
@@ -126,11 +134,11 @@ onUnmounted(() => {
         <p v-if="stale" class="text-danger font-semibold" role="alert">Sem atualização há mais de 30 segundos. Confira a conexão antes de operar.</p>
         <p v-if="ids.length && operation.visual_alerts" class="text-warn font-semibold" role="status">{{ ids.length }} pedido(s) aguardando confirmação.</p>
         <template v-if="operation.sound_alerts">
-            <button v-if="!wanted" type="button" class="btn btn-secondary" @click="enable">Ativar som de novos pedidos</button>
-            <template v-else>
-                <span v-if="unlocked" class="text-muted">Som de novos pedidos ativado</span>
-                <span v-else class="text-warn font-semibold" role="status">Toque em qualquer lugar da tela para liberar o som</span>
-                <button type="button" class="text-muted cursor-pointer underline" @click="disable">Desativar som</button>
+            <button v-if="!wanted && soundControls" type="button" class="btn btn-secondary" @click="enable">Ativar som de novos pedidos</button>
+            <template v-else-if="wanted">
+                <span v-if="unlocked && soundControls" class="text-muted">Som de novos pedidos ativado</span>
+                <span v-else-if="!unlocked" class="text-warn font-semibold" role="status">Toque em qualquer lugar da tela para liberar o som</span>
+                <button v-if="soundControls" type="button" class="text-muted cursor-pointer underline" @click="disable">Desativar som</button>
             </template>
         </template>
         <span v-if="audioError" class="text-danger" role="alert">{{ audioError }}</span>

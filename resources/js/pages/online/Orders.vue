@@ -8,6 +8,7 @@ import OnlineOrderCard from '@/components/OnlineOrderCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { usePermissions } from '@/lib/can';
+import { Settings } from '@lucide/vue';
 
 const props = defineProps({
     pending: { type: Array, required: true },
@@ -26,11 +27,16 @@ const { can } = usePermissions();
 const lastUpdated = ref(Date.now());
 usePoll(10000, { only: ['pending', 'producing', 'ready', 'closed', 'store', 'operation', 'onlinePendingCount', 'whatsapp', 'waitingCustomers'], onSuccess: () => (lastUpdated.value = Date.now()) }, { keepAlive: true });
 const pendingIds = computed(() => props.pending.map((order) => order.id));
+const settingsOpen = ref(false);
+const alerts = ref(null);
+function toggleSound(event) {
+    event.target.checked ? alerts.value?.enable() : alerts.value?.disable();
+}
 
 const columns = computed(() => [
-    { stage: 'analysis', title: 'Em análise', orders: props.pending, empty: 'Novos pedidos da loja aparecem aqui sozinhos.' },
-    { stage: 'production', title: 'Em produção', orders: props.producing, empty: 'Pedidos aceitos ficam aqui enquanto são preparados.' },
-    { stage: 'ready', title: 'Prontos para entrega', orders: props.ready, empty: 'Quando a produção termina, o pedido aparece aqui.' },
+    { stage: 'analysis', title: 'Em análise', orders: props.pending, empty: props.store?.auto_accept ? 'Todos os pedidos são aceitos automaticamente.' : 'Nenhum pedido aguardando.', head: 'bg-stone-500', body: 'bg-stone-200' },
+    { stage: 'production', title: 'Em produção', orders: props.producing, empty: 'Nenhum pedido em preparo.', head: 'bg-orange-500', body: 'bg-orange-100' },
+    { stage: 'ready', title: 'Prontos para entrega', orders: props.ready, empty: 'Nenhum pedido pronto.', head: 'bg-ok', body: 'bg-ok-soft' },
 ]);
 
 /** Etapa seguinte de cada coluna e a permissão exigida para levar o pedido até ela. */
@@ -143,6 +149,38 @@ function togglePause() {
 <template>
     <AppLayout title="Pedidos online">
         <PageHeader title="Pedidos online" :subtitle="store ? store.label : null">
+            <div v-if="store" class="relative" @keydown.escape="settingsOpen = false">
+                <button
+                    type="button"
+                    class="btn btn-secondary px-2.5"
+                    aria-label="Configurações dos pedidos online"
+                    aria-haspopup="dialog"
+                    :aria-expanded="settingsOpen"
+                    @click="settingsOpen = !settingsOpen"
+                >
+                    <Settings :size="18" />
+                </button>
+                <div v-if="settingsOpen" class="fixed inset-0 z-30" @click="settingsOpen = false" />
+                <div
+                    v-if="settingsOpen"
+                    role="dialog"
+                    aria-label="Configurações dos pedidos online"
+                    class="card absolute top-full left-0 z-40 mt-2 w-[min(20rem,calc(100vw-2rem))] space-y-4 p-4 text-sm shadow-lg sm:right-0 sm:left-auto"
+                >
+                    <label v-if="operation.sound_alerts" class="flex cursor-pointer items-start gap-2.5">
+                        <input type="checkbox" class="accent-brand mt-0.5 size-4" :checked="alerts?.wanted" @change="toggleSound" />
+                        <span>
+                            <span class="block font-semibold">Som de novos pedidos</span>
+                            <span class="text-muted">Vale para este aparelho.</span>
+                        </span>
+                    </label>
+                    <div :class="{ 'border-line border-t pt-3': operation.sound_alerts }">
+                        <p class="text-muted text-xs">Link da loja</p>
+                        <a :href="store.link" target="_blank" rel="noopener" class="text-brand-strong break-all underline">{{ store.link }}</a>
+                    </div>
+                    <p class="text-muted hidden text-xs lg:block">Dica: arraste o pedido para a próxima coluna para mudar a etapa.</p>
+                </div>
+            </div>
             <button v-if="store" type="button" class="btn btn-secondary" :disabled="pausing" @click="togglePause">
                 {{ store.paused ? 'Reabrir loja' : 'Pausar loja' }}
             </button>
@@ -154,23 +192,9 @@ function togglePause() {
         </div>
 
         <template v-else>
-            <p class="text-muted mb-3 text-sm">Link da loja: <a :href="store.link" target="_blank" rel="noopener" class="text-brand-strong break-all underline">{{ store.link }}</a></p>
-            <div class="card mb-3 p-4">
-                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
-                    <input type="checkbox" class="accent-brand mt-0.5 size-4" :checked="store.auto_accept" :disabled="autoAccepting" @change="toggleAutoAccept" />
-                    <span>
-                        <span class="block font-semibold">Aceitar pedidos automaticamente</span>
-                        <span class="text-muted">Cada pedido novo vira entrega e vai direto para a produção. Se algum item estiver indisponível, o pedido fica em análise para a equipe decidir.</span>
-                    </span>
-                </label>
-                <p v-if="autoAcceptError" class="text-danger mt-2 text-sm" role="alert">
-                    {{ autoAcceptError }}
-                    <Link v-if="can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
-                </p>
-            </div>
-            <p v-if="store.paused" class="text-warn mb-3 text-sm font-semibold" role="status">A loja está pausada: os clientes não conseguem enviar novos pedidos.</p>
+            <p v-if="store.paused" class="text-warn mb-3 text-sm font-semibold" role="status">Loja pausada: clientes não conseguem pedir.</p>
             <p v-if="whatsapp && !whatsapp.connected" class="text-warn mb-3 text-sm font-semibold" role="alert">
-                WhatsApp desconectado: os clientes não estão recebendo as mensagens dos pedidos.
+                WhatsApp desconectado: clientes não recebem as mensagens.
                 <Link v-if="can('company.manage')" :href="route('online.whatsapp')" class="underline">Abrir WhatsApp</Link>
             </p>
             <p v-if="whatsapp && whatsapp.failed_recent > 0" class="text-warn mb-3 text-sm font-semibold" role="alert">
@@ -186,28 +210,43 @@ function togglePause() {
                     </li>
                 </ul>
             </div>
-            <MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" />
+            <MenuReceiptAlerts ref="alerts" :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" :sound-controls="false" />
 
             <p v-if="advanceError || moveError" class="text-danger mb-3 text-sm" role="alert">{{ advanceError ?? moveError }}</p>
-            <p class="text-muted mb-3 hidden text-sm lg:block">Arraste o pedido para a próxima coluna para mudar a etapa.</p>
 
             <div class="grid items-start gap-4 lg:grid-cols-3">
                 <section
                     v-for="column in columns"
                     :key="column.stage"
-                    class="bg-canvas rounded-xl border p-3 transition-colors"
-                    :class="dropTarget === column.stage ? 'border-brand bg-brand-soft' : accepts(column.stage) ? 'border-brand border-dashed' : 'border-line'"
+                    class="overflow-hidden rounded-xl outline-offset-2 transition-all"
+                    :class="[column.body, dropTarget === column.stage ? 'outline-brand outline-4' : accepts(column.stage) ? 'outline-brand outline-2 outline-dashed' : '']"
                     :aria-label="column.title"
                     @dragover="onDragOver($event, column.stage)"
                     @dragleave="dropTarget === column.stage && (dropTarget = null)"
                     @drop.prevent="onDrop(column.stage)"
                 >
-                    <h2 class="mb-3 flex items-center justify-between gap-2 px-1 font-bold">
+                    <h2 class="flex items-center justify-between gap-2 px-4 py-3 font-bold text-white" :class="column.head">
                         {{ column.title }}
-                        <span class="badge bg-surface text-muted tabular-nums">{{ column.orders.length }}</span>
+                        <span class="tabular-nums">{{ column.orders.length }}</span>
                     </h2>
-                    <p v-if="!column.orders.length" class="text-muted px-1 py-6 text-center text-sm">{{ column.empty }}</p>
-                    <div v-else class="space-y-3">
+                    <div v-if="column.stage === 'analysis' && can('online_orders.accept')" class="px-3 pt-3">
+                        <div class="card p-3 text-sm">
+                            <label class="flex cursor-pointer items-center gap-3">
+                                <input type="checkbox" role="switch" class="peer sr-only" :checked="store.auto_accept" :disabled="autoAccepting" @change="toggleAutoAccept" />
+                                <span
+                                    class="peer-checked:bg-ok peer-focus-visible:outline-brand relative h-6 w-11 shrink-0 rounded-full bg-stone-300 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 after:absolute after:top-0.5 after:left-0.5 after:size-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"
+                                    aria-hidden="true"
+                                />
+                                <span class="font-semibold">Aceitar os pedidos automaticamente</span>
+                            </label>
+                            <p v-if="autoAcceptError" class="text-danger mt-2" role="alert">
+                                {{ autoAcceptError }}
+                                <Link v-if="can('production.configure')" :href="route('production.sectors')" class="underline">Abrir setores de produção</Link>
+                            </p>
+                        </div>
+                    </div>
+                    <p v-if="!column.orders.length" class="text-ink/70 px-4 py-10 text-center text-sm">{{ column.empty }}</p>
+                    <div v-else class="space-y-3 p-3">
                         <div
                             v-for="order in column.orders"
                             :key="order.id"
