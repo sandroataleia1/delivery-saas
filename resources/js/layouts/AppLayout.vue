@@ -140,13 +140,13 @@ const topItems = computed(() => (user.value.is_super_admin
 // Quem tem poucos itens, como garçom e entregador, vê tudo aberto.
 const isCollapsible = computed(() => groups.value.reduce((sum, group) => sum + group.items.length, 0) > 10);
 
-const STORAGE_KEY = 'menu-sections';
+const STORAGE_KEY = 'menu-sections-v2';
 
 function loadOpenSections() {
     try {
-        return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? ['Vendas']);
+        return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? []);
     } catch {
-        return new Set(['Vendas']);
+        return new Set();
     }
 }
 
