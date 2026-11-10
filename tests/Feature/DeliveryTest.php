@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\SyncRecipe;
 use App\Models\AuditLog;
 use App\Models\Bill;
+use App\Models\Courier;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
@@ -406,6 +407,146 @@ class DeliveryTest extends TestCase
     {
         $this->assertContains('deliveries.courier', collect(config('permissions.default_roles'))->firstWhere('name', 'Entregador')['permissions']);
         $this->assertInstanceOf(Role::class, $this->courier->role);
+    }
+
+    private function readyOrder(): DeliveryOrder
+    {
+        $order = $this->order();
+        $this->advance($order);
+        $this->advance($order);
+
+        return $order->fresh();
+    }
+
+    private function outOrder(?Courier $courier = null): DeliveryOrder
+    {
+        $order = $this->readyOrder();
+        $this->actingAs($this->admin);
+        $extra = $courier ? ['delivery_courier_id' => $courier->id] : ['courier_id' => $this->courier->id];
+        $this->advance($order, $extra)->assertSessionHasNoErrors();
+
+        return $order->fresh();
+    }
+
+    public function test_cadastro_de_entregadores_exige_permissao_e_fica_na_empresa(): void
+    {
+        $this->actingAs($this->admin)->post('/entregas/entregadores', ['name' => 'Zé Moto', 'phone' => '(11) 99999-0000', 'active' => true])->assertSessionHasNoErrors();
+        $courier = Courier::sole();
+        $this->assertSame($this->admin->company_id, $courier->company_id);
+
+        $this->put("/entregas/entregadores/{$courier->id}", ['name' => 'Zé da Moto', 'phone' => null, 'active' => false])->assertSessionHasNoErrors();
+        $this->assertSame('Zé da Moto', $courier->fresh()->name);
+        $this->assertFalse($courier->fresh()->active);
+        $this->post('/entregas/entregadores', ['name' => ''])->assertSessionHasErrors('name');
+
+        $this->get('/entregas/entregadores')->assertInertia(fn (Assert $page) => $page->component('deliveries/Couriers')->has('couriers', 1));
+
+        $this->actingAs($this->userWith(['deliveries.operate'], $this->admin->company))->post('/entregas/entregadores', ['name' => 'X'])->assertForbidden();
+        $this->actingAs($this->productionAdminOf())->put("/entregas/entregadores/{$courier->id}", ['name' => 'Invasor', 'active' => true])->assertNotFound();
+    }
+
+    public function test_vinculo_com_usuario_so_aceita_entregador_da_empresa_uma_vez(): void
+    {
+        $this->actingAs($this->admin);
+        $plain = $this->userWith([], $this->admin->company);
+        $foreign = $this->userWith(['deliveries.courier'], $this->productionAdminOf()->company);
+
+        $this->post('/entregas/entregadores', ['name' => 'A', 'active' => true, 'user_id' => $plain->id])->assertSessionHasErrors('user_id');
+        $this->post('/entregas/entregadores', ['name' => 'A', 'active' => true, 'user_id' => $foreign->id])->assertSessionHasErrors('user_id');
+        $this->post('/entregas/entregadores', ['name' => 'A', 'active' => true, 'user_id' => $this->courier->id])->assertSessionHasNoErrors();
+        $this->post('/entregas/entregadores', ['name' => 'B', 'active' => true, 'user_id' => $this->courier->id])->assertSessionHasErrors('user_id');
+    }
+
+    public function test_despachar_para_entregador_do_cadastro_sem_login(): void
+    {
+        $courier = Courier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Zé Moto']);
+
+        $order = $this->outOrder($courier);
+
+        $this->assertSame(DeliveryOrder::OUT, $order->status);
+        $this->assertSame($courier->id, $order->delivery_courier_id);
+        $this->assertSame('Zé Moto', $order->courier_name);
+        $this->assertNull($order->courier_id);
+        $this->get('/entregas/historico?courier=c'.$courier->id)->assertInertia(fn (Assert $page) => $page->has('orders.data', 1));
+        $this->get('/entregas/historico?courier=u'.$this->courier->id)->assertInertia(fn (Assert $page) => $page->has('orders.data', 0));
+    }
+
+    public function test_entregador_do_cadastro_com_usuario_ve_e_conclui_a_entrega(): void
+    {
+        $courier = Courier::factory()->create(['company_id' => $this->admin->company_id, 'user_id' => $this->courier->id]);
+
+        $order = $this->outOrder($courier);
+
+        $this->assertSame($this->courier->id, $order->courier_id);
+        $this->actingAs($this->courier)->get('/entregas/minhas')->assertInertia(fn (Assert $page) => $page->has('orders', 1));
+        $this->post("/entregas/{$order->id}/avancar", ['expected_status' => DeliveryOrder::OUT])->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryOrder::DELIVERED, $order->fresh()->status);
+    }
+
+    public function test_entregador_inativo_ou_de_outra_empresa_nao_despacha(): void
+    {
+        $inactive = Courier::factory()->create(['company_id' => $this->admin->company_id, 'active' => false]);
+        $foreign = Courier::factory()->create();
+        $order = $this->readyOrder();
+
+        $this->advance($order, ['delivery_courier_id' => $inactive->id])->assertSessionHasErrors('delivery_courier_id');
+        $this->advance($order, ['delivery_courier_id' => $foreign->id])->assertSessionHasErrors('delivery_courier_id');
+        $this->assertSame(DeliveryOrder::READY, $order->fresh()->status);
+    }
+
+    public function test_lista_do_despachar_traz_cadastro_e_usuarios_sem_duplicar(): void
+    {
+        $linked = $this->userWith(['deliveries.courier'], $this->admin->company);
+        $withUser = Courier::factory()->create(['company_id' => $this->admin->company_id, 'user_id' => $linked->id]);
+        $plain = Courier::factory()->create(['company_id' => $this->admin->company_id]);
+        Courier::factory()->create(['company_id' => $this->admin->company_id, 'active' => false]);
+
+        $this->actingAs($this->admin)->get('/entregas')->assertInertia(fn (Assert $page) => $page->where('couriers', function ($couriers) use ($linked, $withUser, $plain) {
+            $keys = collect($couriers)->map(fn ($courier) => $courier['type'].$courier['id'])->sort()->values()->all();
+
+            return $keys === collect(['courier'.$withUser->id, 'courier'.$plain->id, 'user'.$this->courier->id, 'user'.$this->admin->id])->sort()->values()->all()
+                && ! in_array('user'.$linked->id, $keys, true);
+        }));
+    }
+
+    public function test_nao_entregue_exige_motivo_e_so_vale_em_rota(): void
+    {
+        $ready = $this->readyOrder();
+        $this->post("/entregas/{$ready->id}/nao-entregue", ['reason' => 'Cliente ausente'])->assertSessionHasErrors('order');
+
+        $order = $this->outOrder();
+        $this->post("/entregas/{$order->id}/nao-entregue", ['reason' => ''])->assertSessionHasErrors('reason');
+        $this->post("/entregas/{$order->id}/nao-entregue", ['reason' => 'Cliente ausente'])->assertSessionHasNoErrors();
+
+        $order->refresh();
+        $this->assertSame(DeliveryOrder::RETURNED, $order->status);
+        $this->assertSame('Cliente ausente', $order->return_reason);
+        $this->assertNotNull($order->returned_at);
+        $this->get('/entregas')->assertInertia(fn (Assert $page) => $page->where('orders.1.status', DeliveryOrder::RETURNED)->where('orders.1.return_reason', 'Cliente ausente')->where('orders.1.next_status', DeliveryOrder::READY));
+
+        $this->advance($order)->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryOrder::READY, $order->fresh()->status);
+        $this->advance($order, ['courier_id' => $this->courier->id])->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryOrder::OUT, $order->fresh()->status);
+    }
+
+    public function test_entregador_so_marca_nao_entregue_na_propria_entrega(): void
+    {
+        $order = $this->outOrder();
+        $other = $this->userWith(['deliveries.courier'], $this->admin->company);
+
+        $this->actingAs($other)->post("/entregas/{$order->id}/nao-entregue", ['reason' => 'x'])->assertForbidden();
+        $this->actingAs($this->courier)->post("/entregas/{$order->id}/nao-entregue", ['reason' => 'Endereço não existe'])->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryOrder::RETURNED, $order->fresh()->status);
+    }
+
+    public function test_pedido_que_voltou_pode_ser_cancelado(): void
+    {
+        $order = $this->outOrder();
+        $this->post("/entregas/{$order->id}/nao-entregue", ['reason' => 'Recusou']);
+
+        $this->post("/entregas/{$order->id}/cancelar", ['reason' => 'Cliente desistiu'])->assertSessionHasNoErrors();
+        $this->assertSame(DeliveryOrder::CANCELLED, $order->fresh()->status);
     }
 
     public function test_auditoria_acompanha_as_etapas(): void

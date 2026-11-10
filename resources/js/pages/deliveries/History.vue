@@ -58,7 +58,7 @@ watch(filters, () => {
             </select>
             <select v-model="filters.courier" class="input" aria-label="Filtrar por entregador">
                 <option value="">Todos os entregadores</option>
-                <option v-for="courier in couriers" :key="courier.id" :value="courier.id">{{ courier.name }}</option>
+                <option v-for="courier in couriers" :key="`${courier.type}${courier.id}`" :value="`${courier.type === 'courier' ? 'c' : 'u'}${courier.id}`">{{ courier.name }}</option>
             </select>
             <input v-model="filters.from" class="input" type="date" aria-label="Data inicial" />
             <input v-model="filters.to" class="input" type="date" aria-label="Data final" />

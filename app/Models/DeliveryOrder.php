@@ -27,6 +27,9 @@ class DeliveryOrder extends Model
 
     public const DELIVERED = 'delivered';
 
+    /** O entregador não conseguiu entregar e o pedido voltou para a loja. */
+    public const RETURNED = 'returned';
+
     public const CANCELLED = 'cancelled';
 
     protected function casts(): array
@@ -37,6 +40,7 @@ class DeliveryOrder extends Model
             'change_for' => 'decimal:2',
             'dispatched_at' => 'datetime',
             'delivered_at' => 'datetime',
+            'returned_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -71,7 +75,7 @@ class DeliveryOrder extends Model
         return $this->sale_id !== null;
     }
 
-    /** Próxima etapa. Retirada no balcão não passa por "em rota". */
+    /** Próxima etapa. Retirada no balcão não passa por "em rota"; o que voltou vai para prontos e sai de novo. */
     public function nextStatus(): ?string
     {
         return match ($this->status) {
@@ -79,6 +83,7 @@ class DeliveryOrder extends Model
             self::PREPARING => self::READY,
             self::READY => $this->isDelivery() ? self::OUT : self::DELIVERED,
             self::OUT => self::DELIVERED,
+            self::RETURNED => self::READY,
             default => null,
         };
     }
@@ -99,7 +104,7 @@ class DeliveryOrder extends Model
 
     protected function auditExclude(): array
     {
-        return ['number', 'customer_id', 'courier_id', 'sale_id', 'user_id', 'user_name', 'dispatched_at', 'delivered_at', 'cancelled_at', 'customer_phone'];
+        return ['number', 'customer_id', 'courier_id', 'delivery_courier_id', 'sale_id', 'user_id', 'user_name', 'dispatched_at', 'delivered_at', 'returned_at', 'cancelled_at', 'customer_phone'];
     }
 
     protected function auditDisplayValue(string $field, mixed $value): mixed

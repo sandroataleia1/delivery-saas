@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Actions\AdvanceDeliveryOrder;
 use App\Actions\CancelDeliveryOrder;
 use App\Actions\CreateDeliveryOrder;
+use App\Actions\ReturnDeliveryOrder;
 use App\Actions\SettleDeliveryOrder;
 use App\Http\Requests\SettleDeliveryOrderRequest;
 use App\Http\Requests\StoreDeliveryOrderRequest;
 use App\Models\Category;
+use App\Models\Courier;
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
 use App\Models\DeliveryZone;
@@ -45,7 +47,7 @@ class DeliveryController extends Controller
     {
         $filters = $request->validate([
             'status' => ['nullable', 'string', 'max:20'],
-            'courier' => ['nullable', 'integer'],
+            'courier' => ['nullable', 'string', 'regex:/^[cu]\d{1,10}$/'],
             'search' => ['nullable', 'string', 'max:100'],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
@@ -53,7 +55,7 @@ class DeliveryController extends Controller
 
         $query = DeliveryOrder::query()
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($filters['courier'] ?? null, fn ($query, $courier) => $query->where('courier_id', $courier))
+            ->when($filters['courier'] ?? null, fn ($query, $courier) => $query->where($courier[0] === 'c' ? 'delivery_courier_id' : 'courier_id', (int) substr($courier, 1)))
             ->when($filters['search'] ?? null, fn ($query, $search) => $this->search($query, $search, $request->user()->company_id))
             ->when($filters['from'] ?? null, fn ($query, $from) => $query->where('created_at', '>=', Carbon::parse($from)->startOfDay()))
             ->when($filters['to'] ?? null, fn ($query, $to) => $query->where('created_at', '<=', Carbon::parse($to)->endOfDay()));
@@ -148,14 +150,13 @@ class DeliveryController extends Controller
     public function advance(Request $request, DeliveryOrder $delivery, AdvanceDeliveryOrder $advance): RedirectResponse
     {
         $user = $request->user();
-        $isCourierFinishing = $delivery->courier_id === $user->id && $delivery->status === DeliveryOrder::OUT;
-
-        abort_unless($user->hasPermission('deliveries.operate') || $isCourierFinishing, 403);
+        abort_unless($user->hasPermission('deliveries.operate') || $this->isOwnRoute($delivery, $user), 403);
 
         $data = $request->validate([
             'expected_status' => ['required', 'string'],
             'courier_id' => ['nullable', Rule::exists('users', 'id')->where('company_id', $user->company_id)->where('active', true)],
-        ]);
+            'delivery_courier_id' => ['nullable', Rule::exists('couriers', 'id')->where('company_id', $user->company_id)->where('active', true)],
+        ], [], ['delivery_courier_id' => 'entregador']);
 
         $courier = isset($data['courier_id']) ? User::with('role')->find($data['courier_id']) : null;
 
@@ -163,9 +164,25 @@ class DeliveryController extends Controller
             return back()->withErrors(['courier_id' => 'Este usuário não é entregador.']);
         }
 
+        if (isset($data['delivery_courier_id'])) {
+            $courier = Courier::find($data['delivery_courier_id']);
+        }
+
         $advance->handle($delivery, $data['expected_status'], $courier);
 
         return back()->with('success', 'Pedido atualizado.');
+    }
+
+    /** O entregador não conseguiu entregar: o pedido volta para a loja com o motivo. */
+    public function markReturned(Request $request, DeliveryOrder $delivery, ReturnDeliveryOrder $returnOrder): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('deliveries.operate') || $this->isOwnRoute($delivery, $request->user()), 403);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:255']], [], ['reason' => 'motivo']);
+
+        $returnOrder->handle($delivery, $data['reason']);
+
+        return back()->with('success', "Pedido #{$delivery->number} marcado como não entregue.");
     }
 
     public function cancel(Request $request, DeliveryOrder $delivery, CancelDeliveryOrder $cancelOrder): RedirectResponse
@@ -250,10 +267,16 @@ class DeliveryController extends Controller
         ], [], ['name' => 'bairro', 'fee' => 'taxa']);
     }
 
-    /** @return array<int, array{id: int, name: string}> */
+    /** O entregador com login pode concluir ou devolver só o que está em rota com ele. */
+    private function isOwnRoute(DeliveryOrder $delivery, User $user): bool
+    {
+        return $delivery->courier_id === $user->id && $delivery->status === DeliveryOrder::OUT;
+    }
+
+    /** @return list<array{type: string, id: int, name: string}> */
     private function couriers(): array
     {
-        return User::activeCouriers();
+        return Courier::dispatchOptions();
     }
 
     /** O nome do cliente, ou um número, que pode ser o da entrega ou o do pedido online. */
@@ -289,6 +312,7 @@ class DeliveryController extends Controller
             'payment_method' => $order->payment_method,
             'change_for' => $order->change_for,
             'courier' => $order->courier_name,
+            'return_reason' => $order->status === DeliveryOrder::RETURNED ? $order->return_reason : null,
             'settled' => $order->isSettled(),
             'minutes' => (int) $order->created_at->diffInMinutes(now()),
             'date' => $order->created_at->format('d/m/Y H:i'),

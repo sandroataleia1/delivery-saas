@@ -111,6 +111,11 @@ function printThermal() {
             <p>Motivo: {{ order.cancel_reason }}</p>
         </div>
 
+        <div v-if="order.status === 'returned'" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm">
+            <p class="font-semibold">Não entregue<template v-if="order.courier"> por {{ order.courier }}</template></p>
+            <p>Motivo: {{ order.return_reason }}</p>
+        </div>
+
         <p v-if="order.settled" class="bg-ok-soft text-ok mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm font-semibold">
             Acertado no caixa.
             <Link :href="route('sales.show', order.sale_id)" class="underline">Ver venda</Link>

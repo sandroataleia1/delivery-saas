@@ -7,6 +7,7 @@ return [
         'ready' => 'Pronto',
         'out_for_delivery' => 'Em rota',
         'delivered' => 'Entregue',
+        'returned' => 'Não entregue',
         'cancelled' => 'Cancelado',
     ],
     'types' => [

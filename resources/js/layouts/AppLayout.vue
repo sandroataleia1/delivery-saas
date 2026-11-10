@@ -89,6 +89,7 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
             can('customers.view') && { label: 'Clientes', href: route('customers.index'), match: '/clientes', icon: Contact },
             can('suppliers.manage') && { label: 'Fornecedores', href: route('suppliers.index'), match: '/fornecedores', icon: Truck },
             can('deliveries.manage') && { label: 'Bairros de entrega', href: route('deliveries.zones'), match: '/entregas/bairros', icon: MapPin },
+            can('deliveries.manage') && { label: 'Entregadores', href: route('couriers.index'), match: '/entregas/entregadores', icon: Motorcycle },
             can('tables.manage') && { label: 'Mesas do salão', href: route('tables.manage'), match: '/mesas/gerenciar', icon: LayoutGrid },
             can('production.configure') && { label: 'Setores', href: route('production.sectors'), match: '/setores', icon: ChefHat },
             can('users.view') && { label: 'Usuários', href: route('users.index'), match: '/usuarios', icon: Users },

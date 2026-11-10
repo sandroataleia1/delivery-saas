@@ -11,6 +11,7 @@ use App\Http\Controllers\BillController;
 use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CourierController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryController;
@@ -173,6 +174,9 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('entregas/bairros', [DeliveryController::class, 'storeZone'])->name('deliveries.zones.store');
             Route::put('entregas/bairros/{zone}', [DeliveryController::class, 'updateZone'])->name('deliveries.zones.update');
             Route::delete('entregas/bairros/{zone}', [DeliveryController::class, 'destroyZone'])->name('deliveries.zones.destroy');
+            Route::get('entregas/entregadores', [CourierController::class, 'index'])->name('couriers.index');
+            Route::post('entregas/entregadores', [CourierController::class, 'store'])->name('couriers.store');
+            Route::put('entregas/entregadores/{courier}', [CourierController::class, 'update'])->name('couriers.update');
         });
         Route::middleware('can:deliveries.courier')->get('entregas/minhas', [DeliveryController::class, 'mine'])->name('deliveries.mine');
         Route::middleware('can:deliveries.operate')->group(function () {
@@ -185,6 +189,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('entregas/{delivery}/imprimir', [DeliveryController::class, 'printThermal'])->name('deliveries.print');
         });
         Route::post('entregas/{delivery}/avancar', [DeliveryController::class, 'advance'])->name('deliveries.advance');
+        Route::post('entregas/{delivery}/nao-entregue', [DeliveryController::class, 'markReturned'])->name('deliveries.returned');
         Route::middleware('can:deliveries.settle')->post('entregas/{delivery}/acertar', [DeliveryController::class, 'settle'])->name('deliveries.settle');
         Route::middleware('can:deliveries.cancel')->post('entregas/{delivery}/cancelar', [DeliveryController::class, 'cancel'])->name('deliveries.cancel');
 

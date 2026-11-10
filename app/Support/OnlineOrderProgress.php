@@ -26,7 +26,7 @@ class OnlineOrderProgress
             $status === DeliveryOrder::CANCELLED => 'cancelled',
             $delivery === null => 'pending',
             $status === DeliveryOrder::DELIVERED => 'delivered',
-            $status === DeliveryOrder::OUT => 'ready',
+            in_array($status, [DeliveryOrder::OUT, DeliveryOrder::RETURNED], true) => 'ready',
             $status === DeliveryOrder::READY => $pickup ? 'ready' : 'preparing',
             $status === DeliveryOrder::PREPARING => 'preparing',
             default => 'accepted',
@@ -37,8 +37,8 @@ class OnlineOrderProgress
         $reached = [
             'received' => true,
             'accepted' => $accepted,
-            'preparing' => ! $terminal && in_array($status, [DeliveryOrder::PREPARING, DeliveryOrder::READY, DeliveryOrder::OUT, DeliveryOrder::DELIVERED], true),
-            'ready' => ! $terminal && in_array($status, $pickup ? [DeliveryOrder::READY, DeliveryOrder::DELIVERED] : [DeliveryOrder::OUT, DeliveryOrder::DELIVERED], true),
+            'preparing' => ! $terminal && in_array($status, [DeliveryOrder::PREPARING, DeliveryOrder::READY, DeliveryOrder::OUT, DeliveryOrder::RETURNED, DeliveryOrder::DELIVERED], true),
+            'ready' => ! $terminal && in_array($status, $pickup ? [DeliveryOrder::READY, DeliveryOrder::DELIVERED] : [DeliveryOrder::OUT, DeliveryOrder::RETURNED, DeliveryOrder::DELIVERED], true),
             'delivered' => ! $terminal && $status === DeliveryOrder::DELIVERED,
         ];
         $labels = [

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\Courier;
 use App\Models\DeliveryOrder;
 use App\Models\User;
 use App\Support\ProductionGuard;
@@ -11,8 +12,11 @@ use Illuminate\Validation\ValidationException;
 
 class AdvanceDeliveryOrder
 {
-    /** @param  string  $expectedStatus  Etapa vista na tela: evita pular etapa em duplo clique. */
-    public function handle(DeliveryOrder $order, string $expectedStatus, ?User $courier = null): DeliveryOrder
+    /**
+     * @param  string  $expectedStatus  Etapa vista na tela: evita pular etapa em duplo clique.
+     * @param  User|Courier|null  $courier  Entregador do cadastro ou, como antes, um usuário entregador.
+     */
+    public function handle(DeliveryOrder $order, string $expectedStatus, User|Courier|null $courier = null): DeliveryOrder
     {
         return DB::transaction(function () use ($order, $expectedStatus, $courier) {
             /** @var DeliveryOrder $locked */
@@ -41,7 +45,8 @@ class AdvanceDeliveryOrder
                     throw ValidationException::withMessages(['courier_id' => 'Escolha o entregador.']);
                 }
 
-                $locked->courier_id = $courier->id;
+                $locked->courier_id = $courier instanceof Courier ? $courier->user_id : $courier->id;
+                $locked->delivery_courier_id = $courier instanceof Courier ? $courier->id : null;
                 $locked->courier_name = $courier->name;
                 $locked->dispatched_at = now();
             }
