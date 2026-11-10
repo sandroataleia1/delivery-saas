@@ -109,12 +109,14 @@ function beep() {
     oscillator.stop(audio.currentTime + 0.25);
 }
 const SOUND_KEY = 'production-panel-sound';
+const soundWanted = ref(false);
 async function enableAudio() {
     try {
         audio ??= new (window.AudioContext || window.webkitAudioContext)();
         await audio.resume();
         audioEnabled.value = true;
-        localStorage.setItem(SOUND_KEY, '1');
+        soundWanted.value = true;
+        try { localStorage.setItem(SOUND_KEY, '1'); } catch { /* sem armazenamento */ }
         beep();
     } catch {
         audioEnabled.value = false;
@@ -126,7 +128,8 @@ async function enableAudio() {
  * Quem já ativou não precisa achar o botão: o som volta sozinho no primeiro
  * toque em qualquer lugar da tela (ou na hora, se o navegador já permitir).
  */
-const GESTURES = ['pointerdown', 'keydown'];
+/* O Chrome só libera o som ao soltar o toque (click/touchend), não ao encostar. */
+const GESTURES = ['click', 'touchend', 'keydown'];
 function resumeOnGesture() {
     GESTURES.forEach((name) => document.removeEventListener(name, resumeOnGesture, true));
     audio?.resume().then(() => { audioEnabled.value = audio.state === 'running'; }).catch(() => {});
@@ -137,6 +140,7 @@ onMounted(() => {
     if (!wanted || !props.operation.sound_alerts) {
         return;
     }
+    soundWanted.value = true;
     try {
         audio = new (window.AudioContext || window.webkitAudioContext)();
     } catch {
@@ -170,7 +174,7 @@ watch(() => props.orders.flatMap((order) => order.items.map((item) => item.id)),
                     <option value="">Escolher setor…</option>
                     <option v-for="option in sectors" :key="option.id" :value="option.id">{{ option.name }}</option>
                 </select>
-                <button v-if="operation.sound_alerts && !audioEnabled" type="button" class="rounded-lg bg-amber-500 px-3 py-2 font-bold text-slate-950" @click="enableAudio">Ativar som</button>
+                <button v-if="operation.sound_alerts && !audioEnabled && !soundWanted" type="button" class="rounded-lg bg-amber-500 px-3 py-2 font-bold text-slate-950" @click="enableAudio">Ativar som</button>
                 <button type="button" class="rounded-lg bg-slate-800 px-3 py-2 font-semibold hover:bg-slate-700" @click="toggleFullscreen">{{ fullscreen ? 'Sair da tela cheia' : 'Tela cheia' }}</button>
                 <Link v-if="!fullscreen" :href="route('production.index')" class="rounded-lg px-3 py-2 text-slate-400 hover:text-white">Voltar</Link>
                 <span class="text-3xl font-black tabular-nums">{{ time }}</span>

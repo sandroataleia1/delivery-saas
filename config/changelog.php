@@ -9,12 +9,12 @@
 
 return [
     [
-        'id' => '2026-11-10.5',
+        'id' => '2026-11-10.6',
         'date' => '10/11/2026',
         'items' => [
             [
                 'title' => 'Som do painel da cozinha lembrado',
-                'text' => 'Depois de ativar o som uma vez, o painel lembra: ao recarregar a página, o som volta no primeiro toque em qualquer lugar da tela.',
+                'text' => 'Depois de ativar o som uma vez, o painel lembra e não mostra mais o botão "Ativar som": ao recarregar a página, o som volta no primeiro toque em qualquer lugar da tela.',
                 'can' => 'production.view',
             ],
         ],
