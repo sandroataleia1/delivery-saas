@@ -56,7 +56,7 @@ class WhatsAppBotCheckoutTest extends TestCase
     /** Do carrinho até o resumo: entrega no Centro, nome do WhatsApp, Pix. */
     private function deliveryCheckout(): void
     {
-        $this->customerAnswers(['3', '1', '1', 'Rua das Flores', '45', 'pular', 'Perto da praça', '1', '2']);
+        $this->customerAnswers(['3', '1', '1', 'Rua das Flores, 45, Perto da praça', '1', '2']);
     }
 
     private function previousOrder(): void
@@ -78,7 +78,9 @@ class WhatsAppBotCheckoutTest extends TestCase
         $this->assertSame("Como prefere receber?\n1 – entrega\n2 – retirar na loja\n\n9 – voltar · 0 – atendente", $this->lastSent());
         $this->customerSays('1');
         $this->assertSame("Qual o seu bairro?\n1 – Centro – taxa R$ 6,00\n\n9 – voltar · 0 – atendente", $this->lastSent());
-        $this->customerAnswers(['1', 'Rua das Flores', '45', 'pular', 'Perto da praça']);
+        $this->customerSays('1');
+        $this->assertSame("Agora mande o endereço completo numa mensagem só: rua, número, complemento e ponto de referência.\nEx.: Rua das Flores, 45, apto 12, perto da praça\n\n9 – voltar · 0 – atendente", $this->lastSent());
+        $this->customerSays('Rua das Flores, 45, Perto da praça');
         $this->assertSame("Em nome de quem é o pedido?\n1 – usar Cliente Teste\nOu escreva outro nome.", $this->lastSent());
         $this->customerAnswers(['1', '2']);
 
@@ -223,7 +225,47 @@ class WhatsAppBotCheckoutTest extends TestCase
         $this->cokeInCart();
         $this->customerAnswers(['3', '1', '1', 'Rua das Flores', '9']);
 
-        $this->assertStringStartsWith('Tem complemento', $this->lastSent());
+        $this->assertStringStartsWith('Em nome de quem é o pedido?', $this->lastSent());
+        $this->assertSame(['street' => 'Rua das Flores', 'number' => '9'], array_intersect_key($this->conversation()->context['checkout']['address'], ['street' => 1, 'number' => 1]));
+    }
+
+    public function test_full_address_in_one_message_fills_street_number_complement_and_reference(): void
+    {
+        $this->cokeInCart();
+        $this->customerAnswers(['3', '1', '1', 'Rua das Flores, nº 45, apto 12, bloco B, perto da praça', '1', '2', '1']);
+
+        $order = OnlineOrder::sole();
+        $this->assertSame(['Rua das Flores', '45', 'apto 12, bloco B', 'perto da praça'], [$order->street, $order->number_address, $order->complement, $order->reference]);
+    }
+
+    public function test_number_glued_to_street_and_lines_are_understood(): void
+    {
+        $this->cokeInCart();
+        $this->customerAnswers(['3', '1', '1', "Av. Brasil 1200A\nCasa dos fundos\nEm frente ao mercado", '1', '2', '1']);
+
+        $order = OnlineOrder::sole();
+        $this->assertSame(['Av. Brasil', '1200A', 'Casa dos fundos', 'Em frente ao mercado'], [$order->street, $order->number_address, $order->complement, $order->reference]);
+    }
+
+    public function test_missing_number_is_asked_alone_and_keeps_the_rest(): void
+    {
+        $this->cokeInCart();
+        $this->customerAnswers(['3', '1', '1', 'Rua das Flores, apto 3, perto da escola']);
+
+        $this->assertSame("Faltou o número da casa.\nQual o número? Se não tiver, digite s/n.", implode("\n", array_slice($this->sentTexts(), -2)));
+        $this->customerAnswers(['s/n', '1', '2', '1']);
+
+        $order = OnlineOrder::sole();
+        $this->assertSame(['Rua das Flores', 's/n', 'apto 3', 'perto da escola'], [$order->street, $order->number_address, $order->complement, $order->reference]);
+    }
+
+    public function test_address_too_long_is_refused_without_moving_on(): void
+    {
+        $this->cokeInCart();
+        $this->customerAnswers(['3', '1', '1', str_repeat('a', 121).', 45']);
+
+        $this->assertSame('O nome da rua pode ter até 120 caracteres. Mande o endereço de novo.', $this->lastSent());
+        $this->assertSame('address', $this->conversation()->state);
     }
 
     public function test_zero_after_sent_order_calls_attendant(): void

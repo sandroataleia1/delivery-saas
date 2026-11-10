@@ -28,6 +28,10 @@ class CheckoutFlow
 
     public const ZONE = 'zone';
 
+    /** Endereço completo numa mensagem só: rua, número, complemento e referência. */
+    public const ADDRESS = 'address';
+
+    /** Passos antigos, um campo por mensagem: seguem valendo para conversas que já estavam neles. */
     public const STREET = 'street';
 
     public const NUMBER = 'number';
@@ -47,9 +51,15 @@ class CheckoutFlow
     /** Pedido enviado (ou recusado pelo limite de pendentes): o bot fica quieto até a próxima conversa. */
     public const DONE = 'done';
 
-    public const STATES = [self::TYPE, self::ADDRESS_REUSE, self::ZONE, self::STREET, self::NUMBER, self::COMPLEMENT, self::REFERENCE, self::NAME, self::PAYMENT, self::CHANGE, self::SUMMARY];
+    public const STATES = [self::TYPE, self::ADDRESS_REUSE, self::ZONE, self::ADDRESS, self::STREET, self::NUMBER, self::COMPLEMENT, self::REFERENCE, self::NAME, self::PAYMENT, self::CHANGE, self::SUMMARY];
 
     private const NO_CHANGE = ['nao preciso', 'nao', 'sem troco', 'nao precisa'];
+
+    /** Número da casa: 45, 45A, 1200-B, s/n, com ou sem "nº" na frente. */
+    private const HOUSE_NUMBER = '(?:n(?:[º°o]|um(?:ero)?)?\.?\s*)?(\d{1,6}\s?-?\s?[a-z]?|s\/?n)';
+
+    /** Começo de trecho que é ponto de referência, não complemento. */
+    private const REFERENCE_START = '/^(perto|pr[oó]x|ao lado|do lado|em frente|frente|atr[aá]s|esquina|ref\b|ref\.|refer[eê]ncia|depois|antes|entre|em cima|embaixo|junto)/iu';
 
     private WhatsAppConversation $conversation;
 
@@ -95,8 +105,9 @@ class CheckoutFlow
             self::ZONE => "Qual o seu bairro?\n".OrderFlow::numbered($this->zones()->map(
                 fn (DeliveryZone $zone) => $zone->name.' – '.(bccomp((string) $zone->fee, '0', 2) > 0 ? 'taxa R$ '.Decimal::currency($zone->fee) : 'entrega grátis'),
             )->all()).OrderFlow::footer($this->zones()->count()),
+            self::ADDRESS => "Agora mande o endereço completo numa mensagem só: rua, número, complemento e ponto de referência.\nEx.: Rua das Flores, 45, apto 12, perto da praça".OrderFlow::FOOTER,
             self::STREET => 'Qual a rua?',
-            self::NUMBER => 'Qual o número?',
+            self::NUMBER => 'Qual o número? Se não tiver, digite s/n.',
             self::COMPLEMENT => 'Tem complemento (apto, bloco)? Escreva aqui ou digite pular.',
             self::REFERENCE => 'Algum ponto de referência? Escreva aqui ou digite pular.',
             self::NAME => $this->contactName() === null
@@ -147,7 +158,10 @@ class CheckoutFlow
                 }
                 $checkout['address'] = ['delivery_zone_id' => $zone->id];
 
-                return $this->go(self::STREET);
+                return $this->go(self::ADDRESS);
+
+            case self::ADDRESS:
+                return $this->fullAddress($raw, $checkout);
 
             case self::STREET:
             case self::NUMBER:
@@ -158,7 +172,12 @@ class CheckoutFlow
                 }
                 $checkout['address'][$state] = $raw;
 
-                return $this->go($state === self::STREET ? self::NUMBER : self::COMPLEMENT);
+                if ($state === self::STREET) {
+                    return $this->go(self::NUMBER);
+                }
+
+                // Veio do endereço numa mensagem só: complemento e referência já foram lidos.
+                return $this->go(array_key_exists('complement', $checkout['address']) ? self::NAME : self::COMPLEMENT);
 
             case self::COMPLEMENT:
             case self::REFERENCE:
@@ -493,6 +512,75 @@ class CheckoutFlow
     private function paymentLabel(string $method): string
     {
         return config('sales.payment_methods')[$method] ?? $method;
+    }
+
+    /**
+     * Lê o endereço que o cliente mandou de uma vez. Separa por vírgula, ponto e vírgula, quebra de linha ou
+     * travessão: o primeiro trecho é a rua (o número pode vir colado no fim dela), o trecho seguinte que parece
+     * número é o número, trechos que começam com "perto", "em frente"... são referência e o resto é complemento.
+     * Sem número, pergunta só o número.
+     *
+     * @param  array<string, mixed>  $checkout
+     * @return array{next: ?string, texts: list<string>, remember: bool}
+     */
+    private function fullAddress(string $raw, array &$checkout): array
+    {
+        $parts = array_values(array_filter(
+            array_map('trim', preg_split('/\s*(?:[,;\n]|\s[-–—]\s)\s*/u', $raw) ?: []),
+            fn (string $part) => $part !== '',
+        ));
+
+        if ($parts === []) {
+            return $this->stay('Mande o endereço com rua e número.');
+        }
+
+        $street = array_shift($parts);
+        $number = null;
+
+        // Número em trecho próprio vem antes: "Rua 25, 45" é a rua 25, número 45.
+        if ($parts !== [] && preg_match('/^'.self::HOUSE_NUMBER.'$/iu', $parts[0], $match) === 1) {
+            array_shift($parts);
+            $number = $match[1];
+        } elseif (preg_match('/^(.+?)\s+'.self::HOUSE_NUMBER.'$/iu', $street, $match) === 1) {
+            [$street, $number] = [trim($match[1]), $match[2]];
+        }
+
+        $complement = [];
+        $reference = [];
+
+        foreach ($parts as $part) {
+            if (preg_match(self::REFERENCE_START, $part) === 1) {
+                $reference[] = $part;
+            } else {
+                $complement[] = $part;
+            }
+        }
+
+        $complement = $complement === [] ? null : implode(', ', $complement);
+        $reference = $reference === [] ? null : implode(', ', $reference);
+
+        if (mb_strlen($street) > 120) {
+            return $this->stay('O nome da rua pode ter até 120 caracteres. Mande o endereço de novo.');
+        }
+
+        if (mb_strlen((string) $complement) > 100 || mb_strlen((string) $reference) > 150) {
+            return $this->stay('O complemento pode ter até 100 caracteres e a referência até 150. Mande o endereço de novo, mais curto.');
+        }
+
+        $checkout['address'] = [
+            'delivery_zone_id' => $checkout['address']['delivery_zone_id'] ?? null,
+            'street' => $street,
+            'complement' => $complement,
+            'reference' => $reference,
+        ];
+
+        if ($number === null) {
+            return ['next' => self::NUMBER, 'texts' => ['Faltou o número da casa.'], 'remember' => true];
+        }
+
+        $checkout['address']['number'] = Str::lower(preg_replace('/\s+/', '', $number)) === 'sn' ? 's/n' : preg_replace('/\s+/', '', $number);
+
+        return $this->go(self::NAME);
     }
 
     /** @return array{next: string, texts: list<string>, remember: bool} */
