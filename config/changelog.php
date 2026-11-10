@@ -9,6 +9,22 @@
 
 return [
     [
+        'id' => '2026-11-10.9',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Produto esgotado não entra mais na mesa',
+                'text' => 'Ao lançar itens numa mesa, o sistema recusa produto marcado como esgotado e avisa qual é ("X-Bacon está esgotado."), em vez de mandar para a cozinha.',
+                'can' => 'tables.operate',
+            ],
+            [
+                'title' => 'App do garçom: cardápio e pedidos',
+                'text' => 'No app do garçom já dá para abrir uma mesa livre, ver a comanda com a situação de cada item e lançar pedidos pelo cardápio, inclusive pizzas e adicionais. O preço sempre vem do sistema.',
+                'can' => 'tables.operate',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.8',
         'date' => '10/11/2026',
         'items' => [
