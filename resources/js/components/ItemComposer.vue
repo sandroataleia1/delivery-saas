@@ -8,8 +8,12 @@ import { fromCents } from '@/lib/money';
 
 const props = defineProps({
     product: { type: Object, required: true },
-    composition: { type: Object, required: true },
+    // Produto simples não tem composição: o modal serve só para quantidade e observação.
+    composition: { type: Object, default: () => ({ groups: [] }) },
     withNotes: { type: Boolean, default: true },
+    // Loja online e cardápio do QR: escolhe a quantidade no próprio modal.
+    withQuantity: { type: Boolean, default: false },
+    maxQuantity: { type: Number, default: 99 },
     // Vindo da lista por tamanho: abre com o tamanho e o sabor tocados já marcados.
     initialSizeId: { type: Number, default: null },
     initialFlavorId: { type: Number, default: null },
@@ -23,6 +27,11 @@ const sizeId = ref(props.initialSizeId);
 const flavorIds = ref(props.initialFlavorId ? [props.initialFlavorId] : []);
 const quantities = ref({});
 const notes = ref('');
+const quantity = ref(1);
+
+function stepQuantity(delta) {
+    quantity.value = Math.min(props.maxQuantity, Math.max(1, quantity.value + delta));
+}
 
 const selection = computed(() => ({
     size_id: sizeId.value,
@@ -99,6 +108,7 @@ function confirm() {
         unitCents: unitCents.value,
         label: preview.value,
         notes: notes.value.trim(),
+        quantity: props.withQuantity ? quantity.value : 1,
     });
 }
 </script>
@@ -107,12 +117,14 @@ function confirm() {
     <ConfirmDialog
         :open="true"
         :title="product.name"
-        confirm-label="Adicionar"
+        :confirm-label="withQuantity ? `Adicionar ${formatMoney(fromCents(unitCents * quantity))}` : 'Adicionar'"
         :disabled="problems.length > 0"
         @confirm="confirm"
         @cancel="emit('cancel')"
     >
         <div class="mt-4 max-h-[60dvh] space-y-4 overflow-y-auto">
+            <p v-if="product.description" class="text-muted text-sm break-words">{{ product.description }}</p>
+
             <fieldset v-if="pizza">
                 <legend class="mb-1.5 text-sm font-semibold">Tamanho</legend>
                 <div class="flex flex-wrap gap-2">
@@ -189,7 +201,18 @@ function confirm() {
             <ul v-if="problems.length" class="text-danger space-y-0.5 text-sm" role="alert">
                 <li v-for="message in problems" :key="message">{{ message }}</li>
             </ul>
-            <p class="text-right text-lg font-bold tabular-nums">{{ formatMoney(fromCents(unitCents)) }}</p>
+            <div v-if="withQuantity" class="flex items-center justify-between gap-3">
+                <span class="text-sm font-semibold">Quantidade</span>
+                <span class="flex items-center gap-2">
+                    <button type="button" class="btn btn-secondary size-10 px-0" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="stepQuantity(-1)"><Minus :size="16" /></button>
+                    <span class="w-8 text-center text-lg font-bold tabular-nums" aria-live="polite">{{ quantity }}</span>
+                    <button type="button" class="btn btn-secondary size-10 px-0" aria-label="Aumentar quantidade" :disabled="quantity >= maxQuantity" @click="stepQuantity(1)"><Plus :size="16" /></button>
+                </span>
+            </div>
+            <p class="text-right text-lg font-bold tabular-nums">
+                <span v-if="withQuantity && quantity > 1" class="text-muted mr-1 text-sm font-normal">{{ quantity }} × {{ formatMoney(fromCents(unitCents)) }} =</span>
+                {{ formatMoney(fromCents(unitCents * (withQuantity ? quantity : 1))) }}
+            </p>
         </div>
     </ConfirmDialog>
 </template>

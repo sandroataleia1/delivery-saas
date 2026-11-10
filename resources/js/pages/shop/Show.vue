@@ -74,13 +74,8 @@ function add(product) {
     if (product.sold_out) {
         return;
     }
-    if (isComposed(product)) {
-        composerStart.value = {};
-        composing.value = product;
-
-        return;
-    }
-    cart.value = addLine(cart.value, { product_id: product.id, name: product.name, unit_cents: toCents(product.sale_price), quantity: 1, notes: '', key: String(product.id), label: null, fields: {} });
+    composerStart.value = {};
+    composing.value = product;
 }
 
 function pickPizza(product, { sizeId, flavorId }) {
@@ -91,10 +86,15 @@ function pickPizza(product, { sizeId, flavorId }) {
     composing.value = product;
 }
 
-function addComposed({ selection, unitCents, label, notes }) {
+function addComposed({ selection, unitCents, label, notes, quantity }) {
     const product = composing.value;
     composing.value = null;
-    cart.value = addLine(cart.value, { product_id: product.id, name: product.name, unit_cents: unitCents, quantity: 1, notes, key: selectionKey(product.id, selection), label, fields: payloadFields(selection) });
+    if (!isComposed(product)) {
+        cart.value = addLine(cart.value, { product_id: product.id, name: product.name, unit_cents: toCents(product.sale_price), quantity, notes, key: String(product.id), label: null, fields: {} });
+
+        return;
+    }
+    cart.value = addLine(cart.value, { product_id: product.id, name: product.name, unit_cents: unitCents, quantity, notes, key: selectionKey(product.id, selection), label, fields: payloadFields(selection) });
 }
 
 function changeLine(line, delta) {
@@ -236,7 +236,7 @@ onUnmounted(() => http.cancel());
             </button>
         </div>
 
-        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" :initial-size-id="composerStart.sizeId" :initial-flavor-id="composerStart.flavorId" @add="addComposed" @cancel="composing = null" />
+        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" with-quantity :initial-size-id="composerStart.sizeId" :initial-flavor-id="composerStart.flavorId" @add="addComposed" @cancel="composing = null" />
 
         <div v-if="sheet" class="fixed inset-0 z-30 bg-black/40" @click.self="sheet = null">
             <section class="bg-surface absolute inset-x-0 bottom-0 mx-auto max-h-[90dvh] max-w-2xl overflow-y-auto rounded-t-2xl px-4 py-4">

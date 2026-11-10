@@ -94,7 +94,8 @@ function storageChanged(event) {
 function change(product, delta) {
     if (frozen.value || (delta > 0 && product.sold_out)) return;
     if (isComposed(product)) { if (delta > 0) { composerStart.value = {}; composing.value = product; } return; }
-    const line = cart.value.find(item => item.product_id === product.id && !item.key);
+    const simple = cart.value.filter(item => item.product_id === product.id && !item.key);
+    const line = simple.find(item => !item.notes) ?? simple.at(-1);
     if (delta > 0 && (count.value >= props.limits.max_order_units || (line?.quantity ?? 0) >= props.limits.max_line_units || (!line && cart.value.length >= props.limits.max_lines))) {
         error.value = 'Limite de itens atingido. Confira seu pedido.'; return;
     }
@@ -106,17 +107,25 @@ function pickPizza(product, { sizeId, flavorId }) {
     composerStart.value = { sizeId, flavorId };
     composing.value = product;
 }
-function withinLimits(line) {
-    return count.value < props.limits.max_order_units && (line?.quantity ?? 0) < props.limits.max_line_units && (line || cart.value.length < props.limits.max_lines);
+function withinLimits(line, quantity = 1) {
+    return count.value + quantity <= props.limits.max_order_units && (line?.quantity ?? 0) + quantity <= props.limits.max_line_units && (line || cart.value.length < props.limits.max_lines);
 }
-function addComposed({ selection, unitCents, label, notes }) {
+/** Botão de adicionar: abre o modal com quantidade, observação e adicionais. */
+function openComposer(product) {
+    if (frozen.value || product.sold_out) return;
+    composerStart.value = {};
+    composing.value = product;
+}
+function addComposed({ selection, unitCents, label, notes, quantity }) {
     const product = composing.value;
     composing.value = null;
-    const key = selectionKey(product.id, selection);
-    const line = cart.value.find(item => item.key === key && item.notes === notes);
-    if (!withinLimits(line)) { error.value = 'Limite de itens atingido. Confira seu pedido.'; return; }
-    if (line) line.quantity += 1;
-    else cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity: 1, notes, key, label, fields: payloadFields(selection) });
+    const composed = isComposed(product);
+    const key = composed ? selectionKey(product.id, selection) : undefined;
+    const line = cart.value.find(item => (composed ? item.key === key : item.product_id === product.id && !item.key) && (item.notes ?? '') === notes);
+    if (!withinLimits(line, quantity)) { error.value = 'Limite de itens atingido. Confira seu pedido.'; return; }
+    if (line) line.quantity += quantity;
+    else if (composed) cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity, notes, key, label, fields: payloadFields(selection) });
+    else cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: product.sale_price, quantity, notes });
 }
 function changeLine(line, delta) {
     if (frozen.value) return;
@@ -237,7 +246,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
                         <span class="w-5 text-center font-bold tabular-nums">{{ quantityOf(product) }}</span>
                         <button type="button" class="btn btn-secondary size-10 px-0" :aria-label="`Aumentar ${product.name}`" :disabled="frozen || product.sold_out" @click="change(product, 1)"><Plus :size="16" /></button>
                     </div>
-                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="frozen || product.sold_out" @click="change(product, 1)"><Plus :size="18" /></button>
+                    <button v-else type="button" class="btn btn-primary size-10 px-0" :aria-label="`Adicionar ${product.name}`" :disabled="frozen || product.sold_out" @click="openComposer(product)"><Plus :size="18" /></button>
                 </li>
                 </template>
             </ul>
@@ -254,7 +263,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); clearInterval(pollTim
             </button>
         </div>
 
-        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" :initial-size-id="composerStart.sizeId" :initial-flavor-id="composerStart.flavorId" @add="addComposed" @cancel="composing = null" />
+        <ItemComposer v-if="composing" :product="composing" :composition="composition[composing.id]" with-quantity :max-quantity="limits.max_line_units" :initial-size-id="composerStart.sizeId" :initial-flavor-id="composerStart.flavorId" @add="addComposed" @cancel="composing = null" />
 
         <div v-if="sheet" class="fixed inset-0 z-30 bg-black/40" @click.self="sheet = null">
             <section class="bg-surface absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl p-4">
