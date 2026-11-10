@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'evolution' => [
+        'url' => env('EVOLUTION_URL'),
+        'key' => env('EVOLUTION_API_KEY'),
+        'timeout' => 10,
+    ],
+
 ];

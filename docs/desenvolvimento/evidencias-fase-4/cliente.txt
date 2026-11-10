@@ -1,0 +1,13 @@
+✔ delayed tracking cannot regress status or erase a newer draft after resend (5.5255ms)
+✔ another tab resolves the original ambiguous submission and preserves its own draft (4.385ms)
+✔ network retry keeps UUID, key, context and content across reload (1.2191ms)
+✔ recovery in another tab clears only the old draft before editing resumes (1.7352ms)
+✔ a stale tracking response cannot regress delivered production from another tab (0.7074ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 173.9846

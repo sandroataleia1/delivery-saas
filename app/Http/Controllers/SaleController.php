@@ -11,6 +11,8 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Support\CashPanel;
+use App\Support\ProductComposition;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -33,13 +35,16 @@ class SaleController extends Controller
             return redirect()->route('cash.index')->with('error', 'Abra o caixa para começar a vender.');
         }
 
+        $products = Product::query()
+            ->where('active', true)
+            ->where('sellable', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']);
+
         return Inertia::render('sales/Pos', [
-            'cashNumber' => $session->number,
-            'products' => Product::query()
-                ->where('active', true)
-                ->where('sellable', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+            'cash' => CashPanel::present($session, $user),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'paymentMethods' => config('sales.payment_methods'),
             'completed' => session('completed_sale'),
@@ -168,7 +173,7 @@ class SaleController extends Controller
             'cancelled_by' => $sale->cancelled_by,
             'cancel_reason' => $sale->cancel_reason,
             'cost' => $withCost ? $cost : null,
-            'items' => $sale->items->map(fn (SaleItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'unit_price', 'total')),
+            'items' => $sale->items->map(fn (SaleItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'unit_price', 'total')),
             'payments' => $sale->payments->map(fn (SalePayment $payment) => [
                 'id' => $payment->id,
                 'label' => $methods[$payment->method],

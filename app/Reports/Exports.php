@@ -81,6 +81,7 @@ class Exports
             ['Custo das mercadorias vendidas', Csv::money(-$statement['cost'])],
             ['Lucro bruto', Csv::money($statement['gross_profit'])],
             ['Outras receitas', Csv::money($statement['other_income'])],
+            ['Descontos na quitação de fiado', Csv::money(-$statement['credit_discounts'])],
         ];
 
         foreach ($data['expenses'] as $expense) {
@@ -136,6 +137,25 @@ class Exports
     }
 
     /** @return array{0: array<int, string>, 1: iterable} */
+    /** As entregas do entregador escolhido; sem entregador, a planilha sai só com o cabeçalho. */
+    public function courier(CourierReport $report): array
+    {
+        $rows = $report->orders()->map(fn (DeliveryOrder $order) => [
+            $order->number,
+            $order->dispatched_at->format('d/m/Y H:i'),
+            $order->courier_name,
+            __("deliveries.status.{$order->status}"),
+            $order->customer_name,
+            $order->district,
+            config("sales.payment_methods.{$order->payment_method}"),
+            Csv::money($order->delivery_fee),
+            Csv::money($order->total()),
+            $order->status === DeliveryOrder::RETURNED ? $order->return_reason : '',
+        ])->all();
+
+        return [['Pedido', 'Saída', 'Entregador', 'Situação', 'Cliente', 'Bairro', 'Pagamento', 'Taxa', 'Total', 'Motivo'], $rows];
+    }
+
     public function deliveries(): array
     {
         $rows = DeliveryOrder::query()

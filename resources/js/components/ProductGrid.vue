@@ -7,6 +7,7 @@ const props = defineProps({
     products: { type: Array, required: true },
     categories: { type: Array, required: true },
     placeholder: { type: String, default: 'Nome ou código de barras' },
+    composition: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits(['add']);
@@ -104,7 +105,7 @@ defineExpose({ focus: () => searchField.value?.focus() });
                         @click="add(product)"
                     >
                         <span class="line-clamp-2 text-sm leading-tight font-semibold">{{ product.name }}</span>
-                        <span class="text-brand-strong text-sm font-bold tabular-nums">{{ formatMoney(product.sale_price) }}</span>
+                        <span class="text-brand-strong text-sm font-bold tabular-nums">{{ composition[product.id] ? `a partir de ${formatMoney(composition[product.id].from_price)}` : formatMoney(product.sale_price) }}</span>
                     </button>
                 </li>
             </ul>

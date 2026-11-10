@@ -30,7 +30,7 @@ class CreditSaleTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->product = Product::factory()->create(['company_id' => $this->admin->company_id, 'sale_price' => '10', 'stock_quantity' => '100']);
         $this->customer = Customer::factory()->create([
             'company_id' => $this->admin->company_id,
@@ -209,6 +209,7 @@ class CreditSaleTest extends TestCase
             'items' => [['product_id' => $this->product->id, 'quantity' => '2']],
         ]);
 
+        $this->deliverProduction($order);
         $this->post("/mesas/comandas/{$order->id}/fechar", [
             'client_uuid' => (string) Str::uuid(),
             'expected_subtotal' => '20.00',

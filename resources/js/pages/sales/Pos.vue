@@ -1,23 +1,29 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Minus, Plus, Trash2 } from '@lucide/vue';
+import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChevronDown, List, Lock, Minus, Plus, Trash2 } from '@lucide/vue';
+import CashControls from '@/components/CashControls.vue';
+import QrOrderAlert from '@/components/QrOrderAlert.vue';
+import UpdateBanner from '@/components/UpdateBanner.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
+import ItemComposer from '@/components/ItemComposer.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import SaleCompleteDialog from '@/components/SaleCompleteDialog.vue';
 import { usePermissions } from '@/lib/can';
+import { label as compositionLabel, missing as compositionMissing, lineError, payloadFields, priceCents, selectionKey } from '@/lib/composition';
 import { formatMoney } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
     products: { type: Array, required: true },
+    composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
-    cashNumber: { type: Number, required: true },
+    cash: { type: Object, required: true },
     completed: { type: Object, default: null },
 });
 
@@ -55,8 +61,27 @@ const discountCents = computed(() => toCents(discount.value));
 const totalCents = computed(() => Math.max(subtotalCents.value - discountCents.value, 0));
 const itemCount = computed(() => cart.value.length);
 
+const composing = ref(null);
+
 function addProduct(product, quantity = 1) {
-    const line = cart.value.find((item) => item.id === product.id);
+    if (props.composition[product.id]) {
+        composing.value = { product, quantity };
+
+        return;
+    }
+
+    addLine(product, quantity);
+}
+
+function addComposed({ selection, unitCents, label }) {
+    const { product, quantity } = composing.value;
+    composing.value = null;
+    addLine(product, quantity, { selection, label, sale_price: fromCents(unitCents) });
+}
+
+function addLine(product, quantity, composed = null) {
+    const key = composed ? selectionKey(product.id, composed.selection) : null;
+    const line = cart.value.find((item) => (composed ? item.key === key : item.id === product.id && !item.key));
 
     if (line) {
         line.quantity = String(Number(line.quantity) + quantity);
@@ -65,8 +90,9 @@ function addProduct(product, quantity = 1) {
             id: product.id,
             name: product.name,
             unit: product.unit,
-            sale_price: product.sale_price,
+            sale_price: composed?.sale_price ?? product.sale_price,
             quantity: String(quantity),
+            ...(composed ? { key, selection: composed.selection, label: composed.label } : {}),
         });
     }
 }
@@ -112,6 +138,7 @@ function finish() {
             product_id: item.id,
             quantity: item.quantity,
             expected_price: item.sale_price,
+            ...payloadFields(item.selection),
         })),
         payments: payments.value
             .filter((payment) => toCents(payment.amount) > 0)
@@ -130,7 +157,25 @@ function finish() {
 function refreshCart() {
     cart.value = cart.value
         .filter((item) => props.products.some((product) => product.id === item.id))
-        .map((item) => ({ ...item, sale_price: props.products.find((product) => product.id === item.id).sale_price }));
+        .map((item) => {
+            const product = props.products.find((candidate) => candidate.id === item.id);
+            const composition = props.composition[item.id];
+
+            if (!item.selection) {
+                return { ...item, sale_price: product.sale_price };
+            }
+
+            if (!composition || compositionMissing(composition, item.selection).length > 0) {
+                return null;
+            }
+
+            return {
+                ...item,
+                sale_price: fromCents(priceCents(product, composition, item.selection)),
+                label: compositionLabel(composition, item.selection),
+            };
+        })
+        .filter(Boolean);
 }
 
 function onKeydown(event) {
@@ -162,12 +207,30 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
+
+const cashControls = ref(null);
+const cashMenuOpen = ref(false);
+
+function cashAction(action) {
+    cashMenuOpen.value = false;
+    action(cashControls.value);
+}
+
+function closeCashMenuOutside(event) {
+    if (!event.target.closest('[data-cash-menu]')) {
+        cashMenuOpen.value = false;
+    }
+}
+
+watch(cashMenuOpen, (open) => (open ? document.addEventListener('click', closeCashMenuOutside) : document.removeEventListener('click', closeCashMenuOutside)));
+onBeforeUnmount(() => document.removeEventListener('click', closeCashMenuOutside));
 </script>
 
 <template>
     <div class="flex h-dvh flex-col overflow-hidden">
         <Head title="PDV" />
         <FlashMessages top />
+        <QrOrderAlert />
 
         <header class="bg-sidebar flex h-14 shrink-0 items-center gap-3 px-4 text-white">
             <Link :href="route('dashboard')" class="flex items-center gap-2 text-sm font-semibold" aria-label="Sair do PDV">
@@ -175,13 +238,44 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 <span class="max-sm:hidden">Sair do PDV</span>
             </Link>
             <span class="min-w-0 flex-1 truncate text-center font-bold">{{ page.props.auth.company.trade_name }}</span>
-            <Link :href="route('cash.index')" class="text-sidebar-text text-sm hover:text-white">Caixa #{{ cashNumber }}</Link>
+            <div class="relative" data-cash-menu>
+                <button
+                    type="button"
+                    class="text-sidebar-text flex h-10 items-center gap-1 rounded-lg px-2 text-sm font-semibold hover:bg-white/10 hover:text-white"
+                    :aria-expanded="cashMenuOpen"
+                    aria-controls="cash-menu"
+                    @click="cashMenuOpen = !cashMenuOpen"
+                    @keydown.escape="cashMenuOpen = false"
+                >
+                    Caixa #{{ cash.number }}
+                    <ChevronDown :size="16" />
+                </button>
+                <div v-if="cashMenuOpen" id="cash-menu" class="bg-surface text-ink border-line absolute right-0 z-30 mt-1 w-56 rounded-xl border p-1 shadow-xl">
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.start('withdrawal'))">
+                        <ArrowUpFromLine :size="16" class="text-muted" />
+                        Sangria
+                    </button>
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.start('deposit'))">
+                        <ArrowDownToLine :size="16" class="text-muted" />
+                        Suprimento
+                    </button>
+                    <button type="button" class="hover:bg-canvas flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.openEntries())">
+                        <List :size="16" class="text-muted" />
+                        Ver lançamentos
+                    </button>
+                    <hr class="border-line my-1" />
+                    <button type="button" class="hover:bg-canvas text-danger flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm" @click="cashAction((c) => c.startClose())">
+                        <Lock :size="16" />
+                        Fechar caixa
+                    </button>
+                </div>
+            </div>
             <span class="text-sidebar-text text-sm max-sm:hidden">{{ page.props.auth.user.name }}</span>
         </header>
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'cart' }" aria-label="Produtos">
-                <ProductGrid ref="grid" :products="products" :categories="categories" placeholder="Nome ou código de barras (F2)" @add="addProduct" />
+                <ProductGrid ref="grid" :products="products" :composition="composition" :categories="categories" placeholder="Nome ou código de barras (F2)" @add="addProduct" />
 
                 <button v-if="itemCount > 0" type="button" class="btn btn-primary m-3 shrink-0 lg:hidden" @click="view = 'cart'">
                     Ver carrinho ({{ itemCount }}) · {{ formatMoney(fromCents(totalCents)) }}
@@ -204,9 +298,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 </p>
 
                 <ul v-else class="divide-line min-h-0 flex-1 divide-y overflow-y-auto">
-                    <li v-for="item in cart" :key="item.id" class="px-4 py-3">
+                    <li v-for="(item, index) in cart" :key="item.key ?? item.id" class="px-4 py-3">
                         <div class="flex items-start justify-between gap-3">
-                            <span class="min-w-0 text-sm font-semibold break-words">{{ item.name }}</span>
+                            <span class="min-w-0 text-sm font-semibold break-words">
+                                {{ item.name }}
+                                <span v-if="item.label" class="text-muted block text-xs font-normal break-words">{{ item.label }}</span>
+                            </span>
                             <span class="shrink-0 text-sm font-bold tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                         </div>
                         <div class="mt-2 flex items-center gap-2">
@@ -222,6 +319,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                                 <Trash2 :size="16" />
                             </button>
                         </div>
+                        <p v-if="lineError(form.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(form.errors, index) }}</p>
                     </li>
                 </ul>
 
@@ -260,6 +358,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
             <p v-for="message in [form.errors.cash, form.errors.items, form.errors.payments, form.errors.discount].filter(Boolean)" :key="message" class="text-danger mt-2 text-sm" role="alert">{{ message }}</p>
         </ConfirmDialog>
 
+        <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" :with-notes="false" @add="addComposed" @cancel="composing = null" />
+
         <SaleCompleteDialog :sale="receipt" @close="receipt = null" />
+
+        <CashControls ref="cashControls" :session="cash" />
+        <UpdateBanner hint="O carrinho continua guardado depois de atualizar." />
     </div>
 </template>

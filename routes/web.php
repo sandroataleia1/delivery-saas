@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Admin\CompanyController as AdminCompanyController;
+use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -10,27 +11,67 @@ use App\Http\Controllers\BillController;
 use App\Http\Controllers\CashController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CourierController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DiningTableController;
 use App\Http\Controllers\MenuController;
+use App\Http\Controllers\MenuOrderReceiptController;
+use App\Http\Controllers\NavCountController;
+use App\Http\Controllers\OnlineOrderController;
+use App\Http\Controllers\OnlineStoreController;
+use App\Http\Controllers\OptionController;
+use App\Http\Controllers\PizzaController;
+use App\Http\Controllers\PrintAgentController;
+use App\Http\Controllers\PrinterController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\ProductionSectorController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RestaurantOperationSettingsController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\ShopController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\StockEntryController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TableOrderController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WhatsAppController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Webhook da Evolution (WhatsApp): público, protegido pelo segredo da instância.
+Route::post('webhooks/whatsapp/{instance}/{secret}', WhatsAppWebhookController::class)
+    ->middleware('throttle:whatsapp-webhook')
+    ->name('whatsapp.webhook');
+
+// Agente de impressão da loja: público, protegido pela chave do agente.
+Route::middleware(['throttle:print-agent', 'print.agent'])->prefix('print-agent')->name('print-agent.')->group(function () {
+    Route::get('jobs', [PrintAgentController::class, 'jobs'])->name('jobs');
+    Route::post('jobs/{job}/printed', [PrintAgentController::class, 'printed'])->whereNumber('job')->name('printed');
+    Route::post('jobs/{job}/failed', [PrintAgentController::class, 'failed'])->whereNumber('job')->name('failed');
+    Route::post('printers', [PrintAgentController::class, 'printers'])->name('printers');
+});
 
 // Cardápio da mesa: público, acessado pelo QR Code.
 Route::middleware('public.page')->group(function () {
     Route::get('m/{token}', [MenuController::class, 'show'])->name('menu.show');
+    Route::get('m/{token}/envios/{uuid}', [MenuController::class, 'track'])->whereUuid('uuid')->middleware('throttle:menu-tracking')->name('menu.track');
     Route::post('m/{token}', [MenuController::class, 'store'])->middleware('throttle:menu')->name('menu.store');
 });
+
+// Loja online: pública, acessada pelo link da loja.
+Route::middleware('public.page')->group(function () {
+    Route::get('loja/{slug}', [ShopController::class, 'show'])->name('shop.show');
+    Route::post('loja/{slug}/pedidos', [ShopController::class, 'store'])->middleware('throttle:online')->name('shop.store');
+    Route::get('loja/{slug}/pedido/{token}', [ShopController::class, 'track'])->middleware('throttle:online-status')->name('shop.track');
+    Route::get('loja/{slug}/pedido/{token}/status', [ShopController::class, 'status'])->middleware('throttle:online-status')->name('shop.status');
+});
+
+// Versão no ar: as telas abertas comparam com a delas para avisar que há atualização.
+Route::get('versao', AppVersionController::class)->middleware('throttle:60,1')->name('app.version');
 
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'create'])->name('login');
@@ -58,6 +99,22 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
     // Área da empresa.
     Route::middleware('company')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
+        Route::get('contadores', NavCountController::class)->middleware('throttle:60,1')->name('nav.counts');
+        Route::middleware('can:production.configure')->group(function () {
+            Route::get('setores', [ProductionSectorController::class, 'index'])->name('production.sectors');
+            Route::post('setores', [ProductionSectorController::class, 'store'])->name('production.sectors.store');
+            Route::put('setores/{sector}', [ProductionSectorController::class, 'update'])->name('production.sectors.update');
+            Route::delete('setores/{sector}', [ProductionSectorController::class, 'destroy'])->name('production.sectors.destroy');
+            Route::redirect('producao/setores', '/setores');
+        });
+        Route::patch('produtos/{product}/esgotado', [ProductController::class, 'availability'])->middleware('can:products.manage')->name('products.availability');
+        Route::get('producao', [ProductionController::class, 'index'])->middleware('can:production.view')->name('production.index');
+        Route::get('producao/painel', [ProductionController::class, 'panel'])->middleware('can:production.view')->name('production.panel');
+        Route::post('producao/painel/pronto', [ProductionController::class, 'panelReady'])->middleware(['can:production.view', 'can:production.operate'])->name('production.panel.ready');
+        Route::post('producao/{work}/etapa', [ProductionController::class, 'transition'])->name('production.transition');
+        Route::post('producao/{work}/imprimir', [ProductionController::class, 'print'])->middleware('can:production.view')->name('production.print');
+        Route::post('producao/{work}/reconciliar', [ProductionController::class, 'reconcile'])->middleware('can:production.manage')->name('production.reconcile');
+        Route::post('producao/avisos/{event}/ciencia', [ProductionController::class, 'acknowledge'])->middleware('can:production.operate')->name('production.acknowledge');
 
         Route::middleware('can:tables.operate')->group(function () {
             Route::get('mesas', [DiningTableController::class, 'index'])->name('tables.index');
@@ -67,6 +124,13 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('mesas/comandas/{order}/cozinha', [TableOrderController::class, 'kitchen'])->name('orders.kitchen');
             Route::get('mesas/comandas/{order}/cozinha/{batch}', [TableOrderController::class, 'ticket'])->whereNumber('batch')->name('orders.ticket');
             Route::post('mesas/comandas/{order}/transferir', [TableOrderController::class, 'transfer'])->name('orders.transfer');
+            Route::post('mesas/comandas/{order}/conta', [TableOrderController::class, 'requestBill'])->name('orders.bill');
+            Route::post('mesas/comandas/{order}/imprimir', [TableOrderController::class, 'print'])->name('orders.print');
+        });
+        Route::middleware('can:tables.confirm')->group(function () {
+            Route::get('mesas/recebimentos/pendentes', [MenuOrderReceiptController::class, 'pending'])->middleware('throttle:30,1')->name('receipts.pending');
+            Route::post('mesas/recebimentos/{receipt}/confirmar', [MenuOrderReceiptController::class, 'confirm'])->name('receipts.confirm');
+            Route::post('mesas/recebimentos/{receipt}/rejeitar', [MenuOrderReceiptController::class, 'reject'])->name('receipts.reject');
         });
         Route::middleware('can:tables.close')->post('mesas/comandas/{order}/fechar', [TableOrderController::class, 'close'])->name('orders.close');
         Route::middleware('can:tables.cancel')->group(function () {
@@ -88,13 +152,14 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('relatorios/produtos', [ReportController::class, 'products'])->name('reports.products');
             Route::get('relatorios/estoque', [ReportController::class, 'stock'])->name('reports.stock');
             Route::get('relatorios/entregas', [ReportController::class, 'deliveries'])->name('reports.deliveries');
+            Route::get('relatorios/entregadores', [ReportController::class, 'couriers'])->name('reports.couriers');
         });
         Route::middleware('can:reports.finance')->group(function () {
             Route::get('relatorios/financeiro', [ReportController::class, 'finance'])->name('reports.finance');
             Route::get('relatorios/caixa', [ReportController::class, 'cash'])->name('reports.cash');
         });
         Route::get('relatorios/{report}/exportar', [ReportController::class, 'export'])
-            ->whereIn('report', ['vendas', 'produtos', 'financeiro', 'estoque', 'caixa', 'entregas'])
+            ->whereIn('report', ['vendas', 'produtos', 'financeiro', 'estoque', 'caixa', 'entregas', 'entregadores'])
             ->name('reports.export');
 
         Route::middleware('can:customers.view')->group(function () {
@@ -114,6 +179,9 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('entregas/bairros', [DeliveryController::class, 'storeZone'])->name('deliveries.zones.store');
             Route::put('entregas/bairros/{zone}', [DeliveryController::class, 'updateZone'])->name('deliveries.zones.update');
             Route::delete('entregas/bairros/{zone}', [DeliveryController::class, 'destroyZone'])->name('deliveries.zones.destroy');
+            Route::get('entregas/entregadores', [CourierController::class, 'index'])->name('couriers.index');
+            Route::post('entregas/entregadores', [CourierController::class, 'store'])->name('couriers.store');
+            Route::put('entregas/entregadores/{courier}', [CourierController::class, 'update'])->name('couriers.update');
         });
         Route::middleware('can:deliveries.courier')->get('entregas/minhas', [DeliveryController::class, 'mine'])->name('deliveries.mine');
         Route::middleware('can:deliveries.operate')->group(function () {
@@ -123,8 +191,10 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('entregas', [DeliveryController::class, 'store'])->name('deliveries.store');
             Route::get('entregas/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
             Route::get('entregas/{delivery}/imprimir', [DeliveryController::class, 'ticket'])->name('deliveries.ticket');
+            Route::post('entregas/{delivery}/imprimir', [DeliveryController::class, 'printThermal'])->name('deliveries.print');
         });
         Route::post('entregas/{delivery}/avancar', [DeliveryController::class, 'advance'])->name('deliveries.advance');
+        Route::post('entregas/{delivery}/nao-entregue', [DeliveryController::class, 'markReturned'])->name('deliveries.returned');
         Route::middleware('can:deliveries.settle')->post('entregas/{delivery}/acertar', [DeliveryController::class, 'settle'])->name('deliveries.settle');
         Route::middleware('can:deliveries.cancel')->post('entregas/{delivery}/cancelar', [DeliveryController::class, 'cancel'])->name('deliveries.cancel');
 
@@ -146,6 +216,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('caixa', [CashController::class, 'index'])->name('cash.index');
             Route::post('caixa/abrir', [CashController::class, 'open'])->name('cash.open');
             Route::post('caixa/movimentos', [CashController::class, 'movement'])->name('cash.movement');
+            Route::post('caixa/movimentos/{cashMovement}/estornar', [CashController::class, 'reverse'])->whereNumber('cashMovement')->name('cash.movement.reverse');
             Route::get('caixa/historico', [CashController::class, 'sessions'])->name('cash.sessions');
             Route::get('caixa/{cashSession}', [CashController::class, 'show'])->whereNumber('cashSession')->name('cash.show');
             Route::post('caixa/{cashSession}/fechar', [CashController::class, 'close'])->name('cash.close');
@@ -174,6 +245,13 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::get('produtos/{product}/editar', [ProductController::class, 'edit'])->name('products.edit');
             Route::put('produtos/{product}', [ProductController::class, 'update'])->name('products.update');
             Route::patch('produtos/{product}/status', [ProductController::class, 'toggleStatus'])->name('products.status');
+
+            Route::get('produtos/opcoes', [OptionController::class, 'index'])->name('options.index');
+            Route::post('produtos/opcoes', [OptionController::class, 'store'])->name('options.store');
+            Route::put('produtos/opcoes/{group}', [OptionController::class, 'update'])->name('options.update');
+            Route::patch('opcoes/{option}/pausa', [OptionController::class, 'pause'])->name('options.pause');
+            Route::get('produtos/{product}/pizza', [PizzaController::class, 'edit'])->name('products.pizza.edit');
+            Route::put('produtos/{product}/pizza', [PizzaController::class, 'update'])->name('products.pizza.update');
 
             Route::post('categorias', [CategoryController::class, 'store'])->name('categories.store');
             Route::put('categorias/{category}', [CategoryController::class, 'update'])->name('categories.update');
@@ -222,14 +300,41 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
 
         Route::middleware('can:audit.view')->get('auditoria', [AuditController::class, 'index'])->name('audit.index');
 
+        Route::middleware('can:online_orders.accept')->group(function () {
+            Route::get('loja-online/pedidos', [OnlineOrderController::class, 'index'])->name('online.orders');
+            Route::post('loja-online/pausa', [OnlineStoreController::class, 'pause'])->name('online.pause');
+            Route::delete('loja-online/pausa', [OnlineStoreController::class, 'resume'])->name('online.resume');
+            Route::put('loja-online/aceite-automatico', [OnlineStoreController::class, 'autoAccept'])->name('online.auto-accept');
+            Route::post('loja-online/pedidos/{onlineOrder}/aceitar', [OnlineOrderController::class, 'accept'])->name('online.orders.accept');
+            Route::post('loja-online/pedidos/{onlineOrder}/recusar', [OnlineOrderController::class, 'reject'])->name('online.orders.reject');
+            Route::post('loja-online/pedidos/{onlineOrder}/pronto', [OnlineOrderController::class, 'ready'])->middleware('can:production.operate')->name('online.orders.ready');
+        });
+
         Route::middleware('can:company.manage')->group(function () {
             Route::get('empresa', [CompanyController::class, 'edit'])->name('company.edit');
             Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');
+            Route::get('loja-online/configuracao', [OnlineStoreController::class, 'edit'])->name('online.settings');
+            Route::put('loja-online/configuracao', [OnlineStoreController::class, 'update'])->name('online.settings.update');
+            Route::get('loja-online/whatsapp', [WhatsAppController::class, 'edit'])->name('online.whatsapp');
+            Route::post('loja-online/whatsapp/conectar', [WhatsAppController::class, 'connect'])->name('online.whatsapp.connect');
+            Route::delete('loja-online/whatsapp/conexao', [WhatsAppController::class, 'disconnect'])->name('online.whatsapp.disconnect');
+            Route::put('loja-online/whatsapp', [WhatsAppController::class, 'update'])->name('online.whatsapp.update');
+            Route::put('empresa/operacao', [RestaurantOperationSettingsController::class, 'update'])->name('company.operation');
+            Route::get('impressoras', [PrinterController::class, 'index'])->name('printers.index');
+            Route::post('impressoras', [PrinterController::class, 'store'])->name('printers.store');
+            Route::put('impressoras/destinos', [PrinterController::class, 'destinations'])->name('printers.destinations');
+            Route::get('impressoras/agente', [PrinterController::class, 'agent'])->name('printers.agent');
+            Route::post('impressoras/buscar', [PrinterController::class, 'discover'])->name('printers.discover');
+            Route::post('impressoras/fila/{job}/reenviar', [PrinterController::class, 'retry'])->name('printers.retry');
+            Route::put('impressoras/{printer}', [PrinterController::class, 'update'])->whereNumber('printer')->name('printers.update');
+            Route::delete('impressoras/{printer}', [PrinterController::class, 'destroy'])->whereNumber('printer')->name('printers.destroy');
+            Route::post('impressoras/{printer}/teste', [PrinterController::class, 'test'])->whereNumber('printer')->name('printers.test');
         });
     });
 
     // Painel da plataforma, só para o super administrador.
     Route::middleware('super')->prefix('admin')->name('admin.')->group(function () {
+        Route::post('empresas/{company}/operacao/bloqueio', [RestaurantOperationSettingsController::class, 'block'])->name('companies.operation.block');
         Route::get('empresas', [AdminCompanyController::class, 'index'])->name('companies.index');
         Route::get('empresas/nova', [AdminCompanyController::class, 'create'])->name('companies.create');
         Route::post('empresas', [AdminCompanyController::class, 'store'])->name('companies.store');

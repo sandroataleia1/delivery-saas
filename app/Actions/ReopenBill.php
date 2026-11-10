@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\Bill;
+use App\Models\BillSettlement;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Support\Audit;
@@ -17,36 +18,41 @@ use Illuminate\Validation\ValidationException;
  */
 class ReopenBill
 {
-    public function __construct(private RecordCashMovement $recordCashMovement) {}
+    public function __construct(private RecordCashMovement $recordCashMovement, private UpdateBillSettlementTotals $updateTotals) {}
 
-    public function handle(Bill $bill, string $reason): void
+    public function handle(Bill $bill, string $reason, ?int $settlementId = null): void
     {
-        DB::transaction(function () use ($bill, $reason) {
+        DB::transaction(function () use ($bill, $reason, $settlementId) {
             /** @var Bill $locked */
             $locked = Bill::whereKey($bill->getKey())->lockForUpdate()->firstOrFail();
 
-            if (! $locked->isPaid()) {
-                throw ValidationException::withMessages(['reason' => 'Só é possível estornar uma conta quitada.']);
+            if ($locked->status === Bill::CANCELLED || $locked->legacy_review_required) {
+                throw ValidationException::withMessages(['reason' => 'Conta cancelada ou com legado pendente de reconciliação.']);
             }
 
-            if ($locked->cash_movement_id) {
-                $this->returnCash($locked, $reason);
+            $active = $locked->settlements()->whereNull('reversed_at')->get();
+            if ($settlementId === null && $active->count() !== 1) {
+                throw ValidationException::withMessages(['settlement_id' => 'Selecione a baixa que deseja estornar.']);
             }
+            $settlement = $settlementId === null ? $active->sole() : $active->firstWhere('id', $settlementId);
+            if (! $settlement) {
+                throw ValidationException::withMessages(['settlement_id' => 'Baixa não disponível para estorno nesta conta.']);
+            }
+            $movement = $settlement->cash_movement_id ? $this->returnCash($locked, $settlement, $reason) : null;
 
-            Audit::record('bill_reopened', $locked, "Baixa estornada: {$locked->fullDescription()}", new: ['reason' => $reason]);
-
-            $locked->forceFill([
-                'status' => Bill::OPEN,
-                'paid_at' => null,
-                'paid_amount' => null,
-                'payment_method' => null,
-                'cash_movement_id' => null,
-                'settled_by' => null,
+            $settlement->forceFill([
+                'reversed_at' => now(), 'reversed_by_id' => Auth::id(), 'reversed_by' => Auth::user()->name,
+                'reversal_reason' => $reason, 'reversal_cash_movement_id' => $movement?->id,
             ])->save();
+            Audit::record('bill_reopened', $locked, "Baixa #{$settlement->id} estornada: {$locked->fullDescription()}", new: [
+                'reason' => $reason, 'settlement_id' => $settlement->id,
+                'amount' => $settlement->amount, 'discount_amount' => $settlement->discount_amount,
+            ]);
+            $this->updateTotals->handle($locked);
         });
     }
 
-    private function returnCash(Bill $bill, string $reason): void
+    private function returnCash(Bill $bill, BillSettlement $settlement, string $reason): CashMovement
     {
         $session = CashSession::query()->openFor(Auth::user())->first();
 
@@ -55,10 +61,10 @@ class ReopenBill
         }
 
         try {
-            $this->recordCashMovement->handle(
+            return $this->recordCashMovement->handle(
                 $session,
                 $bill->isPayable() ? CashMovement::BILL_RECEIPT : CashMovement::BILL_PAYMENT,
-                $bill->paid_amount,
+                $settlement->amount,
                 "Estorno de {$bill->fullDescription()}: $reason",
             );
         } catch (ValidationException $exception) {

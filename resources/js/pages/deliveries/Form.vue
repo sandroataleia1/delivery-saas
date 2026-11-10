@@ -5,14 +5,17 @@ import { ArrowLeft, Minus, Plus, Trash2, UserPlus } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
+import ItemComposer from '@/components/ItemComposer.vue';
 import Field from '@/components/Field.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
+import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatPhone } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
     products: { type: Array, required: true },
+    composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     zones: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
@@ -35,13 +38,35 @@ const subtotalCents = computed(() => cart.value.reduce((sum, item) => sum + line
 const feeCents = computed(() => (type.value === 'delivery' ? toCents(fee.value) : 0));
 const totalCents = computed(() => subtotalCents.value + feeCents.value);
 
+const composing = ref(null);
+let lineSequence = 0;
+
 function add(product, quantity = 1) {
-    const line = cart.value.find((item) => item.product_id === product.id && !item.notes);
+    if (props.composition[product.id]) {
+        composing.value = { product, quantity };
+
+        return;
+    }
+
+    const line = cart.value.find((item) => item.product_id === product.id && !item.key && !item.notes);
 
     if (line) {
         line.quantity = String(Number(line.quantity) + quantity);
     } else {
-        cart.value.push({ product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: String(quantity), notes: '' });
+        cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: product.sale_price, quantity: String(quantity), notes: '' });
+    }
+}
+
+function addComposed({ selection, unitCents, label, notes }) {
+    const { product, quantity } = composing.value;
+    const key = selectionKey(product.id, selection);
+    const line = cart.value.find((item) => item.key === key && item.notes === notes);
+    composing.value = null;
+
+    if (line) {
+        line.quantity = String(Number(line.quantity) + quantity);
+    } else {
+        cart.value.push({ uid: ++lineSequence, product_id: product.id, name: product.name, sale_price: fromCents(unitCents), quantity: String(quantity), notes, key, selection, label });
     }
 }
 
@@ -89,7 +114,7 @@ function submit() {
         client_uuid: orderUuid.value,
         customer_id: customer.value?.id,
         type: type.value,
-        items: cart.value.map(({ product_id, quantity, notes: itemNotes }) => ({ product_id, quantity, notes: itemNotes || null })),
+        items: cart.value.map(({ product_id, quantity, notes: itemNotes, selection }) => ({ product_id, quantity, notes: itemNotes || null, ...payloadFields(selection) })),
         address: type.value === 'delivery' ? address.value : null,
         delivery_fee: fee.value || 0,
         payment_method: paymentMethod.value,
@@ -139,7 +164,7 @@ function createCustomer() {
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'order' }" aria-label="Cardápio">
-                <ProductGrid :products="products" :categories="categories" @add="add" />
+                <ProductGrid :products="products" :composition="composition" :categories="categories" @add="add" />
             </section>
 
             <aside class="border-line bg-surface w-full shrink-0 space-y-4 overflow-y-auto border-l p-4 lg:w-[28rem]" :class="{ 'max-lg:hidden': view === 'menu' }" aria-label="Pedido">
@@ -191,16 +216,20 @@ function createCustomer() {
                     <p v-if="form.errors.items" class="text-danger mb-1 text-sm" role="alert">{{ form.errors.items }}</p>
                     <p v-if="cart.length === 0" class="text-muted text-sm">Escolha os produtos no cardápio.</p>
                     <ul class="space-y-2">
-                        <li v-for="item in cart" :key="item.product_id">
+                        <li v-for="(item, index) in cart" :key="item.uid">
                             <div class="flex items-center gap-2">
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Diminuir ${item.name}`" @click="change(item, -1)"><Minus :size="14" /></button>
                                 <span class="w-6 text-center text-sm font-bold tabular-nums">{{ item.quantity }}</span>
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Aumentar ${item.name}`" @click="change(item, 1)"><Plus :size="14" /></button>
-                                <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ item.name }}</span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold break-words">
+                                    {{ item.name }}
+                                    <span v-if="item.label" class="text-muted block text-xs font-normal">{{ item.label }}</span>
+                                </span>
                                 <span class="text-sm tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                                 <button type="button" class="btn btn-ghost min-h-7 px-1 py-0.5" :aria-label="`Remover ${item.name}`" @click="cart = cart.filter((line) => line !== item)"><Trash2 :size="14" /></button>
                             </div>
                             <input v-model="item.notes" class="input mt-1 min-h-9 py-1" maxlength="120" placeholder="Observação do item" :aria-label="`Observação de ${item.name}`" />
+                            <p v-if="lineError(form.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(form.errors, index) }}</p>
                         </li>
                     </ul>
                 </div>
@@ -238,6 +267,8 @@ function createCustomer() {
                 <button type="button" class="btn btn-primary min-h-12 w-full text-base" :disabled="form.processing || cart.length === 0 || !customer" @click="submit">Registrar pedido</button>
             </aside>
         </div>
+
+        <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" @add="addComposed" @cancel="composing = null" />
 
         <ConfirmDialog
             :open="creating"

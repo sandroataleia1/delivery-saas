@@ -68,7 +68,7 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-2">
                 <Field
                     v-slot="{ id }"
-                    :label="editing ? 'Nova senha provisória' : 'Senha provisória'"
+                    :label="editing ? 'Nova senha' : 'Senha'"
                     :error="form.errors.password"
                     :hint="editing ? 'Deixe em branco para manter a atual.' : 'Mínimo de 8 caracteres, com letras e números.'"
                 >
@@ -80,7 +80,7 @@ function submit() {
                 </Field>
             </div>
 
-            <p class="text-muted text-sm">A pessoa precisará trocar a senha provisória no próximo acesso.</p>
+            <p class="text-muted text-sm">A pessoa entra com esta senha e pode trocá-la quando quiser em Minha conta.</p>
 
             <div class="flex gap-2">
                 <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>

@@ -130,6 +130,17 @@ class AuthTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['event' => 'password_changed', 'user_id' => $user->id]);
     }
 
+    public function test_usuarios_ja_cadastrados_com_senha_provisoria_deixam_de_ser_obrigados_a_trocar(): void
+    {
+        $user = $this->adminOf();
+        $user->forceFill(['must_change_password' => true])->saveQuietly();
+
+        (require database_path('migrations/2026_11_19_000001_release_pending_password_changes.php'))->up();
+
+        $this->assertFalse($user->fresh()->must_change_password);
+        $this->actingAs($user->fresh())->get('/')->assertOk();
+    }
+
     public function test_troca_de_senha_exige_a_senha_atual(): void
     {
         $user = $this->adminOf();

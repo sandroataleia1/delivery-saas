@@ -2,10 +2,10 @@
 
 namespace App\Actions;
 
-use App\Models\Company;
 use App\Models\DiningTable;
 use App\Models\TableOrder;
 use App\Models\User;
+use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -15,7 +15,7 @@ class OpenTable
     public function handle(DiningTable $table, int $people, ?User $user, ?string $guestName = null): TableOrder
     {
         return DB::transaction(function () use ($table, $people, $user, $guestName) {
-            Company::whereKey($table->company_id)->lockForUpdate()->firstOrFail();
+            $table = TableOperationLock::table($table);
 
             if (! $table->fresh()->active) {
                 throw ValidationException::withMessages(['table' => 'Esta mesa está inativa.']);

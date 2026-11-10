@@ -76,6 +76,19 @@ class BillTest extends TestCase
         $this->assertSame($this->admin->name, Bill::first()->user_name);
     }
 
+    public function test_lista_traz_fornecedores_ativos_para_o_modal_de_nova_conta_so_para_quem_cadastra(): void
+    {
+        Supplier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Atacado']);
+        Supplier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Antigo', 'active' => false]);
+        Supplier::factory()->create(['company_id' => $this->adminOf()->company_id, 'name' => 'De outra loja']);
+
+        $this->actingAs($this->admin)->get(route('bills.index', 'pagar'))
+            ->assertInertia(fn (Assert $page) => $page->has('suppliers', 1)->where('suppliers.0.name', 'Atacado'));
+
+        $this->actingAs($this->userWith(['finance.view'], $this->admin->company))->get(route('bills.index', 'pagar'))
+            ->assertInertia(fn (Assert $page) => $page->where('suppliers', []));
+    }
+
     public function test_tipo_invalido_nao_existe(): void
     {
         $this->actingAs($this->admin)->get('/financeiro/outra')->assertNotFound();
@@ -117,14 +130,16 @@ class BillTest extends TestCase
         $this->assertSame(0, CashMovement::count());
     }
 
-    public function test_pode_pagar_valor_diferente_por_juros_ou_desconto(): void
+    public function test_nao_presume_juros_ao_receber_acima_do_saldo(): void
     {
         $bill = $this->bill(['amount' => '100']);
 
-        $this->actingAs($this->admin)->post("/financeiro/contas/{$bill->id}/baixa", $this->settlement(['paid_amount' => '103.50']));
+        $this->actingAs($this->admin)->post("/financeiro/contas/{$bill->id}/baixa", $this->settlement(['paid_amount' => '103.50']))->assertSessionHasErrors('paid_amount');
 
         $this->assertSame('100.00', $bill->fresh()->amount);
-        $this->assertSame('103.50', $bill->fresh()->paid_amount);
+        $this->assertNull($bill->fresh()->paid_amount);
+        $this->assertTrue($bill->fresh()->isOpen());
+        $this->assertDatabaseCount('bill_settlements', 0);
     }
 
     public function test_conta_paga_em_dinheiro_sai_do_caixa_aberto(): void
@@ -393,10 +408,10 @@ class BillTest extends TestCase
     {
         $this->bill(['due_date' => today()->subDay()]);
 
-        $this->actingAs($this->admin)->get('/')->assertInertia(fn (Assert $page) => $page->where('stats.overdue_bills', 1));
+        $this->actingAs($this->admin)->get('/')->assertInertia(fn (Assert $page) => $page->where('finance.payable_overdue.count', 1));
 
         $this->actingAs($this->userWith([], $this->admin->company))->get('/')
-            ->assertInertia(fn (Assert $page) => $page->where('stats.overdue_bills', null));
+            ->assertInertia(fn (Assert $page) => $page->where('finance', null));
     }
 
     public function test_permissoes(): void

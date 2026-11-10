@@ -66,9 +66,29 @@ class AuditLog extends Model
         return match (true) {
             $value === null || $value === '' || $value === [] => '—',
             is_bool($value) => $value ? 'Sim' : 'Não',
-            is_array($value) => implode(', ', array_map(self::permissionLabel(...), $value)),
+            is_array($value) => implode(', ', array_map(self::listItem(...), $value)),
             default => (string) $value,
         };
+    }
+
+    /** Item de lista: turno de horário, chave de permissão ou, para outros formatos, os valores em sequência. */
+    private static function listItem(mixed $item): string
+    {
+        if (! is_array($item)) {
+            return self::permissionLabel($item);
+        }
+
+        if (isset($item['weekday'], $item['opens_at'], $item['closes_at'])) {
+            $weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+            return ($weekdays[(int) $item['weekday']] ?? $item['weekday']).' '
+                .substr((string) $item['opens_at'], 0, 5).'–'.substr((string) $item['closes_at'], 0, 5);
+        }
+
+        return implode(' ', array_map(
+            fn (mixed $part): string => is_scalar($part) ? (string) $part : (string) json_encode($part, JSON_UNESCAPED_UNICODE),
+            $item,
+        ));
     }
 
     private static function permissionLabel(mixed $key): string

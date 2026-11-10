@@ -1,0 +1,24 @@
+{
+    "data": {
+        "key": {
+            "id": "AC2CAB9AEEAEFCB7078A6C58B5EEED7D",
+            "fromMe": true,
+            "remoteJid": "123456789012345@lid",
+            "participant": null,
+            "remoteJidAlt": "551188887777@s.whatsapp.net",
+            "addressingMode": "lid"
+        },
+        "source": "android",
+        "status": "SERVER_ACK",
+        "message": {
+            "conversation": "Oi, aqui é da loja"
+        },
+        "pushName": "Loja Teste",
+        "messageType": "conversation",
+        "messageTimestamp": 1794249979
+    },
+    "event": "messages.upsert",
+    "sender": "551130000000@s.whatsapp.net",
+    "instance": "inst-a",
+    "date_time": "2026-11-09T15:46:20.016Z"
+}

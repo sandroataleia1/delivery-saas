@@ -1,0 +1,96 @@
+name: Phase 1 quality
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  sqlite-and-build:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      DB_URL: ''
+      DB_SOCKET: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: bcmath, pdo_sqlite, pdo_mysql
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer validate --strict
+      - run: composer check-platform-reqs
+      - run: php artisan test --compact
+      - run: vendor/bin/pint --test
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test tests/Frontend/*.test.mjs
+      - run: npm run build
+      - run: composer audit --locked
+      - run: npm audit --omit=dev
+
+  mariadb:
+    runs-on: ubuntu-latest
+    services:
+      # Reproduces the locally verified engine; not a production version recommendation.
+      database:
+        image: mariadb:10.4.32
+        env:
+          MYSQL_ROOT_PASSWORD: ci-disposable-only
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-disposable-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: mariadb
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3307'
+      DB_USERNAME: delivery_test
+      DB_URL: ''
+      DB_SOCKET: ''
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      BCRYPT_ROUNDS: '4'
+      DISPOSABLE_ADMIN_PASSWORD: ci-disposable-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: bcmath, pdo_mysql, pdo_sqlite
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Identify the disposable service
+        shell: bash
+        run: |
+          mkdir -p .testing
+          token=$(openssl rand -hex 16)
+          database="delivery_test_$(openssl rand -hex 8)"
+          marker="$RUNNER_TEMP/delivery-test-marker.json"
+          printf '{"port":3307,"database":"%s","directory":"/var/lib/mysql","token":"%s"}' "$database" "$token" > "$marker"
+          echo "DISPOSABLE_DB_MARKER=$marker" >> "$GITHUB_ENV"
+          echo "DISPOSABLE_DB_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "DB_DATABASE=$database" >> "$GITHUB_ENV"
+          echo "DB_PASSWORD=$token" >> "$GITHUB_ENV"
+          echo "APP_KEY=base64:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - run: php scripts/testing/provision-disposable-database.php
+      - run: php scripts/testing/assert-disposable-database.php
+      - run: vendor/bin/phpunit -c phpunit.mariadb.xml
+      - name: Concurrency integrity, QR receipts and table lock ordering
+        shell: bash
+        run: |
+          set -o pipefail
+          php tests/Concurrency/run.php | tee .testing/concurrency.jsonl
+          echo 'C9 now requires zero deadlocks and zero lock timeouts, plus financial and stock integrity.' >> "$GITHUB_STEP_SUMMARY"
+          cat .testing/concurrency.jsonl >> "$GITHUB_STEP_SUMMARY"

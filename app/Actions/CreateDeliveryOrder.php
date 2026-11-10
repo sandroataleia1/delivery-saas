@@ -6,13 +6,18 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\DeliveryOrder;
 use App\Models\Product;
+use App\Models\User;
 use App\Support\Decimal;
+use App\Support\ItemComposer;
+use App\Support\Printing\PrintQueue;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /** Registra o pedido com os preços atuais, que valem até o acerto. */
 class CreateDeliveryOrder
 {
+    public function __construct(private ItemComposer $composer) {}
+
     public function handle(array $data): DeliveryOrder
     {
         return DB::transaction(function () use ($data) {
@@ -28,70 +33,94 @@ class CreateDeliveryOrder
                 return $existing;
             }
 
-            $products = Product::findMany(collect($data['items'])->pluck('product_id'))->keyBy('id');
+            $products = Product::where('company_id', $user->company_id)->whereIn('id', collect($data['items'])->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
-            $lines = collect($data['items'])->map(function (array $item) use ($products, $user) {
+            $composed = $this->composer->composeMany($user->company_id, array_values($data['items']));
+
+            $lines = collect($data['items'])->values()->map(function (array $item, int $index) use ($products, $composed) {
                 $product = $products[$item['product_id']];
+                $price = $composed[$index]['unit_price'];
 
                 return [
-                    'company_id' => $user->company_id,
                     'product_id' => $product->id,
                     'product_name' => $product->name,
                     'unit' => $product->unit,
                     'quantity' => $item['quantity'],
-                    'unit_price' => $product->sale_price,
-                    'total' => Decimal::money(bcmul((string) $item['quantity'], $product->sale_price, 5)),
+                    'unit_price' => $price,
+                    'options' => $composed[$index]['options'],
+                    'options_label' => $composed[$index]['options_label'],
+                    'total' => Decimal::money(bcmul((string) $item['quantity'], $price, 5)),
                     'notes' => $item['notes'] ?? null,
                 ];
-            });
+            })->all();
 
             $address = $isDelivery ? $data['address'] : null;
 
             if ($address) {
-                $this->rememberAddress($customer, $address);
+                $customer->rememberAddress($address);
             }
 
-            $order = new DeliveryOrder;
-            $order->forceFill([
-                'company_id' => $user->company_id,
-                'number' => (int) DeliveryOrder::max('number') + 1,
+            return $this->persist($user, $customer, [
                 'client_uuid' => $data['client_uuid'],
-                'customer_id' => $customer->id,
                 'type' => $data['type'],
-                'status' => DeliveryOrder::RECEIVED,
-                'customer_name' => $customer->name,
-                'customer_phone' => $customer->phone,
                 'street' => $address['street'] ?? null,
                 'number_address' => $address['number'] ?? null,
                 'complement' => $address['complement'] ?? null,
                 'district' => $address['district'] ?? null,
                 'reference' => $address['reference'] ?? null,
-                'subtotal' => $lines->reduce(fn (string $sum, array $line) => bcadd($sum, $line['total'], 2), '0.00'),
                 'delivery_fee' => $isDelivery ? ($data['delivery_fee'] ?? '0') : '0',
                 'payment_method' => $data['payment_method'],
                 'change_for' => $data['change_for'] ?? null,
                 'notes' => $data['notes'] ?? null,
-                'user_id' => $user->id,
-                'user_name' => $user->name,
-            ])->save();
-
-            $order->items()->createMany($lines->all());
-
-            return $order;
+            ], $lines);
         });
     }
 
-    private function rememberAddress(Customer $customer, array $address): void
+    /**
+     * Núcleo comum ao balcão e ao aceite da loja online: numera, grava o pedido com as linhas
+     * já compostas e encaminha cada linha à produção. Não trava nada: quem chama já está numa
+     * transação com a empresa travada. Sem usuário, o registro sai como aceite automático.
+     *
+     * @param  array{client_uuid: string, type: string, street?: ?string, number_address?: ?string, complement?: ?string, district?: ?string, reference?: ?string, delivery_fee: string, payment_method: string, change_for?: ?string, notes?: ?string}  $header
+     * @param  array<int, array{product_id: int, product_name: string, unit: string, quantity: mixed, unit_price: string, options: mixed, options_label: ?string, total: string, notes: ?string}>  $lines
+     */
+    public function persist(?User $user, Customer $customer, array $header, array $lines, ?int $onlineOrderId = null): DeliveryOrder
     {
-        $known = $customer->addresses()
-            ->where('street', $address['street'])
-            ->where('number', $address['number'])
-            ->exists();
+        $companyId = (int) $customer->company_id;
+        $actorName = $user?->name ?? AcceptOnlineOrder::AUTOMATIC;
+        $order = new DeliveryOrder;
+        $order->forceFill([
+            'company_id' => $companyId,
+            'number' => (int) DeliveryOrder::withoutGlobalScopes()->where('company_id', $companyId)->max('number') + 1,
+            'client_uuid' => $header['client_uuid'],
+            'customer_id' => $customer->id,
+            'type' => $header['type'],
+            'status' => DeliveryOrder::RECEIVED,
+            'customer_name' => $customer->name,
+            'customer_phone' => $customer->phone,
+            'street' => $header['street'] ?? null,
+            'number_address' => $header['number_address'] ?? null,
+            'complement' => $header['complement'] ?? null,
+            'district' => $header['district'] ?? null,
+            'reference' => $header['reference'] ?? null,
+            'subtotal' => array_reduce($lines, fn (string $sum, array $line) => bcadd($sum, (string) $line['total'], 2), '0.00'),
+            'delivery_fee' => $header['delivery_fee'],
+            'payment_method' => $header['payment_method'],
+            'change_for' => $header['change_for'] ?? null,
+            'notes' => $header['notes'] ?? null,
+            'online_order_id' => $onlineOrderId,
+            'user_id' => $user?->id,
+            'user_name' => $actorName,
+        ])->save();
 
-        if (! $known) {
-            $saved = $customer->addresses()->make($address);
-            $saved->company_id = $customer->company_id;
-            $saved->save();
+        $rows = array_map(fn (array $line) => ['company_id' => $companyId, ...$line], $lines);
+
+        foreach ($order->items()->createMany($rows) as $item) {
+            (new DispatchProduction)->handle($item, $actorName);
         }
+
+        app(PrintQueue::class)->order($order);
+
+        return $order;
     }
 }

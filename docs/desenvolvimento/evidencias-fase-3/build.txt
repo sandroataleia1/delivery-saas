@@ -1,0 +1,130 @@
+
+> build
+> vite build
+
+vite v8.3.6 building client environment for production...
+node.exe : [plugin laravel:fonts] Optimized font fallbacks require the optional "fontaine" package. Install it, or set
+"optimizedFallbacks: false" on your fonts to disable the feature.
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([plugin laravel...le the feature.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+transforming...
+✓ 2746 modules transformed.
+rendering chunks...
+computing gzip size...
+public/build/fonts-manifest.json                         7.13 kB │ gzip:  0.74 kB
+public/build/assets/figtree-700-normal-th6qEP7c.woff2   11.37 kB
+public/build/assets/figtree-400-normal-g7Dtegnw.woff2   11.38 kB
+public/build/assets/figtree-500-normal-BWnGEVsr.woff2   11.43 kB
+public/build/assets/figtree-600-normal-Cv_xCTDl.woff2   11.54 kB
+public/build/assets/figtree-400-normal-BD4aNku5.woff    15.03 kB
+public/build/assets/figtree-500-normal-B_yy1phn.woff    15.04 kB
+public/build/assets/figtree-700-normal-BCCt2T1q.woff    15.16 kB
+public/build/assets/figtree-600-normal-BM_oTo4n.woff    15.21 kB
+public/build/manifest.json                              35.41 kB │ gzip:  3.65 kB
+public/build/assets/Ticket-Ce4CT7mU.css                  0.08 kB │ gzip:  0.10 kB
+public/build/assets/Receipt-Bh7GFJ7c.css                 0.08 kB │ gzip:  0.10 kB
+public/build/assets/GuestLayout-CuMtTUR7.css             0.79 kB │ gzip:  0.33 kB
+public/build/assets/fonts-CBc-swC9.css                   2.93 kB │ gzip:  0.40 kB
+public/build/assets/app-Cci7G0nK.css                    39.61 kB │ gzip:  7.71 kB
+public/build/assets/minus-D79wSh9x.js                    0.12 kB │ gzip:  0.13 kB
+public/build/assets/can-UOpyONfQ.js                      0.15 kB │ gzip:  0.15 kB
+public/build/assets/plus-CmgVvfn3.js                     0.15 kB │ gzip:  0.15 kB
+public/build/assets/arrow-left-DCCa-huF.js               0.17 kB │ gzip:  0.16 kB
+public/build/assets/search-DWolB98a.js                   0.17 kB │ gzip:  0.17 kB
+public/build/assets/ban-D4H_7IjT.js                      0.18 kB │ gzip:  0.17 kB
+public/build/assets/lock-Pbf7CWlC.js                     0.21 kB │ gzip:  0.19 kB
+public/build/assets/map-pin-KMOOEivr.js                  0.26 kB │ gzip:  0.22 kB
+public/build/assets/pencil-VATpFvN3.js                   0.28 kB │ gzip:  0.22 kB
+public/build/assets/printer-D_CRml6x.js                  0.32 kB │ gzip:  0.23 kB
+public/build/assets/money-B8TTd1KC.js                    0.34 kB │ gzip:  0.21 kB
+public/build/assets/trash-BHNcgoxC.js                    0.35 kB │ gzip:  0.22 kB
+public/build/assets/BillStatus-D8Zs494H.js               0.39 kB │ gzip:  0.27 kB
+public/build/assets/EmptyState-Dji-9IgJ.js               0.39 kB │ gzip:  0.29 kB
+public/build/assets/chef-hat-j5U91_dg.js                 0.42 kB │ gzip:  0.28 kB
+public/build/assets/StatusBadge-EUanF1gg.js              0.46 kB │ gzip:  0.34 kB
+public/build/assets/qr-code-CqNL7bHZ.js                  0.65 kB │ gzip:  0.31 kB
+public/build/assets/receipt-BN721xHV.js                  0.65 kB │ gzip:  0.28 kB
+public/build/assets/Field-DFC0x2Nh.js                    0.77 kB │ gzip:  0.44 kB
+public/build/assets/DecimalInput-DbveqjyO.js             0.93 kB │ gzip:  0.52 kB
+public/build/assets/Error-QpR_NjDJ.js                    0.93 kB │ gzip:  0.61 kB
+public/build/assets/store-Di23ZqGO.js                    1.01 kB │ gzip:  0.46 kB
+public/build/assets/format-e05JGApg.js                   1.06 kB │ gzip:  0.52 kB
+public/build/assets/Ticket-CdbuuCTp.js                   1.07 kB │ gzip:  0.60 kB
+public/build/assets/Pagination-5nBpL866.js               1.12 kB │ gzip:  0.60 kB
+public/build/assets/RankList-mq4hJA-i.js                 1.30 kB │ gzip:  0.75 kB
+public/build/assets/ForgotPassword-CDjh944a.js           1.30 kB │ gzip:  0.79 kB
+public/build/assets/ConfirmDialog-BTLZgFUm.js            1.34 kB │ gzip:  0.72 kB
+public/build/assets/ResetPassword-Cv8pCiq5.js            1.54 kB │ gzip:  0.71 kB
+public/build/assets/FlashMessages-BYsV-lHw.js            1.57 kB │ gzip:  0.86 kB
+public/build/assets/MenuReceiptAlerts-bd8jLxGU.js        1.80 kB │ gzip:  0.98 kB
+public/build/assets/SaleCompleteDialog-CrIztBhv.js       1.82 kB │ gzip:  1.00 kB
+public/build/assets/Ticket-Bx-WyZBU.js                   1.93 kB │ gzip:  0.83 kB
+public/build/assets/Login-hx5Ump8Q.js                    2.10 kB │ gzip:  1.05 kB
+public/build/assets/ProductPicker-DUOIZDXu.js            2.11 kB │ gzip:  1.20 kB
+public/build/assets/Index-CpbLllez.js                    2.24 kB │ gzip:  1.18 kB
+public/build/assets/Deliveries-CMhWSV1E.js               2.25 kB │ gzip:  1.02 kB
+public/build/assets/Form-Ce5dztNJ.js                     2.45 kB │ gzip:  1.05 kB
+public/build/assets/Form-CBen84hm.js                     2.52 kB │ gzip:  1.23 kB
+public/build/assets/Dashboard-T1PrYm9q.js                2.55 kB │ gzip:  1.28 kB
+public/build/assets/Mine-DwzsLLdo.js                     2.61 kB │ gzip:  1.42 kB
+public/build/assets/Index-jyziLw60.js                    2.62 kB │ gzip:  1.28 kB
+public/build/assets/x-C2nUa1da.js                        2.64 kB │ gzip:  1.33 kB
+public/build/assets/Sessions-CxIfTMnL.js                 2.66 kB │ gzip:  1.31 kB
+public/build/assets/Receipt-C0OeZ_lt.js                  2.84 kB │ gzip:  1.12 kB
+public/build/assets/Zones-D_OuOJLL.js                    2.89 kB │ gzip:  1.39 kB
+public/build/assets/Products-Bw9xhs88.js                 2.98 kB │ gzip:  1.33 kB
+public/build/assets/Cash-CfPIkb34.js                     2.99 kB │ gzip:  1.22 kB
+public/build/assets/Edit-Dm1BaUye.js                     3.00 kB │ gzip:  1.20 kB
+public/build/assets/AddressFields-B-Wu55Qi.js            3.13 kB │ gzip:  1.12 kB
+public/build/assets/Index-DSutawmg.js                    3.19 kB │ gzip:  1.51 kB
+public/build/assets/Show-Bi0wQ1No.js                     3.20 kB │ gzip:  1.41 kB
+public/build/assets/Stock-DjF0__ON.js                    3.23 kB │ gzip:  1.18 kB
+public/build/assets/Index-DBE2VOM2.js                    3.28 kB │ gzip:  1.52 kB
+public/build/assets/Form-GaCWG6vV.js                     3.34 kB │ gzip:  1.38 kB
+public/build/assets/SettleDialog-DTeflkvo.js             3.37 kB │ gzip:  1.42 kB
+public/build/assets/Index-B8UqlTX8.js                    3.37 kB │ gzip:  1.55 kB
+public/build/assets/History-CHpS8292.js                  3.52 kB │ gzip:  1.47 kB
+public/build/assets/Show-DTIIQB7D.js                     3.70 kB │ gzip:  1.62 kB
+public/build/assets/Index-DAVsq9CG.js                    3.71 kB │ gzip:  1.73 kB
+public/build/assets/Movements-BDB6PAfR.js                3.80 kB │ gzip:  1.68 kB
+public/build/assets/ReportLayout-CCiTILaA.js             3.97 kB │ gzip:  1.81 kB
+public/build/assets/Form-DOHeZgsw.js                     4.16 kB │ gzip:  1.57 kB
+public/build/assets/PaymentPanel-CoHE47bu.js             4.20 kB │ gzip:  1.88 kB
+public/build/assets/Board-WUoAK6Px.js                    4.32 kB │ gzip:  1.88 kB
+public/build/assets/Index-H3Pxc1R8.js                    4.32 kB │ gzip:  1.93 kB
+public/build/assets/Index-cyrGk0IZ.js                    4.67 kB │ gzip:  2.00 kB
+public/build/assets/Index-D1XzStxG.js                    4.67 kB │ gzip:  1.90 kB
+public/build/assets/Sales-BPUCUdqm.js                    5.04 kB │ gzip:  2.05 kB
+public/build/assets/Show-B69P0-el.js                     5.06 kB │ gzip:  1.97 kB
+public/build/assets/Manage-DbfRdyhf.js                   5.07 kB │ gzip:  1.85 kB
+public/build/assets/Form-C0wgnNGp.js                     5.18 kB │ gzip:  1.80 kB
+public/build/assets/Flow-RxYpjD05.js                     5.23 kB │ gzip:  1.95 kB
+public/build/assets/Finance-BUgUdYg8.js                  5.25 kB │ gzip:  1.72 kB
+public/build/assets/ProductGrid-DT3kPTsa.js              5.29 kB │ gzip:  2.33 kB
+public/build/assets/Form-CC2YBeR3.js                     5.36 kB │ gzip:  1.94 kB
+public/build/assets/Index-BFb7rYqv.js                    5.40 kB │ gzip:  2.44 kB
+public/build/assets/Index-jXtR_Gfm.js                    5.77 kB │ gzip:  2.46 kB
+public/build/assets/Register-D6BuqaGK.js                 5.83 kB │ gzip:  2.19 kB
+public/build/assets/Show-DA3PQk1p.js                     6.02 kB │ gzip:  2.21 kB
+public/build/assets/Index-paCVOvvj.js                    6.05 kB │ gzip:  2.32 kB
+public/build/assets/Form-DN-1ShnH.js                     6.26 kB │ gzip:  2.46 kB
+public/build/assets/GuestLayout-DdPk0vL-.js              6.45 kB │ gzip:  2.73 kB
+public/build/assets/Index-DRDx7fXF.js                    6.47 kB │ gzip:  2.64 kB
+public/build/assets/Index-Dgwxlwyd.js                    6.49 kB │ gzip:  2.53 kB
+public/build/assets/Edit-KM9y-dPp.js                     6.77 kB │ gzip:  2.59 kB
+public/build/assets/Show-pbKG9b3j.js                     7.47 kB │ gzip:  2.92 kB
+public/build/assets/Show-CnP5q63K.js                     7.52 kB │ gzip:  2.84 kB
+public/build/assets/Pos-Q_H5vF7c.js                      8.38 kB │ gzip:  3.33 kB
+public/build/assets/Form-CkyUrQQG.js                    10.53 kB │ gzip:  3.59 kB
+public/build/assets/Form-cqfCFbKF.js                    11.02 kB │ gzip:  3.83 kB
+public/build/assets/Show-qlahdQFy.js                    12.20 kB │ gzip:  4.68 kB
+public/build/assets/AppLayout-D35YSGfe.js               14.20 kB │ gzip:  5.01 kB
+public/build/assets/Order-BHVCGEWd.js                   16.26 kB │ gzip:  5.71 kB
+public/build/assets/QrCodes-oZoktsmr.js                 26.77 kB │ gzip: 10.52 kB
+public/build/assets/app-B3kdMeRb.js                    236.45 kB │ gzip: 79.38 kB
+
+✓ built in 1.20s

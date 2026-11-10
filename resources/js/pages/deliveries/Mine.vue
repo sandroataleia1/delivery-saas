@@ -1,7 +1,10 @@
 <script setup>
+import { ref } from 'vue';
 import { useForm, usePoll } from '@inertiajs/vue3';
 import { MapPin, Phone } from '@lucide/vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import Field from '@/components/Field.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney } from '@/lib/format';
@@ -17,6 +20,22 @@ const form = useForm({ expected_status: 'out_for_delivery' });
 
 function finish(order) {
     form.post(route('deliveries.advance', order.id), { preserveScroll: true });
+}
+
+const returnForm = useForm({ reason: '' });
+const returning = ref(null);
+
+function askReturn(order) {
+    returnForm.reset();
+    returnForm.clearErrors();
+    returning.value = order;
+}
+
+function markReturned() {
+    returnForm.post(route('deliveries.returned', returning.value.id), {
+        preserveScroll: true,
+        onSuccess: () => (returning.value = null),
+    });
 }
 
 const changeToBring = (order) => Math.max(Number(order.change_for) - Number(order.total), 0);
@@ -55,7 +74,26 @@ const mapUrl = (order) => `https://www.google.com/maps/search/?api=1&query=${enc
                     </a>
                 </div>
                 <button type="button" class="btn btn-primary mt-2 min-h-12 w-full" :disabled="form.processing" @click="finish(order)">Entreguei</button>
+                <button type="button" class="btn btn-ghost text-danger mt-1 w-full" @click="askReturn(order)">Não consegui entregar</button>
             </li>
         </ul>
+
+        <ConfirmDialog
+            :open="returning !== null"
+            :title="`Pedido #${returning?.number ?? ''} não entregue`"
+            message="Leve o pedido de volta para a loja."
+            confirm-label="Confirmar"
+            danger
+            :disabled="returnForm.reason.trim() === ''"
+            :processing="returnForm.processing"
+            @confirm="markReturned"
+            @cancel="returning = null"
+        >
+            <div class="mt-4">
+                <Field v-slot="{ id }" label="O que aconteceu?" required :error="returnForm.errors.reason || returnForm.errors.order">
+                    <input :id="id" v-model="returnForm.reason" class="input" maxlength="255" placeholder="Ex.: cliente ausente" />
+                </Field>
+            </div>
+        </ConfirmDialog>
     </AppLayout>
 </template>

@@ -41,7 +41,7 @@ class UserManagementTest extends TestCase
         $this->post('/usuarios', $this->payload(['role_id' => $user->role_id]))->assertForbidden();
     }
 
-    public function test_admin_cria_usuario_com_senha_provisoria(): void
+    public function test_admin_cria_usuario_com_senha_definitiva(): void
     {
         $admin = $this->adminOf();
         $role = Role::factory()->create(['company_id' => $admin->company_id]);
@@ -51,7 +51,7 @@ class UserManagementTest extends TestCase
 
         $user = User::where('email', 'maria@teste.com')->sole();
         $this->assertSame($admin->company_id, $user->company_id);
-        $this->assertTrue($user->must_change_password);
+        $this->assertFalse($user->must_change_password);
         $this->assertTrue(Hash::check('senha12345', $user->password));
     }
 
@@ -162,7 +162,7 @@ class UserManagementTest extends TestCase
         $this->assertStringNotContainsString('senha12345', json_encode($log->getAttributes()));
     }
 
-    public function test_senha_alterada_pelo_admin_vira_provisoria(): void
+    public function test_senha_alterada_pelo_admin_nao_obriga_troca(): void
     {
         $admin = $this->adminOf();
         $target = User::factory()->forRole($admin->role)->create();
@@ -175,6 +175,7 @@ class UserManagementTest extends TestCase
             'password_confirmation' => 'senha12345',
         ]);
 
-        $this->assertTrue($target->fresh()->must_change_password);
+        $this->assertFalse($target->fresh()->must_change_password);
+        $this->assertTrue(Hash::check('senha12345', $target->fresh()->password));
     }
 }

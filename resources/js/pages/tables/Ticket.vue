@@ -23,6 +23,7 @@ onMounted(() => window.print());
         <ul class="my-2 border-t border-dashed border-black pt-2">
             <li v-for="item in items" :key="item.id" class="mb-2">
                 <p class="font-bold">{{ formatQuantity(item.quantity, item.unit) }} {{ item.product_name }}</p>
+                <p v-if="item.options_label">{{ item.options_label }}</p>
                 <p v-if="item.notes">&gt;&gt; {{ item.notes }}</p>
             </li>
         </ul>

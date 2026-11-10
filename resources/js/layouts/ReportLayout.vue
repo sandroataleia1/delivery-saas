@@ -12,6 +12,8 @@ const props = defineProps({
     period: { type: Object, required: true },
     presets: { type: Array, required: true },
     hidesPeriod: { type: Boolean, default: false },
+    /** Filtros próprios do relatório (ex.: entregador), mantidos ao trocar o período e ao exportar. */
+    extraQuery: { type: Object, default: () => ({}) },
 });
 
 const page = usePage();
@@ -24,6 +26,8 @@ const tabs = computed(() => [
     can('reports.finance') && { label: 'Caixa', slug: 'caixa', route: 'reports.cash' },
     can('reports.view') && { label: 'Estoque', slug: 'estoque', route: 'reports.stock' },
     can('reports.view') && { label: 'Entregas', slug: 'entregas', route: 'reports.deliveries' },
+    can('reports.view') && { label: 'Entregadores', slug: 'entregadores', route: 'reports.couriers' },
+    can('sales.view') && { label: 'Venda a venda', slug: 'historico', route: 'sales.index' },
 ].filter(Boolean));
 
 const heading = computed(() => (props.slug === 'financeiro' ? 'Relatório financeiro' : `Relatório de ${props.title.toLowerCase()}`));
@@ -38,7 +42,7 @@ watch(() => props.period, (period) => {
 });
 
 function apply(range = query.value) {
-    router.get(page.url.split('?')[0], range, { preserveScroll: true, replace: true });
+    router.get(page.url.split('?')[0], { ...range, ...props.extraQuery }, { preserveScroll: true, replace: true });
 }
 
 function changeDate() {
@@ -54,7 +58,7 @@ const isActive = (preset) => preset.from === props.period.from && preset.to === 
     <AppLayout :title="`Relatório: ${title}`">
         <PageHeader :title="heading" :subtitle="period.label">
             <div class="flex gap-2 print:hidden">
-                <a :href="route('reports.export', { report: slug, ...query })" class="btn btn-secondary">
+                <a :href="route('reports.export', { report: slug, ...query, ...extraQuery })" class="btn btn-secondary">
                     <Download :size="16" />
                     Exportar
                 </a>

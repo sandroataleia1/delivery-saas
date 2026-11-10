@@ -53,13 +53,13 @@ class CancelStockEntry
 
     private function cancelBills(StockEntry $entry, string $reason): void
     {
-        $bills = Bill::where('stock_entry_id', $entry->id)->get();
+        $bills = Bill::where('stock_entry_id', $entry->id)->orderBy('id')->lockForUpdate()->get();
 
-        if ($bills->contains(fn (Bill $bill) => $bill->isPaid())) {
+        if ($bills->contains(fn (Bill $bill) => $bill->isPaid() || $bill->hasActiveSettlements() || $bill->legacy_review_required)) {
             throw ValidationException::withMessages(['stock' => 'Esta entrada tem conta quitada. Estorne a baixa antes de cancelar.']);
         }
 
         $bills->filter(fn (Bill $bill) => $bill->isOpen())
-            ->each(fn (Bill $bill) => $this->cancelBill->handle($bill, $reason));
+            ->each(fn (Bill $bill) => $this->cancelBill->handleFromOrigin($bill, $entry, $reason));
     }
 }

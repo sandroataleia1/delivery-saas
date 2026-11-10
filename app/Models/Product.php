@@ -5,16 +5,19 @@ namespace App\Models;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\BelongsToCompany;
 use App\Support\Decimal;
+use App\Support\PublicImage;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 // stock_quantity e cost_price ficam fora de propósito: mudam apenas por MoveStock.
-#[Fillable(['category_id', 'name', 'description', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable'])]
+#[Fillable(['category_id', 'name', 'description', 'sku', 'barcode', 'unit', 'sale_price', 'min_stock', 'track_stock', 'sellable', 'sold_out'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -30,7 +33,13 @@ class Product extends Model
             'track_stock' => 'boolean',
             'sellable' => 'boolean',
             'active' => 'boolean',
+            'sold_out' => 'boolean',
         ];
+    }
+
+    public function imageUrl(): ?string
+    {
+        return PublicImage::url($this->image_path);
     }
 
     public function category(): BelongsTo
@@ -46,6 +55,37 @@ class Product extends Model
     public function recipeItems(): HasMany
     {
         return $this->hasMany(RecipeItem::class);
+    }
+
+    public function optionGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(OptionGroup::class, 'product_option_group')
+            ->withPivot('position')
+            ->orderByPivot('position');
+    }
+
+    /**
+     * Grupos que o produto oferece: os ligados a ele, na ordem do pivot, e depois os da categoria.
+     * Espera optionGroups e category.optionGroups já carregados quando usado em lista.
+     *
+     * @return Collection<int, OptionGroup>
+     */
+    public function availableOptionGroups(): Collection
+    {
+        $direct = $this->optionGroups;
+        $fromCategory = $this->category?->optionGroups ?? collect();
+
+        return $direct->concat($fromCategory->reject(fn (OptionGroup $group) => $direct->contains('id', $group->id)))->values();
+    }
+
+    public function pizzaSizes(): HasMany
+    {
+        return $this->hasMany(PizzaSize::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function isPizza(): bool
+    {
+        return $this->pizza_pricing !== null;
     }
 
     /** Custo atual dos insumos. Exige recipeItems.ingredient carregado. */

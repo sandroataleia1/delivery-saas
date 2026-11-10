@@ -16,7 +16,10 @@ class StockController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'low');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'low' => ['nullable', 'boolean'],
+        ]);
         $tracked = Product::query()->where('track_stock', true)->where('active', true);
 
         return Inertia::render('stock/Index', [

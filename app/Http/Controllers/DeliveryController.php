@@ -5,15 +5,20 @@ namespace App\Http\Controllers;
 use App\Actions\AdvanceDeliveryOrder;
 use App\Actions\CancelDeliveryOrder;
 use App\Actions\CreateDeliveryOrder;
+use App\Actions\ReturnDeliveryOrder;
 use App\Actions\SettleDeliveryOrder;
 use App\Http\Requests\SettleDeliveryOrderRequest;
 use App\Http\Requests\StoreDeliveryOrderRequest;
 use App\Models\Category;
+use App\Models\Courier;
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
 use App\Models\DeliveryZone;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Printing\PrintQueue;
+use App\Support\ProductComposition;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,6 +33,7 @@ class DeliveryController extends Controller
     {
         return Inertia::render('deliveries/Board', [
             'orders' => DeliveryOrder::query()
+                ->with('onlineOrder:id,number')
                 ->whereNull('sale_id')
                 ->where('status', '!=', DeliveryOrder::CANCELLED)
                 ->orderBy('id')
@@ -41,7 +47,7 @@ class DeliveryController extends Controller
     {
         $filters = $request->validate([
             'status' => ['nullable', 'string', 'max:20'],
-            'courier' => ['nullable', 'integer'],
+            'courier' => ['nullable', 'string', 'regex:/^[cu]\d{1,10}$/'],
             'search' => ['nullable', 'string', 'max:100'],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
@@ -49,13 +55,13 @@ class DeliveryController extends Controller
 
         $query = DeliveryOrder::query()
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($filters['courier'] ?? null, fn ($query, $courier) => $query->where('courier_id', $courier))
-            ->when($filters['search'] ?? null, fn ($query, $search) => $query->where('customer_name', 'like', "%$search%"))
+            ->when($filters['courier'] ?? null, fn ($query, $courier) => $query->where($courier[0] === 'c' ? 'delivery_courier_id' : 'courier_id', (int) substr($courier, 1)))
+            ->when($filters['search'] ?? null, fn ($query, $search) => $this->search($query, $search, $request->user()->company_id))
             ->when($filters['from'] ?? null, fn ($query, $from) => $query->where('created_at', '>=', Carbon::parse($from)->startOfDay()))
             ->when($filters['to'] ?? null, fn ($query, $to) => $query->where('created_at', '<=', Carbon::parse($to)->endOfDay()));
 
         return Inertia::render('deliveries/History', [
-            'orders' => (clone $query)->latest('id')->paginate(20)->withQueryString()
+            'orders' => (clone $query)->with('onlineOrder:id,number')->latest('id')->paginate(20)->withQueryString()
                 ->through(fn (DeliveryOrder $order) => $this->card($order)),
             'filters' => $filters,
             'summary' => [
@@ -69,9 +75,12 @@ class DeliveryController extends Controller
 
     public function create(): Response
     {
+        $products = Product::query()->where('active', true)->where('sellable', true)->where('sold_out', false)->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']);
+
         return Inertia::render('deliveries/Form', [
-            'products' => Product::query()->where('active', true)->where('sellable', true)->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'zones' => DeliveryZone::orderBy('name')->get(['id', 'name', 'fee']),
             'paymentMethods' => config('sales.payment_methods'),
@@ -87,7 +96,7 @@ class DeliveryController extends Controller
 
     public function show(Request $request, DeliveryOrder $delivery): Response
     {
-        $delivery->load('items');
+        $delivery->load('items', 'onlineOrder:id,number');
 
         return Inertia::render('deliveries/Show', [
             'order' => [
@@ -102,7 +111,7 @@ class DeliveryController extends Controller
                 'cancel_reason' => $delivery->cancel_reason,
                 'cancelled_by' => $delivery->cancelled_by,
                 'customer_id' => $delivery->customer_id,
-                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'unit_price', 'total', 'notes')),
+                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'unit_price', 'total', 'notes')),
             ],
             'couriers' => $this->couriers(),
             'paymentMethods' => config('sales.payment_methods'),
@@ -112,7 +121,7 @@ class DeliveryController extends Controller
 
     public function ticket(DeliveryOrder $delivery): Response
     {
-        $delivery->load('items');
+        $delivery->load('items', 'onlineOrder:id,number');
 
         return Inertia::render('deliveries/Ticket', [
             'order' => [
@@ -123,22 +132,31 @@ class DeliveryController extends Controller
                 'delivery_fee' => $delivery->delivery_fee,
                 'notes' => $delivery->notes,
                 'date' => $delivery->created_at->format('d/m/Y H:i'),
-                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'total', 'notes')),
+                'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'total', 'notes')),
             ],
         ]);
+    }
+
+    /** Manda o pedido para a impressora térmica de pedidos, pelo agente da loja. */
+    public function printThermal(DeliveryOrder $delivery, PrintQueue $queue): RedirectResponse
+    {
+        if (! $queue->queueOrder($delivery)) {
+            return back()->withErrors(['print' => 'Nenhuma impressora de pedidos ativa. Configure em Gestão > Impressoras.']);
+        }
+
+        return back()->with('success', 'Pedido enviado para a impressora.');
     }
 
     public function advance(Request $request, DeliveryOrder $delivery, AdvanceDeliveryOrder $advance): RedirectResponse
     {
         $user = $request->user();
-        $isCourierFinishing = $delivery->courier_id === $user->id && $delivery->status === DeliveryOrder::OUT;
-
-        abort_unless($user->hasPermission('deliveries.operate') || $isCourierFinishing, 403);
+        abort_unless($user->hasPermission('deliveries.operate') || $this->isOwnRoute($delivery, $user), 403);
 
         $data = $request->validate([
             'expected_status' => ['required', 'string'],
             'courier_id' => ['nullable', Rule::exists('users', 'id')->where('company_id', $user->company_id)->where('active', true)],
-        ]);
+            'delivery_courier_id' => ['nullable', Rule::exists('couriers', 'id')->where('company_id', $user->company_id)->where('active', true)],
+        ], [], ['delivery_courier_id' => 'entregador']);
 
         $courier = isset($data['courier_id']) ? User::with('role')->find($data['courier_id']) : null;
 
@@ -146,9 +164,25 @@ class DeliveryController extends Controller
             return back()->withErrors(['courier_id' => 'Este usuário não é entregador.']);
         }
 
+        if (isset($data['delivery_courier_id'])) {
+            $courier = Courier::find($data['delivery_courier_id']);
+        }
+
         $advance->handle($delivery, $data['expected_status'], $courier);
 
         return back()->with('success', 'Pedido atualizado.');
+    }
+
+    /** O entregador não conseguiu entregar: o pedido volta para a loja com o motivo. */
+    public function markReturned(Request $request, DeliveryOrder $delivery, ReturnDeliveryOrder $returnOrder): RedirectResponse
+    {
+        abort_unless($request->user()->hasPermission('deliveries.operate') || $this->isOwnRoute($delivery, $request->user()), 403);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:255']], [], ['reason' => 'motivo']);
+
+        $returnOrder->handle($delivery, $data['reason']);
+
+        return back()->with('success', "Pedido #{$delivery->number} marcado como não entregue.");
     }
 
     public function cancel(Request $request, DeliveryOrder $delivery, CancelDeliveryOrder $cancelOrder): RedirectResponse
@@ -178,6 +212,7 @@ class DeliveryController extends Controller
     {
         return Inertia::render('deliveries/Mine', [
             'orders' => DeliveryOrder::query()
+                ->with('onlineOrder:id,number')
                 ->where('courier_id', $request->user()->id)
                 ->where('status', DeliveryOrder::OUT)
                 ->orderBy('dispatched_at')
@@ -232,18 +267,29 @@ class DeliveryController extends Controller
         ], [], ['name' => 'bairro', 'fee' => 'taxa']);
     }
 
-    /** @return array<int, array{id: int, name: string}> */
+    /** O entregador com login pode concluir ou devolver só o que está em rota com ele. */
+    private function isOwnRoute(DeliveryOrder $delivery, User $user): bool
+    {
+        return $delivery->courier_id === $user->id && $delivery->status === DeliveryOrder::OUT;
+    }
+
+    /** @return list<array{type: string, id: int, name: string}> */
     private function couriers(): array
     {
-        return User::query()
-            ->where('active', true)
-            ->with('role')
-            ->orderBy('name')
-            ->get()
-            ->filter(fn (User $user) => $user->hasPermission('deliveries.courier'))
-            ->map(fn (User $user) => $user->only('id', 'name'))
-            ->values()
-            ->all();
+        return Courier::dispatchOptions();
+    }
+
+    /** O nome do cliente, ou um número, que pode ser o da entrega ou o do pedido online. */
+    private function search(Builder $query, string $search, int $companyId): Builder
+    {
+        return $query->where(function (Builder $query) use ($search, $companyId) {
+            $query->where('customer_name', 'like', "%$search%");
+
+            if (ctype_digit($search)) {
+                $query->orWhere('number', (int) $search)
+                    ->orWhereHas('onlineOrder', fn (Builder $online) => $online->where('company_id', $companyId)->where('number', (int) $search));
+            }
+        });
     }
 
     private function card(DeliveryOrder $order): array
@@ -251,6 +297,7 @@ class DeliveryController extends Controller
         return [
             'id' => $order->id,
             'number' => $order->number,
+            'online_number' => $order->onlineOrder?->number,
             'type' => $order->type,
             'type_label' => __("deliveries.types.{$order->type}"),
             'status' => $order->status,
@@ -265,6 +312,7 @@ class DeliveryController extends Controller
             'payment_method' => $order->payment_method,
             'change_for' => $order->change_for,
             'courier' => $order->courier_name,
+            'return_reason' => $order->status === DeliveryOrder::RETURNED ? $order->return_reason : null,
             'settled' => $order->isSettled(),
             'minutes' => (int) $order->created_at->diffInMinutes(now()),
             'date' => $order->created_at->format('d/m/Y H:i'),

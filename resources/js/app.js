@@ -2,6 +2,9 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { ZiggyVue } from 'ziggy-js';
+import { setupInstallApp } from './lib/installApp';
+
+setupInstallApp();
 
 // Cada tela vira um arquivo: o cardápio do QR Code não baixa o sistema inteiro no celular do cliente.
 const pages = import.meta.glob('./pages/**/*.vue');

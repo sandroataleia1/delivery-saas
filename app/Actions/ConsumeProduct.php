@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\StockMovement;
+use App\Support\OptionStock;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -14,13 +15,19 @@ use Illuminate\Support\Facades\DB;
  */
 class ConsumeProduct
 {
-    public function __construct(private MoveStock $moveStock) {}
+    public function __construct(private MoveStock $moveStock, private OptionStock $optionStock) {}
 
-    public function handle(Product $product, string $quantity, ?string $notes = null, ?Sale $sale = null): void
+    /**
+     * @param  array<string, mixed>|null  $options  snapshot da composição. Com tamanho, a ficha base do tamanho
+     *                                              substitui a ficha do produto; sabores e opções baixam as suas.
+     */
+    public function handle(Product $product, string $quantity, ?string $notes = null, ?Sale $sale = null, ?array $options = null): void
     {
-        DB::transaction(function () use ($product, $quantity, $notes, $sale) {
+        DB::transaction(function () use ($product, $quantity, $notes, $sale, $options) {
+            $sized = ! empty($options['size']);
+
             // Sempre na mesma ordem: duas vendas simultâneas não travam uma à outra.
-            $items = $product->recipeItems()->with('ingredient')->orderBy('ingredient_id')->get();
+            $items = $sized ? collect() : $product->recipeItems()->with('ingredient')->orderBy('ingredient_id')->get();
 
             foreach ($items as $item) {
                 $this->moveStock->handle(
@@ -33,9 +40,31 @@ class ConsumeProduct
                 );
             }
 
-            if ($items->isEmpty() && $product->track_stock) {
+            if ($options !== null) {
+                $this->consumeOptions($options, $quantity, $sale);
+            }
+
+            if (! $sized && $items->isEmpty() && $product->track_stock) {
                 $this->moveStock->handle($product, StockMovement::SALE, bcmul($quantity, '-1', 3), notes: $notes, sale: $sale, allowNegative: true);
             }
         });
+    }
+
+    /** @param  array<string, mixed>  $options */
+    private function consumeOptions(array $options, string $quantity, ?Sale $sale): void
+    {
+        $consumptions = $this->optionStock->consumptions($options, $quantity);
+        $ingredients = Product::withoutGlobalScopes()->whereIn('id', array_column($consumptions, 'ingredient_id'))->get()->keyBy('id');
+
+        foreach ($consumptions as $consumption) {
+            $this->moveStock->handle(
+                $ingredients[$consumption['ingredient_id']],
+                StockMovement::SALE_INGREDIENT,
+                bcmul($consumption['quantity'], '-1', 3),
+                notes: $consumption['source'],
+                sale: $sale,
+                allowNegative: true,
+            );
+        }
     }
 }

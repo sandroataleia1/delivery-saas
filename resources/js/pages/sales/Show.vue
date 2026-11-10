@@ -56,7 +56,10 @@ function cancelSale() {
                 </thead>
                 <tbody>
                     <tr v-for="item in sale.items" :key="item.id">
-                        <td class="font-semibold">{{ item.product_name }}</td>
+                        <td>
+                            <p class="font-semibold">{{ item.product_name }}</p>
+                            <p v-if="item.options_label" class="text-muted text-xs">{{ item.options_label }}</p>
+                        </td>
                         <td class="text-right whitespace-nowrap tabular-nums">{{ formatQuantity(item.quantity, item.unit) }}</td>
                         <td class="text-right whitespace-nowrap tabular-nums max-sm:hidden">{{ formatMoney(item.unit_price) }}</td>
                         <td class="text-right whitespace-nowrap tabular-nums">{{ formatMoney(item.total) }}</td>

@@ -4,6 +4,7 @@ import { useForm } from '@inertiajs/vue3';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
+import { usePermissions } from '@/lib/can';
 
 const props = defineProps({
     bill: { type: Object, default: null },
@@ -13,14 +14,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-const form = useForm({ paid_at: '', paid_amount: '', payment_method: 'pix', notes: '', bill: null });
+const { can } = usePermissions();
+const form = useForm({ paid_at: '', paid_amount: '', payment_method: 'pix', notes: '', bill: null, discount_amount: '0', discount_reason: '' });
 const isPayable = computed(() => props.bill?.type === 'pagar');
 
 watch(
     () => props.bill,
     (bill) => {
         if (bill) {
-            Object.assign(form, { paid_at: props.today, paid_amount: bill.amount, payment_method: 'pix', notes: '' });
+            Object.assign(form, { paid_at: props.today, paid_amount: bill.balance ?? bill.amount, payment_method: 'pix', notes: '', discount_amount: '0', discount_reason: '' });
             form.clearErrors();
         }
     },
@@ -69,6 +71,15 @@ function submit() {
             <Field v-slot="{ id }" label="Observação" :error="form.errors.notes">
                 <input :id="id" v-model="form.notes" class="input" maxlength="255" />
             </Field>
+
+            <template v-if="can('finance.discount')">
+                <Field v-slot="{ id }" label="Desconto para quitação (R$)" :error="form.errors.discount_amount" hint="Opcional. Valor recebido e desconto devem quitar exatamente o saldo.">
+                    <DecimalInput :id="id" v-model="form.discount_amount" pad />
+                </Field>
+                <Field v-slot="{ id }" label="Motivo do desconto" :error="form.errors.discount_reason">
+                    <input :id="id" v-model="form.discount_reason" class="input" maxlength="255" />
+                </Field>
+            </template>
 
             <p v-if="form.errors.bill" class="text-danger text-sm" role="alert">{{ form.errors.bill }}</p>
         </div>

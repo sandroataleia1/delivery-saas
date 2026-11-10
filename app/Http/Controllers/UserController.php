@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,7 +15,11 @@ class UserController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->only('search', 'status', 'role');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'string', Rule::in(['ativos', 'inativos'])],
+            'role' => ['nullable', 'integer', 'min:1'],
+        ]);
         $actor = $request->user();
 
         $users = User::query()
@@ -55,11 +60,11 @@ class UserController extends Controller
     {
         $user = new User($request->safe()->only('name', 'email', 'phone', 'password'));
         $user->role_id = $request->validated('role_id');
-        $user->must_change_password = true;
+        $user->must_change_password = false;
         $user->save();
 
         return redirect()->route('users.index')
-            ->with('success', "Usuário {$user->name} criado. No primeiro acesso será pedida uma nova senha.");
+            ->with('success', "Usuário {$user->name} criado. Ele já pode entrar com a senha cadastrada.");
     }
 
     public function edit(Request $request, User $user): Response
@@ -83,13 +88,14 @@ class UserController extends Controller
 
         if ($newPassword) {
             $user->password = $newPassword;
-            $user->must_change_password = true;
+            $user->must_change_password = false;
         }
 
         $user->save();
 
         if ($newPassword) {
             $user->terminateSessions(except: $user->is($request->user()) ? $request->session()->getId() : null);
+            $user->tokens()->delete();
         }
 
         return redirect()->route('users.index')->with('success', 'Usuário atualizado.');
@@ -105,6 +111,10 @@ class UserController extends Controller
 
         $user->active = ! $user->active;
         $user->save();
+
+        if (! $user->active) {
+            $user->tokens()->delete();
+        }
 
         return back()->with('success', $user->active ? 'Usuário ativado.' : 'Usuário inativado.');
     }

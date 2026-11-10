@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Ban, Printer, Wallet } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
@@ -73,15 +73,27 @@ function settle() {
             onError: () => (settleUuid.value = newUuid()),
         });
 }
+
+const page = usePage();
+const sendingToPrinter = ref(false);
+
+function printThermal() {
+    sendingToPrinter.value = true;
+    router.post(route('deliveries.print', props.order.id), {}, { preserveScroll: true, onFinish: () => (sendingToPrinter.value = false) });
+}
 </script>
 
 <template>
     <AppLayout :title="`Pedido #${order.number}`">
-        <PageHeader :title="`Pedido #${order.number}`" :subtitle="`${order.type_label} · ${order.status_label} · ${order.date}`">
+        <PageHeader :title="order.online_number ? `Pedido #${order.number} · Online #${order.online_number}` : `Pedido #${order.number}`" :subtitle="`${order.type_label} · ${order.status_label} · ${order.date}`">
             <a :href="route('deliveries.ticket', order.id)" target="_blank" class="btn btn-secondary">
                 <Printer :size="16" />
                 Imprimir
             </a>
+            <button type="button" class="btn btn-secondary" :disabled="sendingToPrinter" @click="printThermal">
+                <Printer :size="16" />
+                Na impressora
+            </button>
             <button v-if="canCancel" type="button" class="btn btn-secondary" @click="cancelling = true">
                 <Ban :size="16" />
                 Cancelar pedido
@@ -92,9 +104,16 @@ function settle() {
             </button>
         </PageHeader>
 
+        <p v-if="page.props.errors.print" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm" role="alert">{{ page.props.errors.print }}</p>
+
         <div v-if="order.status === 'cancelled'" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm">
             <p class="font-semibold">Cancelado por {{ order.cancelled_by }}</p>
             <p>Motivo: {{ order.cancel_reason }}</p>
+        </div>
+
+        <div v-if="order.status === 'returned'" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm">
+            <p class="font-semibold">Não entregue<template v-if="order.courier"> por {{ order.courier }}</template></p>
+            <p>Motivo: {{ order.return_reason }}</p>
         </div>
 
         <p v-if="order.settled" class="bg-ok-soft text-ok mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm font-semibold">
@@ -139,6 +158,7 @@ function settle() {
                     <tr v-for="item in order.items" :key="item.id">
                         <td>
                             <p class="font-semibold">{{ item.product_name }}</p>
+                            <p v-if="item.options_label" class="text-muted text-xs">{{ item.options_label }}</p>
                             <p v-if="item.notes" class="text-warn text-xs">{{ item.notes }}</p>
                         </td>
                         <td class="text-right whitespace-nowrap tabular-nums">{{ formatQuantity(item.quantity, item.unit) }}</td>

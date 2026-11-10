@@ -1,0 +1,32 @@
+{
+    "data": {
+        "key": {
+            "id": "A504EF014DA1F4368E7906BB9CDBCDD3",
+            "fromMe": false,
+            "remoteJid": "123456789012345@lid",
+            "participant": null,
+            "remoteJidAlt": "551188887777@s.whatsapp.net",
+            "addressingMode": "lid"
+        },
+        "source": "android",
+        "status": "DELIVERY_ACK",
+        "message": {
+            "audioMessage": {
+                "ptt": true,
+                "seconds": 1,
+                "mimetype": "audio/ogg; codecs=opus"
+            }
+        },
+        "pushName": "Cliente Teste",
+        "contextInfo": {
+            "mentionedJid": [],
+            "groupMentions": []
+        },
+        "messageType": "audioMessage",
+        "messageTimestamp": 1794248852
+    },
+    "event": "messages.upsert",
+    "sender": "551130000000@s.whatsapp.net",
+    "instance": "inst-a",
+    "date_time": "2026-11-09T15:27:32.691Z"
+}

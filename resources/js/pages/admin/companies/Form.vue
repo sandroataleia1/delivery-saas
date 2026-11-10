@@ -7,9 +7,11 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { formatCnpj, formatPhone } from '@/lib/format';
 
 const props = defineProps({
+    operation: { type: Object, default: null },
     company: { type: Object, default: null },
 });
 
+const block = useForm({ blocked: props.operation?.automatic_blocked ?? false, reason: '' });
 const editing = computed(() => props.company !== null);
 
 const form = useForm({
@@ -106,6 +108,13 @@ function submit() {
                 <button type="submit" class="btn btn-primary" :disabled="form.processing">Salvar</button>
                 <Link :href="route('admin.companies.index')" class="btn btn-secondary">Cancelar</Link>
             </div>
+        </form>
+        <form v-if="editing && operation" class="card mt-6 space-y-4 p-5" @submit.prevent="block.post(route('admin.companies.operation.block', company.id), { preserveScroll: true })">
+            <h2 class="font-bold">Bloqueio administrativo do modo automático</h2>
+            <p class="text-muted text-sm">Preferência da empresa: {{ operation.confirmation_mode }}. Modo efetivo: manual. A liberação do bloqueio mantém o modo manual enquanto a produção automática estiver indisponível.</p>
+            <label class="flex gap-2"><input v-model="block.blocked" type="checkbox" /> Bloquear automático</label>
+            <Field v-slot="{ id }" label="Motivo" :error="block.errors.reason"><input :id="id" v-model="block.reason" class="input" maxlength="255" required /></Field>
+            <button class="btn btn-secondary" :disabled="block.processing">Registrar decisão</button>
         </form>
     </AppLayout>
 </template>

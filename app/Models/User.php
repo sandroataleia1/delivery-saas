@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\HasApiTokens;
 
 // company_id, role_id e is_super_admin ficam fora de propósito: nunca vêm de atribuição em massa.
 #[Fillable(['name', 'email', 'phone', 'password'])]
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use Auditable, BelongsToCompany, HasFactory, Notifiable;
+    use Auditable, BelongsToCompany, HasApiTokens, HasFactory, Notifiable;
 
     protected function casts(): array
     {
@@ -48,9 +49,36 @@ class User extends Authenticatable
         return $this->role?->grantedPermissions() ?? [];
     }
 
+    /**
+     * Usuários ativos que podem levar entregas, para escolher ao despachar.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    public static function activeCouriers(): array
+    {
+        return self::query()
+            ->where('active', true)
+            ->with('role')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (User $user) => $user->hasPermission('deliveries.courier'))
+            ->map(fn (User $user) => $user->only('id', 'name'))
+            ->values()
+            ->all();
+    }
+
     public function hasPermission(string $permission): bool
     {
         return in_array($permission, $this->permissions(), true);
+    }
+
+    /** Perfil só da produção (ex.: cozinha): o início dele é o painel em tela cheia. */
+    public function isProductionOnly(): bool
+    {
+        $permissions = $this->permissions();
+
+        return in_array('production.view', $permissions, true)
+            && array_filter($permissions, fn (string $permission) => ! str_starts_with($permission, 'production.')) === [];
     }
 
     public function isCompanyAdmin(): bool

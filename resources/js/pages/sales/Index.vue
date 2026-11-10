@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
-import { ShoppingCart } from '@lucide/vue';
+import { ChartColumn, ShoppingCart } from '@lucide/vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import Pagination from '@/components/Pagination.vue';
@@ -42,7 +42,11 @@ watch(filters, () => {
 
 <template>
     <AppLayout title="Vendas">
-        <PageHeader title="Vendas" subtitle="Histórico do que foi vendido.">
+        <PageHeader title="Venda a venda" subtitle="Cada venda feita, com filtros por número, data, pagamento e operador.">
+            <Link v-if="can('reports.view')" :href="route('reports.sales', { from: filters.from || undefined, to: filters.to || undefined })" class="btn btn-secondary">
+                <ChartColumn :size="16" />
+                Relatórios
+            </Link>
             <Link v-if="can('sales.create')" :href="route('pos')" class="btn btn-primary">
                 <ShoppingCart :size="16" />
                 Abrir PDV

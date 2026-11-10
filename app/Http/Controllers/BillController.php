@@ -9,9 +9,11 @@ use App\Actions\SettleBill;
 use App\Http\Requests\BillRequest;
 use App\Models\Bill;
 use App\Models\Supplier;
+use App\Reports\BillLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,6 +39,7 @@ class BillController extends Controller
             'type' => $type,
             'bills' => (clone $ofType)
                 ->with('supplier:id,name')
+                ->withCount('settlements')
                 ->when($filters['status'] ?? null, fn ($query, $status) => $status === 'overdue'
                     ? $query->overdue()
                     : $query->where('status', $status))
@@ -54,12 +57,15 @@ class BillController extends Controller
                 ->through(fn (Bill $bill) => $this->present($bill)),
             'filters' => $filters,
             'summary' => [
-                'open' => (clone $ofType)->where('status', Bill::OPEN)->sum('amount'),
-                'overdue' => (clone $ofType)->overdue()->sum('amount'),
-                'next_days' => (clone $ofType)->where('status', Bill::OPEN)->whereBetween('due_date', [today(), today()->addDays(7)])->sum('amount'),
-                'paid_month' => (clone $ofType)->where('status', Bill::PAID)->whereBetween('paid_at', [today()->startOfMonth(), today()->endOfMonth()])->sum('paid_amount'),
+                'open' => (clone $ofType)->where('status', Bill::OPEN)->sum(DB::raw(Bill::balanceExpression())),
+                'overdue' => (clone $ofType)->overdue()->sum(DB::raw(Bill::balanceExpression())),
+                'next_days' => (clone $ofType)->where('status', Bill::OPEN)->whereBetween('due_date', [today(), today()->addDays(7)])->sum(DB::raw(Bill::balanceExpression())),
+                'paid_month' => BillLedger::entries(today()->startOfMonth()->format('Y-m-d'), today()->endOfMonth()->format('Y-m-d'))->where('type', $key)->sum('amount'),
             ],
             'categories' => config("finance.categories.$key"),
+            'suppliers' => $type === 'pagar' && $request->user()->can('finance.manage')
+                ? $this->formProps($type)['suppliers']
+                : [],
             'methods' => config('finance.payment_methods'),
             'today' => today()->format('Y-m-d'),
         ]);
@@ -86,7 +92,8 @@ class BillController extends Controller
 
     public function show(Bill $bill): Response
     {
-        $bill->load('supplier:id,name');
+        $bill->load('supplier:id,name', 'settlements');
+        $bill->loadCount('settlements');
 
         return Inertia::render('finance/Show', [
             'bill' => $this->present($bill),
@@ -97,7 +104,7 @@ class BillController extends Controller
 
     public function edit(Bill $bill): Response
     {
-        abort_unless($bill->isOpen(), 403);
+        abort_unless($bill->canEditDirectly(), 403);
 
         return Inertia::render('finance/Form', [
             ...$this->formProps($bill->isPayable() ? 'pagar' : 'receber'),
@@ -111,35 +118,26 @@ class BillController extends Controller
 
     public function update(BillRequest $request, Bill $bill): RedirectResponse
     {
-        abort_unless($bill->isOpen(), 403);
-
-        $bill->update($request->validated());
+        DB::transaction(function () use ($request, $bill) {
+            $locked = Bill::whereKey($bill->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->canEditDirectly(), 403);
+            $locked->update($request->validated());
+        });
 
         return redirect()->route('bills.show', $bill)->with('success', 'Conta atualizada.');
     }
 
     public function settle(Request $request, Bill $bill, SettleBill $settleBill): RedirectResponse
     {
-        $data = $request->validate([
-            'paid_at' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'paid_amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:9999999'],
-            'payment_method' => ['required', Rule::in(array_keys(config('finance.payment_methods')))],
-            'notes' => ['nullable', 'string', 'max:255'],
-        ], [], [
-            'paid_at' => 'data',
-            'paid_amount' => 'valor',
-            'payment_method' => 'forma de pagamento',
-            'notes' => 'observações',
-        ]);
-
-        $settleBill->handle($bill, $data);
+        $settleBill->handle($bill, $request->only('paid_at', 'paid_amount', 'payment_method', 'notes', 'discount_amount', 'discount_reason'));
 
         return back()->with('success', 'Baixa registrada.');
     }
 
     public function reopen(Request $request, Bill $bill, ReopenBill $reopenBill): RedirectResponse
     {
-        $reopenBill->handle($bill, $this->reason($request));
+        $selection = $request->validate(['settlement_id' => ['nullable', 'integer', 'min:1']]);
+        $reopenBill->handle($bill, $this->reason($request), isset($selection['settlement_id']) ? (int) $selection['settlement_id'] : null);
 
         return back()->with('success', 'Baixa estornada. A conta voltou a ficar em aberto.');
     }
@@ -178,6 +176,21 @@ class BillController extends Controller
             'category' => $bill->category,
             'party' => $bill->supplier?->name ?? $bill->counterparty,
             'amount' => $bill->amount,
+            'balance' => $bill->balance(),
+            'discount_amount' => $bill->discount_amount,
+            'linked' => $bill->isLinked(),
+            'sale_id' => $bill->sale_id,
+            'can_edit' => $bill->canEditDirectly(),
+            'can_cancel' => $bill->isOpen() && ! $bill->isLinked() && ! $bill->hasActiveSettlements() && ! $bill->legacy_review_required,
+            'legacy_review_required' => $bill->legacy_review_required,
+            'settlements' => $bill->relationLoaded('settlements') ? $bill->settlements->sortBy('id')->values()->map(fn ($row) => [
+                'id' => $row->id, 'amount' => $row->amount, 'discount_amount' => $row->discount_amount,
+                'discount_reason' => $row->discount_reason, 'paid_at' => $row->paid_at->format('d/m/Y'),
+                'notes' => $row->notes,
+                'payment_method' => config("finance.payment_methods.{$row->payment_method}"), 'user' => $row->user_name,
+                'reversed_at' => $row->reversed_at?->format('d/m/Y H:i'), 'reversed_by' => $row->reversed_by,
+                'reversal_reason' => $row->reversal_reason, 'legacy_imported' => $row->legacy_imported,
+            ])->all() : null,
             'due_date' => $bill->due_date->format('d/m/Y'),
             'status' => $bill->statusKey(),
             'status_label' => __("finance.status.{$bill->statusKey()}"),

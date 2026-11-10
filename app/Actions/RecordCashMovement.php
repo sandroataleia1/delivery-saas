@@ -12,9 +12,9 @@ use Illuminate\Validation\ValidationException;
 /** Sangria, suprimento, estorno ou conta paga em dinheiro. Saídas não podem passar do dinheiro no caixa. */
 class RecordCashMovement
 {
-    public function handle(CashSession $session, string $type, string $amount, string $reason, ?Sale $sale = null): CashMovement
+    public function handle(CashSession $session, string $type, string $amount, string $reason, ?Sale $sale = null, ?CashMovement $reverses = null): CashMovement
     {
-        return DB::transaction(function () use ($session, $type, $amount, $reason, $sale) {
+        return DB::transaction(function () use ($session, $type, $amount, $reason, $sale, $reverses) {
             /** @var CashSession $locked */
             $locked = CashSession::whereKey($session->getKey())->lockForUpdate()->firstOrFail();
 
@@ -22,7 +22,7 @@ class RecordCashMovement
                 throw ValidationException::withMessages(['amount' => 'Este caixa já foi fechado.']);
             }
 
-            $isOutflow = ! in_array($type, [CashMovement::DEPOSIT, CashMovement::BILL_RECEIPT], true);
+            $isOutflow = ! in_array($type, CashMovement::INFLOWS, true);
 
             if ($isOutflow && bccomp($amount, $locked->calculateSummary()['expected_cash'], 2) > 0) {
                 throw ValidationException::withMessages(['amount' => 'O valor é maior que o dinheiro disponível no caixa.']);
@@ -35,6 +35,7 @@ class RecordCashMovement
                 'company_id' => $locked->company_id,
                 'cash_session_id' => $locked->id,
                 'sale_id' => $sale?->id,
+                'reverses_movement_id' => $reverses?->id,
                 'type' => $type,
                 'amount' => $amount,
                 'reason' => $reason,

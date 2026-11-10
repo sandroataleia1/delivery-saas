@@ -3,7 +3,10 @@
 namespace App\Actions;
 
 use App\Models\TableOrder;
+use App\Support\ProductionGuard;
+use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /** Agrupa o que ainda não foi para a cozinha em um novo pedido. Retorna o número dele. */
 class SendToKitchen
@@ -12,8 +15,12 @@ class SendToKitchen
     {
         return DB::transaction(function () use ($order) {
             /** @var TableOrder $locked */
-            $locked = TableOrder::whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = TableOperationLock::order($order);
 
+            if (! $locked->isOpen()) {
+                throw ValidationException::withMessages(['order' => 'Comanda encerrada.']);
+            }
+            ProductionGuard::assertKnown($locked);
             $pending = $locked->activeItems()->whereNull('kitchen_batch');
 
             if (! $pending->exists()) {

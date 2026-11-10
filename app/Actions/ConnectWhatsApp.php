@@ -1,0 +1,80 @@
+<?php
+
+namespace App\Actions;
+
+use App\Models\Company;
+use App\Models\WhatsAppSetting;
+use App\Support\EvolutionClient;
+use App\Support\EvolutionException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class ConnectWhatsApp
+{
+    public function __construct(private EvolutionClient $evolution) {}
+
+    /**
+     * Cria a instância da loja, se faltar, e guarda o QR para a tela exibir.
+     * Instância com a sessão fechada (celular desconectado) é apagada e recriada: reaproveitá-la
+     * deixava o bot sem ouvir as mensagens depois de reconectar.
+     */
+    public function handle(Company $company): void
+    {
+        if (! $this->evolution->configured()) {
+            throw ValidationException::withMessages(['whatsapp' => 'O WhatsApp ainda não foi configurado no servidor.']);
+        }
+
+        $setting = WhatsAppSetting::where('company_id', $company->id)->first() ?? new WhatsAppSetting;
+
+        try {
+            $qr = null;
+            $needsInstance = true;
+
+            if (filled($setting->instance_name) && filled($setting->instance_token)) {
+                try {
+                    if ($this->evolution->state($setting->instance_name, $setting->instance_token) === 'close') {
+                        $this->evolution->deleteInstance($setting->instance_name);
+                    } else {
+                        $qr = $this->evolution->connect($setting->instance_name, $setting->instance_token);
+                        $needsInstance = false;
+                    }
+                } catch (EvolutionException $e) {
+                    if (! in_array($e->status, [401, 404], true)) {
+                        throw $e;
+                    }
+                }
+            }
+
+            if ($needsInstance) {
+                $name = 'delivery-'.$company->id.'-'.Str::lower(Str::random(6));
+                $created = $this->evolution->createInstance($name);
+                $setting->forceFill([
+                    'company_id' => $company->id,
+                    'instance_name' => $name,
+                    'instance_token' => $created['token'],
+                    'webhook_secret' => null,
+                ])->save();
+                $qr = $created['qr'];
+            }
+        } catch (EvolutionException) {
+            throw ValidationException::withMessages(['whatsapp' => 'Não foi possível falar com o servidor do WhatsApp. Tente de novo em instantes.']);
+        }
+
+        $this->registerWebhook($setting);
+
+        if ($qr !== null) {
+            Cache::put("whatsapp-qr:{$company->id}", $qr, 60);
+        }
+    }
+
+    /** Sem webhook a loja ainda envia avisos; só o bot fica sem ouvir. Por isso a falha não bloqueia a conexão. */
+    private function registerWebhook(WhatsAppSetting $setting): void
+    {
+        try {
+            $this->evolution->setWebhook($setting->instance_name, $setting->instance_token, $setting->webhookUrl());
+        } catch (EvolutionException $e) {
+            report($e);
+        }
+    }
+}

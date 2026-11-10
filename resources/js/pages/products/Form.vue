@@ -3,10 +3,12 @@ import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
+import PizzaFields from '@/components/PizzaFields.vue';
 import RecipeEditor from '@/components/RecipeEditor.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney, formatQuantity } from '@/lib/format';
+import { pizzaPayload, pizzaRows } from '@/lib/pizzaForm';
 
 const props = defineProps({
     product: { type: Object, default: null },
@@ -27,34 +29,60 @@ const form = useForm({
     cost_price: props.product?.cost_price ?? '',
     track_stock: props.product?.track_stock ?? true,
     sellable: props.product?.sellable ?? true,
+    sold_out: props.product?.sold_out ?? false,
     min_stock: props.product?.min_stock ?? '',
     initial_stock: '',
+    image: null,
+    remove_image: false,
     recipe: (props.product?.recipe ?? []).map((item) => ({ ...item, quantity: String(Number(item.quantity)) })),
+    is_pizza: props.product?.is_pizza ?? false,
+    pizza: pizzaRows(props.product?.pizza),
 });
 
 // Com estoque controlado, depois de criado o custo só muda pelas entradas.
 const costIsCalculated = computed(() => editing.value && form.track_stock && props.product.track_stock);
 const hasRecipe = computed(() => !form.track_stock && form.recipe.length > 0);
 
+function onImageChange(event) {
+    form.image = event.target.files[0] ?? null;
+    if (form.image) {
+        form.remove_image = false;
+    }
+}
+
 function submit() {
+    const hasFile = form.image instanceof File;
+
     form.transform((data) => ({
         ...data,
+        ...(editing.value && hasFile ? { _method: 'put' } : {}),
         recipe: data.track_stock
             ? []
             : data.recipe.map(({ ingredient_id, quantity }) => ({ ingredient_id, quantity })),
+        is_pizza: data.sellable && data.is_pizza,
+        pizza: data.sellable && data.is_pizza ? pizzaPayload(data.pizza) : undefined,
     }));
 
-    if (editing.value) {
+    // Multipart só com arquivo (o FormData descarta listas vazias); o PUT vira POST com _method.
+    if (editing.value && !hasFile) {
         form.put(route('products.update', props.product.id));
-    } else {
-        form.post(route('products.store'));
+        return;
     }
+
+    form.post(
+        editing.value ? route('products.update', props.product.id) : route('products.store'),
+        { forceFormData: hasFile },
+    );
 }
 </script>
 
 <template>
     <AppLayout :title="editing ? 'Editar produto' : 'Novo produto'">
-        <PageHeader :title="editing ? 'Editar produto' : 'Novo produto'" />
+        <PageHeader :title="editing ? 'Editar produto' : 'Novo produto'">
+            <template v-if="editing">
+                <Link :href="route('options.index')" class="btn btn-secondary">Opções</Link>
+            </template>
+        </PageHeader>
 
         <form class="max-w-xl space-y-4" @submit.prevent="submit">
             <div class="card space-y-4 p-5">
@@ -65,6 +93,20 @@ function submit() {
                 <Field v-slot="{ id }" label="Descrição" :error="form.errors.description" hint="Aparece no cardápio do QR Code.">
                     <input :id="id" v-model="form.description" class="input" maxlength="255" />
                 </Field>
+
+                <div class="space-y-2">
+                    <Field v-slot="{ id }" label="Foto" :error="form.errors.image" hint="Aparece no catálogo online. JPG, PNG ou WebP, até 1 MB e 2000 x 2000 px.">
+                        <input :id="id" type="file" class="input" accept="image/jpeg,image/png,image/webp" @change="onImageChange" />
+                    </Field>
+                    <div v-if="product?.image_url && !form.remove_image && !form.image" class="flex items-center gap-3">
+                        <img :src="product.image_url" alt="Foto atual" class="size-20 rounded-lg border object-cover" />
+                        <button type="button" class="btn" @click="form.remove_image = true">Remover</button>
+                    </div>
+                    <p v-if="form.remove_image" class="text-muted text-sm">
+                        A foto será removida ao salvar.
+                        <button type="button" class="underline" @click="form.remove_image = false">Desfazer</button>
+                    </p>
+                </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <Field v-slot="{ id }" label="Categoria" :error="form.errors.category_id">
@@ -102,7 +144,7 @@ function submit() {
                 </label>
 
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <Field v-if="form.sellable" v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
+                    <Field v-if="form.sellable && !form.is_pizza" v-slot="{ id }" label="Preço de venda (R$)" required :error="form.errors.sale_price">
                         <DecimalInput :id="id" v-model="form.sale_price" pad required />
                     </Field>
 
@@ -121,6 +163,24 @@ function submit() {
                         <p class="text-muted text-xs">Calculado pelas entradas de mercadorias.</p>
                     </div>
                 </div>
+            </div>
+
+            <div v-if="form.sellable" class="card space-y-4 p-5">
+                <label class="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input v-model="form.is_pizza" type="checkbox" class="accent-brand mt-0.5 size-4" />
+                    <span>
+                        <span class="block font-semibold">É pizza (tamanhos e sabores)</span>
+                        <span class="text-muted">O cliente escolhe o tamanho e os sabores; o preço vem do sabor em cada tamanho.</span>
+                    </span>
+                </label>
+
+                <template v-if="form.is_pizza">
+                    <PizzaFields :form="form" />
+                    <p v-if="editing" class="text-muted text-sm">
+                        Fichas técnicas por tamanho e sabor e preço dos adicionais por tamanho ficam em
+                        <Link :href="route('products.pizza.edit', product.id)" class="underline">ajustes avançados da pizza</Link>.
+                    </p>
+                </template>
             </div>
 
             <div class="card space-y-4 p-5">
@@ -151,6 +211,7 @@ function submit() {
                 </div>
             </div>
 
+            <label class="card flex gap-3 p-4"><input v-model="form.sold_out" type="checkbox" /><span>Esgotado no restaurante (mesa, QR e delivery). Não altera saldo nem vendas diretas no PDV.</span></label>
             <RecipeEditor v-if="!form.track_stock" :form="form" />
 
             <div class="flex gap-2">

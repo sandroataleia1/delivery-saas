@@ -21,7 +21,9 @@ class StockEntryRequest extends FormRequest
             'bill_installments' => ['nullable', 'integer', 'min:1', 'max:60'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 'distinct',
                 Rule::exists('products', 'id')->where('company_id', $companyId)->where('track_stock', true),
             ],

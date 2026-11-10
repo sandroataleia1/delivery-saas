@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { Search } from '@lucide/vue';
 import Field from '@/components/Field.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -21,6 +22,29 @@ const form = useForm({
 
 const canGrant = (key) => page.props.auth.permissions.includes(key);
 
+/* Busca nas permissões: sem acento e sem diferenciar maiúsculas; o nome do grupo também conta. */
+const search = ref('');
+const normalize = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const visibleGroups = computed(() => {
+    const term = normalize(search.value.trim());
+    if (!term) {
+        return props.groups;
+    }
+
+    return props.groups
+        .map((group) => {
+            if (normalize(group.label).includes(term)) {
+                return group;
+            }
+            const permissions = Object.fromEntries(
+                Object.entries(group.permissions).filter(([key, label]) => normalize(label).includes(term) || key.includes(term)),
+            );
+
+            return { ...group, permissions };
+        })
+        .filter((group) => Object.keys(group.permissions).length > 0);
+});
+
 function submit() {
     if (editing.value) {
         form.put(route('roles.update', props.role.id));
@@ -37,7 +61,7 @@ function submit() {
         <form class="max-w-xl space-y-4" @submit.prevent="submit">
             <div class="card space-y-4 p-5">
                 <Field v-slot="{ id }" label="Nome" :error="form.errors.name">
-                    <input :id="id" v-model="form.name" class="input" maxlength="60" required autofocus />
+                    <input :id="id" v-model="form.name" class="input" maxlength="60" required :autofocus="!editing" />
                 </Field>
 
                 <Field v-slot="{ id }" label="Descrição" :error="form.errors.description">
@@ -47,10 +71,19 @@ function submit() {
 
             <fieldset class="card p-5">
                 <legend class="sr-only">Permissões</legend>
-                <h2 class="font-bold">Permissões</h2>
+                <div class="flex items-baseline justify-between gap-2">
+                    <h2 class="font-bold">Permissões</h2>
+                    <span class="text-muted text-sm">{{ form.permissions.length }} marcada{{ form.permissions.length === 1 ? '' : 's' }}</span>
+                </div>
                 <p v-if="form.errors.permissions" class="text-danger mt-1 text-sm" role="alert">{{ form.errors.permissions }}</p>
 
-                <div v-for="group in groups" :key="group.label" class="mt-4">
+                <div class="relative mt-3">
+                    <Search :size="16" class="text-muted pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" aria-hidden="true" />
+                    <input v-model="search" type="search" class="input pl-9" placeholder="Buscar permissão (ex.: caixa, desconto, entrega)" aria-label="Buscar permissão" @keydown.enter.prevent />
+                </div>
+                <p v-if="visibleGroups.length === 0" class="text-muted mt-4 text-sm">Nenhuma permissão encontrada para "{{ search }}".</p>
+
+                <div v-for="group in visibleGroups" :key="group.label" class="mt-4">
                     <p class="text-muted text-xs font-semibold tracking-wide uppercase">{{ group.label }}</p>
                     <label
                         v-for="(label, key) in group.permissions"

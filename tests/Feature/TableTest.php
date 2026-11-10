@@ -30,7 +30,7 @@ class TableTest extends TestCase
     {
         parent::setUp();
 
-        $this->admin = $this->adminOf();
+        $this->admin = $this->productionAdminOf();
         $this->table = DiningTable::factory()->create(['company_id' => $this->admin->company_id, 'number' => 5]);
         $this->soda = Product::factory()->create([
             'company_id' => $this->admin->company_id,
@@ -58,6 +58,10 @@ class TableTest extends TestCase
 
     private function closing(array $overrides = []): array
     {
+        foreach (TableOrder::where('status', 'open')->get() as $activeOrder) {
+            $this->deliverProduction($activeOrder);
+        }
+
         return [
             'client_uuid' => (string) Str::uuid(),
             'expected_subtotal' => '20.00',
@@ -439,6 +443,48 @@ class TableTest extends TestCase
         );
     }
 
+    public function test_pedir_a_conta_poe_a_mesa_em_fechamento_e_da_para_voltar(): void
+    {
+        $order = $this->openTable();
+        $waiter = $this->userWith(['tables.operate'], $this->admin->company);
+
+        $this->actingAs($waiter)->post("/mesas/comandas/{$order->id}/conta", ['requested' => true])->assertSessionHasNoErrors();
+
+        $this->assertNotNull($order->fresh()->bill_requested_at);
+        $this->get('/mesas')->assertInertia(fn (Assert $page) => $page->where('tables.0.order.closing', true));
+        $this->get("/mesas/comandas/{$order->id}")->assertInertia(fn (Assert $page) => $page->where('order.closing', true));
+
+        $this->post("/mesas/comandas/{$order->id}/conta", ['requested' => false])->assertSessionHasNoErrors();
+
+        $this->assertNull($order->fresh()->bill_requested_at);
+        $this->get('/mesas')->assertInertia(fn (Assert $page) => $page->where('tables.0.order.closing', false));
+    }
+
+    public function test_pedir_a_conta_de_novo_mantem_o_horario_do_primeiro_pedido(): void
+    {
+        $order = $this->openTable();
+        $this->post("/mesas/comandas/{$order->id}/conta", ['requested' => true]);
+        $first = $order->fresh()->bill_requested_at;
+
+        $this->travel(5)->minutes();
+        $this->post("/mesas/comandas/{$order->id}/conta", ['requested' => true]);
+
+        $this->assertTrue($first->equalTo($order->fresh()->bill_requested_at));
+    }
+
+    public function test_conta_pedida_so_em_comanda_aberta_da_propria_empresa(): void
+    {
+        $order = $this->openTable();
+        $this->post("/mesas/comandas/{$order->id}/cancelar", ['reason' => 'x']);
+
+        $this->post("/mesas/comandas/{$order->id}/conta", ['requested' => true])->assertSessionHasErrors('order');
+        $this->post("/mesas/comandas/{$order->id}/conta", [])->assertSessionHasErrors('requested');
+
+        $this->actingAs($this->userWith([], $this->admin->company))->post("/mesas/comandas/{$order->id}/conta", ['requested' => true])->assertForbidden();
+        $this->actingAs($this->productionAdminOf())->post("/mesas/comandas/{$order->id}/conta", ['requested' => true])->assertNotFound();
+        $this->assertNull($order->fresh()->bill_requested_at);
+    }
+
     public function test_item_cancelado_fica_fora_do_total_do_mapa(): void
     {
         $order = $this->openTable();
@@ -454,7 +500,7 @@ class TableTest extends TestCase
         $order = $this->openTable();
         $this->launch($order);
         $item = $order->items()->sole();
-        $other = $this->adminOf();
+        $other = $this->productionAdminOf();
         $foreignProduct = Product::factory()->create(['company_id' => $other->company_id]);
 
         $this->actingAs($other);

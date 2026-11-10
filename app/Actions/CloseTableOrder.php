@@ -5,6 +5,8 @@ namespace App\Actions;
 use App\Models\Sale;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\ProductionGuard;
+use App\Support\TableOperationLock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +27,8 @@ class CloseTableOrder
     {
         return DB::transaction(function () use ($order, $data) {
             /** @var TableOrder $locked */
-            $locked = TableOrder::with('diningTable')->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $locked = TableOperationLock::order($order);
+            $locked->load('diningTable');
 
             if (! $locked->isOpen()) {
                 $sale = $locked->sale_id ? Sale::find($locked->sale_id) : null;
@@ -37,6 +40,8 @@ class CloseTableOrder
                 throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);
             }
 
+            TableOperationLock::assertNoPending($locked);
+            ProductionGuard::assertDelivered($locked);
             $items = $locked->activeItems()->orderBy('product_id')->orderBy('id')->get();
 
             if ($items->isEmpty()) {
@@ -54,6 +59,8 @@ class CloseTableOrder
                         'product_id' => $item->product_id,
                         'quantity' => $item->quantity,
                         'fixed_price' => $item->unit_price,
+                        'options_snapshot' => $item->options,
+                        'options_label' => $item->options_label,
                     ])
                     ->all(),
                 'payments' => $data['payments'],
@@ -71,6 +78,8 @@ class CloseTableOrder
                 'closed_at' => now(),
                 'closed_by' => Auth::user()->name,
             ])->save();
+
+            TableOperationLock::rotate($locked);
 
             return [$sale, $negative];
         });

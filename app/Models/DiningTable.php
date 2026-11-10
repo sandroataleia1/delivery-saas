@@ -21,6 +21,7 @@ class DiningTable extends Model
     {
         static::creating(function (DiningTable $table) {
             $table->qr_token ??= Str::random(32);
+            $table->service_context ??= Str::random(64);
         });
     }
 
@@ -36,7 +37,7 @@ class DiningTable extends Model
 
     protected function auditExclude(): array
     {
-        return ['qr_token'];
+        return ['qr_token', 'service_context'];
     }
 
     public function auditLabel(): string

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\DiningTable;
 use App\Models\TableOrder;
 use App\Support\Audit;
+use App\Support\RestaurantOperationPolicy;
+use App\Support\TableFloor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -15,28 +17,12 @@ use Inertia\Response;
 class DiningTableController extends Controller
 {
     /** Mapa do salão. */
-    public function index(): Response
+    public function index(Request $request, RestaurantOperationPolicy $policy): Response
     {
         return Inertia::render('tables/Index', [
-            'tables' => DiningTable::query()
-                ->where('active', true)
-                ->with(['openOrder' => fn ($query) => $query->withSum('activeItems as total', 'total')])
-                ->orderBy('number')
-                ->get()
-                ->map(fn (DiningTable $table) => [
-                    'id' => $table->id,
-                    'number' => $table->number,
-                    'area' => $table->area,
-                    'seats' => $table->seats,
-                    'order' => $table->openOrder ? [
-                        'id' => $table->openOrder->id,
-                        'people' => $table->openOrder->people,
-                        'waiter' => $table->openOrder->user_name,
-                        'total' => (string) ($table->openOrder->total ?? 0),
-                        'minutes' => (int) $table->openOrder->opened_at->diffInMinutes(now()),
-                    ] : null,
-                ]),
+            'tables' => TableFloor::rows(),
             'completed' => session('completed_sale'),
+            'operation' => array_intersect_key($policy->resolve($request->user()->company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
         ]);
     }
 

@@ -3,22 +3,25 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ChecksCreditSale;
+use App\Http\Requests\Concerns\ValidatesComposition;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreSaleRequest extends FormRequest
 {
-    use ChecksCreditSale;
+    use ChecksCreditSale, ValidatesComposition;
 
     public function rules(): array
     {
         return [
+            ...$this->compositionRules('items.*'),
             'client_uuid' => ['required', 'uuid'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.product_id' => [
+                'bail',
                 'required',
-                'distinct',
+                'integer',
                 Rule::exists('products', 'id')->where('company_id', $this->user()->company_id)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],

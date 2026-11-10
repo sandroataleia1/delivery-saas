@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import { Check, Plus } from '@lucide/vue';
+import BillCreateDialog from '@/components/BillCreateDialog.vue';
 import BillStatus from '@/components/BillStatus.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -17,6 +18,7 @@ const props = defineProps({
     filters: { type: Object, required: true },
     summary: { type: Object, required: true },
     categories: { type: Array, required: true },
+    suppliers: { type: Array, default: () => [] },
     methods: { type: Object, required: true },
     today: { type: String, required: true },
 });
@@ -45,15 +47,16 @@ watch(filters, () => {
 });
 
 const target = ref(null);
+const createDialog = ref(null);
 </script>
 
 <template>
     <AppLayout :title="title">
         <PageHeader :title="title" :subtitle="isPayable ? 'O que sua loja deve.' : 'O que sua loja tem para receber.'">
-            <Link v-if="can('finance.manage')" :href="route('bills.create', type)" class="btn btn-primary">
+            <button v-if="can('finance.manage')" type="button" class="btn btn-primary" @click="createDialog.open()">
                 <Plus :size="16" />
                 Nova conta
-            </Link>
+            </button>
         </PageHeader>
 
         <div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -101,7 +104,7 @@ const target = ref(null);
                         <th>Conta</th>
                         <th class="max-md:hidden">Vencimento</th>
                         <th class="max-sm:hidden">Situação</th>
-                        <th class="text-right">Valor</th>
+                        <th class="text-right">Saldo / valor original</th>
                         <th v-if="can('finance.manage')"><span class="sr-only">Ações</span></th>
                     </tr>
                 </thead>
@@ -115,10 +118,14 @@ const target = ref(null);
                         </td>
                         <td class="whitespace-nowrap tabular-nums max-md:hidden">{{ bill.due_date }}</td>
                         <td class="max-sm:hidden"><BillStatus :status="bill.status" :label="bill.status_label" /></td>
-                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="{ 'text-muted line-through': bill.status === 'cancelled' }">{{ formatMoney(bill.amount) }}</td>
+                        <td class="text-right font-semibold whitespace-nowrap tabular-nums" :class="{ 'text-muted line-through': bill.status === 'cancelled' }">
+                            {{ formatMoney(bill.status === 'open' || bill.status === 'overdue' ? bill.balance : bill.amount) }}
+                            <p v-if="Number(bill.paid_amount) > 0 && (bill.status === 'open' || bill.status === 'overdue')" class="text-muted text-xs">Original: {{ formatMoney(bill.amount) }}</p>
+                            <p v-if="bill.legacy_review_required" class="text-danger text-xs">Reconciliação pendente</p>
+                        </td>
                         <td v-if="can('finance.manage')" class="text-right whitespace-nowrap">
                             <button
-                                v-if="bill.status === 'open' || bill.status === 'overdue'"
+                                v-if="(bill.status === 'open' || bill.status === 'overdue') && !bill.legacy_review_required"
                                 type="button"
                                 class="btn btn-ghost"
                                 :aria-label="`Dar baixa em ${bill.description}`"
@@ -136,5 +143,6 @@ const target = ref(null);
         <Pagination :meta="bills" />
 
         <SettleDialog :bill="target" :methods="methods" :today="today" @close="target = null" />
+        <BillCreateDialog v-if="can('finance.manage')" ref="createDialog" :type="type" :categories="categories" :suppliers="suppliers" />
     </AppLayout>
 </template>

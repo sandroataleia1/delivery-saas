@@ -10,19 +10,29 @@ use App\Actions\OpenTable;
 use App\Actions\SendToKitchen;
 use App\Actions\TransferTable;
 use App\Http\Requests\CloseTableOrderRequest;
+use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
 use App\Models\Product;
+use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\Printing\PrintQueue;
+use App\Support\ProductComposition;
+use App\Support\RestaurantOperationPolicy;
+use App\Support\TableOperationLock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class TableOrderController extends Controller
 {
+    use ValidatesComposition;
+
     public function open(Request $request, DiningTable $table, OpenTable $openTable): RedirectResponse
     {
         $data = $request->validate(
@@ -42,7 +52,13 @@ class TableOrderController extends Controller
             return redirect()->route('tables.index')->with('error', 'Esta comanda já foi fechada.');
         }
 
-        $order->load(['diningTable', 'items']);
+        $order->load(['diningTable', 'items.production']);
+
+        $products = Product::query()
+            ->where('active', true)
+            ->where('sellable', true)->where('sold_out', false)
+            ->orderBy('name')
+            ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']);
 
         return Inertia::render('tables/Order', [
             'order' => [
@@ -53,10 +69,13 @@ class TableOrderController extends Controller
                 'waiter' => $order->user_name,
                 'minutes' => (int) $order->opened_at->diffInMinutes(now()),
                 'subtotal' => $order->subtotal(),
+                'closing' => $order->bill_requested_at !== null,
                 'pending_kitchen' => $order->items->whereNull('cancelled_at')->whereNull('kitchen_batch')->count(),
                 'items' => $order->items->map(fn (TableOrderItem $item) => [
                     'id' => $item->id,
+                    'production' => $item->production?->only('id', 'status', 'version', 'delivered_at', 'legacy', 'reconciled_at'),
                     'product_name' => $item->product_name,
+                    'options_label' => $item->options_label,
                     'unit' => $item->unit,
                     'quantity' => $item->quantity,
                     'unit_price' => $item->unit_price,
@@ -68,11 +87,8 @@ class TableOrderController extends Controller
                     'user' => $item->user_name,
                 ]),
             ],
-            'products' => Product::query()
-                ->where('active', true)
-                ->where('sellable', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'sale_price', 'unit', 'category_id', 'barcode', 'sku']),
+            'products' => $products,
+            'composition' => ProductComposition::forProducts($products),
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'paymentMethods' => config('sales.payment_methods'),
             'serviceFeePercent' => $request->user()->company->service_fee_percent,
@@ -82,6 +98,11 @@ class TableOrderController extends Controller
                 ->orderBy('number')
                 ->get(['id', 'number']),
             'ticketBatch' => session('ticket_batch'),
+            'receipts' => $order->receipts()->with('items')->orderBy('id')->get()->map(fn ($receipt) => [
+                ...$receipt->only('id', 'status', 'total', 'created_at', 'decision_reason'),
+                'items' => $receipt->items->map(fn ($item) => $item->only('id', 'product_name', 'options_label', 'quantity', 'total', 'notes')),
+            ]),
+            'operation' => array_intersect_key(app(RestaurantOperationPolicy::class)->resolve($request->user()->company), array_flip(['visual_alerts', 'sound_alerts', 'late_after_minutes'])),
         ]);
     }
 
@@ -91,11 +112,14 @@ class TableOrderController extends Controller
             'client_uuid' => ['required', 'uuid'],
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.product_id' => [
+                'bail',
                 'required',
+                'integer',
                 Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
             ],
             'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
             'items.*.notes' => ['nullable', 'string', 'max:120'],
+            ...$this->compositionRules('items.*'),
         ], [], ['items' => 'itens', 'items.*.product_id' => 'produto', 'items.*.quantity' => 'quantidade', 'items.*.notes' => 'observação']);
 
         $addItems->handle($order, $data['items'], $data['client_uuid']);
@@ -121,7 +145,7 @@ class TableOrderController extends Controller
             'items' => $order->activeItems()
                 ->where('kitchen_batch', $batch)
                 ->get()
-                ->map(fn (TableOrderItem $item) => $item->only('id', 'product_name', 'unit', 'quantity', 'notes', 'user_name')),
+                ->map(fn (TableOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'notes', 'user_name')),
         ]);
     }
 
@@ -153,6 +177,50 @@ class TableOrderController extends Controller
         $transferTable->handle($order, DiningTable::findOrFail($data['dining_table_id']));
 
         return back()->with('success', 'Comanda transferida.');
+    }
+
+    /** Imprime na produção as comandas dos itens ainda não entregues desta mesa, uma por setor. */
+    public function print(TableOrder $order, PrintQueue $printQueue): RedirectResponse
+    {
+        $works = ProductionWork::query()
+            ->whereIn('table_order_item_id', $order->activeItems()->select('id'))
+            ->whereNull('delivered_at')->whereNull('cancelled_at')
+            ->orderBy('id')
+            ->get();
+
+        if ($works->isEmpty()) {
+            throw ValidationException::withMessages(['print' => 'Não há itens em preparo para imprimir.']);
+        }
+
+        if ($printQueue->queueKitchen($works) === 0) {
+            throw ValidationException::withMessages(['print' => 'Os setores destes itens não têm impressora ativa. Configure em Impressoras.']);
+        }
+
+        return back()->with('success', 'Comanda enviada para a impressora.');
+    }
+
+    /**
+     * Marca (ou desmarca) que a mesa pediu a conta. A comanda continua aberta para lançar e fechar.
+     */
+    public function requestBill(Request $request, TableOrder $order): RedirectResponse
+    {
+        $requested = $request->validate(['requested' => ['required', 'boolean']], [], ['requested' => 'conta pedida'])['requested'];
+
+        DB::transaction(function () use ($order, $requested) {
+            $locked = TableOperationLock::order($order);
+
+            if (! $locked->isOpen()) {
+                throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);
+            }
+
+            if ($requested && $locked->bill_requested_at === null) {
+                $locked->forceFill(['bill_requested_at' => now()])->save();
+            } elseif (! $requested && $locked->bill_requested_at !== null) {
+                $locked->forceFill(['bill_requested_at' => null])->save();
+            }
+        });
+
+        return back()->with('success', $requested ? 'Mesa em fechamento.' : 'Mesa voltou a ficar ocupada.');
     }
 
     public function close(CloseTableOrderRequest $request, TableOrder $order, CloseTableOrder $closeOrder): RedirectResponse

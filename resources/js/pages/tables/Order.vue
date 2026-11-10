@@ -1,21 +1,29 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, Minus, Plus, Receipt, Trash2, X } from '@lucide/vue';
+import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, HandCoins, Minus, Plus, Printer, Receipt, Trash2, Undo2, X } from '@lucide/vue';
+import MenuReceiptAlerts from '@/components/MenuReceiptAlerts.vue';
+import MenuReceiptDecisions from '@/components/MenuReceiptDecisions.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import ItemComposer from '@/components/ItemComposer.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
+import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import { usePermissions } from '@/lib/can';
+import { lineError, payloadFields, selectionKey } from '@/lib/composition';
 import { formatMoney, formatQuantity } from '@/lib/format';
 import { fromCents, lineCents, newUuid, toCents } from '@/lib/money';
 
 const props = defineProps({
+    receipts: { type: Array, required: true },
+    operation: { type: Object, required: true },
     order: { type: Object, required: true },
     products: { type: Array, required: true },
+    composition: { type: Object, default: () => ({}) },
     categories: { type: Array, required: true },
     paymentMethods: { type: Object, required: true },
     serviceFeePercent: { type: String, required: true },
@@ -26,7 +34,9 @@ const props = defineProps({
 const page = usePage();
 const { can } = usePermissions();
 
-usePoll(10000, { only: ['order', 'freeTables'] });
+const lastUpdated = ref(Date.now());
+usePoll(10000, { only: ['order', 'freeTables', 'receipts', 'operation'], onSuccess: () => lastUpdated.value = Date.now() }, { keepAlive: true });
+const pendingIds = computed(() => props.receipts.filter(receipt => receipt.status === 'pending').map(receipt => receipt.id));
 
 const view = ref('menu');
 const drafts = ref([]);
@@ -38,18 +48,51 @@ const draftCount = computed(() => drafts.value.length);
 const subtotalCents = computed(() => toCents(props.order.subtotal));
 const perPersonCents = computed(() => Math.ceil(totalCents.value / Math.max(props.order.people, 1)));
 
+const composing = ref(null);
+let draftSequence = 0;
+
 function addDraft(product, quantity = 1) {
-    const line = drafts.value.find((item) => item.product_id === product.id && !item.notes);
+    if (props.composition[product.id]) {
+        composing.value = { product, quantity };
+
+        return;
+    }
+
+    const line = drafts.value.find((item) => item.product_id === product.id && !item.key && !item.notes);
 
     if (line) {
         line.quantity = String(Number(line.quantity) + quantity);
     } else {
         drafts.value.push({
+            uid: ++draftSequence,
             product_id: product.id,
             name: product.name,
             sale_price: product.sale_price,
             quantity: String(quantity),
             notes: '',
+        });
+    }
+}
+
+function addComposed({ selection, unitCents, label, notes }) {
+    const { product, quantity } = composing.value;
+    const key = selectionKey(product.id, selection);
+    const line = drafts.value.find((item) => item.key === key && item.notes === notes);
+    composing.value = null;
+
+    if (line) {
+        line.quantity = String(Number(line.quantity) + quantity);
+    } else {
+        drafts.value.push({
+            uid: ++draftSequence,
+            product_id: product.id,
+            name: product.name,
+            sale_price: fromCents(unitCents),
+            quantity: String(quantity),
+            notes,
+            key,
+            selection,
+            label,
         });
     }
 }
@@ -68,7 +111,7 @@ function launch() {
     launchForm
         .transform(() => ({
             client_uuid: launchUuid.value,
-            items: drafts.value.map(({ product_id, quantity, notes }) => ({ product_id, quantity, notes: notes || null })),
+            items: drafts.value.map(({ product_id, quantity, notes, selection }) => ({ product_id, quantity, notes: notes || null, ...payloadFields(selection) })),
         }))
         .post(route('orders.items', props.order.id), {
             preserveScroll: true,
@@ -79,6 +122,8 @@ function launch() {
         });
 }
 
+const deliveryForm = useForm({ expected_version: 0, target: 'delivered' });
+function deliverItem(item) { deliveryForm.expected_version = item.production.version; deliveryForm.post(route('production.transition', item.production.id), { preserveScroll: true }); }
 const kitchenForm = useForm({});
 const ticket = ref(props.ticketBatch);
 
@@ -90,6 +135,20 @@ watch(() => props.ticketBatch, (batch) => {
 
 function sendToKitchen() {
     kitchenForm.post(route('orders.kitchen', props.order.id), { preserveScroll: true });
+}
+
+const printForm = useForm({});
+
+function printKitchen() {
+    printForm.post(route('orders.print', props.order.id), { preserveScroll: true });
+}
+
+/** A mesa pediu a conta: no mapa ela fica "em fechamento" até fechar ou voltar a consumir. */
+const billForm = useForm({ requested: false });
+
+function toggleBill() {
+    billForm.requested = !props.order.closing;
+    billForm.post(route('orders.bill', props.order.id), { preserveScroll: true });
 }
 
 const cancelling = ref(null);
@@ -129,7 +188,7 @@ function transfer() {
 }
 
 const closing = ref(false);
-const chargeService = ref(true);
+const chargeService = ref(false);
 const customer = ref(null);
 const discount = ref('');
 const payments = ref([]);
@@ -172,13 +231,17 @@ function close() {
     <div class="flex h-dvh flex-col overflow-hidden">
         <Head :title="`Mesa ${order.table}`" />
         <FlashMessages top />
+        <QrOrderAlert :except-order-id="order.id" />
 
         <header class="bg-sidebar flex h-14 shrink-0 items-center gap-3 px-4 text-white">
             <Link :href="route('tables.index')" class="flex items-center gap-2 text-sm font-semibold" aria-label="Voltar às mesas">
                 <ArrowLeft :size="18" />
                 <span class="max-sm:hidden">Mesas</span>
             </Link>
-            <span class="min-w-0 flex-1 truncate text-center font-bold">Mesa {{ order.table }}</span>
+            <span class="flex min-w-0 flex-1 items-center justify-center gap-2 font-bold">
+                <span class="truncate">Mesa {{ order.table }}</span>
+                <span v-if="order.closing" class="badge bg-warn shrink-0 text-white">Em fechamento</span>
+            </span>
             <span class="text-sidebar-text text-sm tabular-nums">Comanda #{{ order.number }}</span>
         </header>
 
@@ -193,12 +256,12 @@ function close() {
 
         <div class="flex min-h-0 flex-1">
             <section class="flex min-w-0 flex-1 flex-col" :class="{ 'max-lg:hidden': view === 'order' }" aria-label="Cardápio">
-                <ProductGrid :products="products" :categories="categories" @add="addDraft" />
+                <ProductGrid :products="products" :composition="composition" :categories="categories" @add="addDraft" />
 
                 <div v-if="draftCount" class="border-line bg-surface max-h-[45%] shrink-0 overflow-y-auto border-t p-3">
                     <h2 class="mb-2 text-sm font-bold">A lançar</h2>
                     <ul class="space-y-2">
-                        <li v-for="item in drafts" :key="`${item.product_id}-${item.name}`">
+                        <li v-for="(item, index) in drafts" :key="item.uid">
                             <div class="flex items-center gap-2">
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Diminuir ${item.name}`" @click="changeDraft(item, -1)">
                                     <Minus :size="14" />
@@ -207,10 +270,14 @@ function close() {
                                 <button type="button" class="btn btn-secondary size-9 min-h-9 px-0" :aria-label="`Aumentar ${item.name}`" @click="changeDraft(item, 1)">
                                     <Plus :size="14" />
                                 </button>
-                                <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ item.name }}</span>
+                                <span class="min-w-0 flex-1 text-sm font-semibold break-words">
+                                    {{ item.name }}
+                                    <span v-if="item.label" class="text-muted block text-xs font-normal">{{ item.label }}</span>
+                                </span>
                                 <span class="text-sm tabular-nums">{{ formatMoney(fromCents(lineCents(item.quantity, item.sale_price))) }}</span>
                             </div>
                             <input v-model="item.notes" class="input mt-1 min-h-9 py-1" maxlength="120" placeholder="Observação (sem cebola, ao ponto...)" :aria-label="`Observação de ${item.name}`" />
+                            <p v-if="lineError(launchForm.errors, index)" class="text-danger mt-1 text-xs" role="alert">{{ lineError(launchForm.errors, index) }}</p>
                         </li>
                     </ul>
                     <p v-if="launchForm.errors.order" class="text-danger mt-2 text-sm" role="alert">{{ launchForm.errors.order }}</p>
@@ -228,6 +295,7 @@ function close() {
                     <p class="text-muted text-xs">{{ order.people }} {{ order.people === 1 ? 'pessoa' : 'pessoas' }} · aberta por {{ order.waiter }}</p>
                 </div>
 
+                <div class="px-4 pt-3"><MenuReceiptAlerts :ids="pendingIds" :operation="operation" :last-updated="lastUpdated" /><MenuReceiptDecisions :receipts="receipts" :late-minutes="operation.late_after_minutes" /></div>
                 <p v-if="order.items.length === 0" class="text-muted flex-1 px-4 py-12 text-center text-sm">Nenhum item lançado.</p>
 
                 <ul v-else class="divide-line min-h-0 flex-1 divide-y overflow-y-auto">
@@ -236,7 +304,10 @@ function close() {
                             <p class="text-sm font-semibold break-words" :class="{ 'line-through': item.cancelled }">
                                 {{ formatQuantity(item.quantity) }} × {{ item.product_name }}
                             </p>
+                            <p v-if="item.options_label" class="text-muted text-xs break-words">{{ item.options_label }}</p>
                             <p v-if="item.notes" class="text-warn text-xs">{{ item.notes }}</p>
+                            <p v-if="item.production && !item.cancelled" class="text-muted text-xs">{{ item.production.delivered_at ? 'Entregue' : item.production.legacy && !item.production.reconciled_at ? 'Legado: precisa de conferência' : { waiting: 'Aguardando preparo', preparing: 'Preparando', ready: 'Pronto' }[item.production.status] }}</p>
+                            <button v-if="!item.cancelled && item.production?.status === 'ready' && !item.production.delivered_at && can('production.deliver')" class="btn btn-secondary mt-1" :disabled="deliveryForm.processing" @click="deliverItem(item)">Registrar entrega</button>
                             <p v-if="item.cancelled" class="text-danger text-xs">Cancelado: {{ item.cancel_reason }}</p>
                             <p v-else class="text-muted text-xs">{{ item.sent ? 'Na cozinha' : 'Não enviado' }} · {{ item.user }}</p>
                         </div>
@@ -263,12 +334,28 @@ function close() {
                     <div class="grid grid-cols-2 gap-2">
                         <button type="button" class="btn btn-secondary" :disabled="order.pending_kitchen === 0 || kitchenForm.processing" @click="sendToKitchen">
                             <ChefHat :size="16" />
-                            Cozinha{{ order.pending_kitchen ? ` (${order.pending_kitchen})` : '' }}
+                            Impressão manual{{ order.pending_kitchen ? ` (${order.pending_kitchen})` : '' }}
                         </button>
                         <button type="button" class="btn btn-secondary" :disabled="freeTables.length === 0" @click="startTransfer">
                             <ArrowRightLeft :size="16" />
                             Transferir
                         </button>
+                        <button type="button" class="btn btn-secondary col-span-2" :disabled="printForm.processing" @click="printKitchen">
+                            <Printer :size="16" />
+                            Imprimir na produção
+                        </button>
+                        <p v-if="printForm.errors.print" class="text-danger col-span-2 text-sm" role="alert">{{ printForm.errors.print }}</p>
+                        <button
+                            type="button"
+                            class="btn col-span-2"
+                            :class="order.closing ? 'btn-secondary' : 'border-warn/50 bg-warn-soft text-warn hover:border-warn border'"
+                            :disabled="billForm.processing"
+                            @click="toggleBill"
+                        >
+                            <component :is="order.closing ? Undo2 : HandCoins" :size="16" />
+                            {{ order.closing ? 'Voltar a consumir' : 'Pedir a conta' }}
+                        </button>
+                        <p v-if="billForm.errors.order" class="text-danger col-span-2 text-sm" role="alert">{{ billForm.errors.order }}</p>
                         <button v-if="can('tables.cancel')" type="button" class="btn btn-secondary col-span-2" @click="startCancel('order')">
                             <Ban :size="16" />
                             Cancelar comanda
@@ -288,6 +375,8 @@ function close() {
                 </div>
             </aside>
         </div>
+
+        <ItemComposer v-if="composing" :product="composing.product" :composition="composition[composing.product.id]" @add="addComposed" @cancel="composing = null" />
 
         <ConfirmDialog
             :open="ticket !== null"

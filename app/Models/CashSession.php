@@ -69,8 +69,7 @@ class CashSession extends Model
         $money = fn (mixed $value) => bcadd((string) ($value ?? '0'), '0', 2);
 
         $cash = $money($byMethod['cash'] ?? 0);
-        $deposits = $money($movements[CashMovement::DEPOSIT] ?? 0);
-        $withdrawals = $money($movements[CashMovement::WITHDRAWAL] ?? 0);
+        ['deposits' => $deposits, 'withdrawals' => $withdrawals] = CashMovement::netTotals($movements);
         $refunds = $money($movements[CashMovement::REFUND] ?? 0);
         $billPayments = $money($movements[CashMovement::BILL_PAYMENT] ?? 0);
         $billReceipts = $money($movements[CashMovement::BILL_RECEIPT] ?? 0);

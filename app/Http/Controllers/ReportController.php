@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Reports\CashReport;
+use App\Reports\CourierReport;
 use App\Reports\Csv;
 use App\Reports\DeliveriesReport;
 use App\Reports\Exports;
@@ -71,6 +72,14 @@ class ReportController extends Controller
         return $this->render('Deliveries', $period, (new DeliveriesReport($period))->data());
     }
 
+    /** Entregas de um entregador num intervalo de dias. */
+    public function couriers(Request $request): Response
+    {
+        $period = Period::fromRequest($request);
+
+        return $this->render('Couriers', $period, (new CourierReport($period, $this->courierFilter($request)))->data());
+    }
+
     public function export(Request $request, string $report): StreamedResponse
     {
         $user = $request->user();
@@ -89,12 +98,18 @@ class ReportController extends Controller
             'estoque' => $exports->stock($withCost),
             'caixa' => $exports->cash(),
             'entregas' => $exports->deliveries(),
+            'entregadores' => $exports->courier(new CourierReport($period, $this->courierFilter($request))),
         };
 
         // Exportar tira dados do sistema: fica registrado quem levou o quê.
         Audit::record('report_exported', description: "Relatório de $report exportado: {$period->from->format('d/m/Y')} a {$period->to->format('d/m/Y')}");
 
         return Csv::download("relatorio-$report-{$period->from->format('Y-m-d')}-a-{$period->to->format('Y-m-d')}.csv", $headers, $rows);
+    }
+
+    private function courierFilter(Request $request): ?string
+    {
+        return $request->validate(['courier' => ['nullable', 'string', 'regex:/^[cu]\d{1,10}$/']], [], ['courier' => 'entregador'])['courier'] ?? null;
     }
 
     private function render(string $page, Period $period, array $data): Response

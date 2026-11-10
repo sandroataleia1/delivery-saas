@@ -23,6 +23,10 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->isProduction()) {
+            throw new \RuntimeException('Seeder de demonstração proibido em produção.');
+        }
+
         $superAdmin = new User([
             'name' => 'Super Admin',
             'email' => 'super@delivery.test',

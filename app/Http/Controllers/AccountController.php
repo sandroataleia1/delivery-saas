@@ -41,6 +41,7 @@ class AccountController extends Controller
         $user->saveQuietly();
 
         $user->terminateSessions(except: $request->session()->getId());
+        $user->tokens()->delete();
         Audit::record('password_changed', $user, "{$user->name} alterou a própria senha");
 
         return redirect()->route('account.edit')->with('success', 'Senha alterada.');

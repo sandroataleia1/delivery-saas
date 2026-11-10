@@ -51,14 +51,14 @@ watch(filters, () => {
         </div>
 
         <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <input v-model="filters.search" class="input" type="search" placeholder="Cliente" aria-label="Buscar cliente" />
+            <input v-model="filters.search" class="input" type="search" placeholder="Cliente ou número" aria-label="Buscar por cliente ou número do pedido" />
             <select v-model="filters.status" class="input" aria-label="Filtrar por etapa">
                 <option value="">Todas as etapas</option>
                 <option v-for="(label, key) in statuses" :key="key" :value="key">{{ label }}</option>
             </select>
             <select v-model="filters.courier" class="input" aria-label="Filtrar por entregador">
                 <option value="">Todos os entregadores</option>
-                <option v-for="courier in couriers" :key="courier.id" :value="courier.id">{{ courier.name }}</option>
+                <option v-for="courier in couriers" :key="`${courier.type}${courier.id}`" :value="`${courier.type === 'courier' ? 'c' : 'u'}${courier.id}`">{{ courier.name }}</option>
             </select>
             <input v-model="filters.from" class="input" type="date" aria-label="Data inicial" />
             <input v-model="filters.to" class="input" type="date" aria-label="Data final" />
@@ -80,6 +80,7 @@ watch(filters, () => {
                     <tr v-for="order in orders.data" :key="order.id">
                         <td>
                             <Link :href="route('deliveries.show', order.id)" class="text-brand font-semibold hover:underline">#{{ order.number }}</Link>
+                            <span v-if="order.online_number" class="text-muted ml-2 text-xs">Online #{{ order.online_number }}</span>
                             <span class="ml-2 font-semibold">{{ order.customer }}</span>
                             <p class="text-muted text-xs tabular-nums">{{ order.date }}</p>
                         </td>
