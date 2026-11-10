@@ -9,6 +9,22 @@
 
 return [
     [
+        'id' => '2026-11-10.2',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Novo perfil de acesso mais rápido',
+                'text' => 'Em Perfis de acesso, "Novo perfil" abre uma janela só com nome e descrição. Depois, toque no perfil (ou em "Permissões") na lista para escolher o que ele pode fazer.',
+                'can' => 'roles.manage',
+            ],
+            [
+                'title' => 'Busca nas permissões',
+                'text' => 'Na tela de permissões do perfil, digite parte do nome (ex.: caixa, desconto, entrega) para achar a permissão sem rolar a lista.',
+                'can' => 'roles.manage',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.1',
         'date' => '10/11/2026',
         'items' => [
