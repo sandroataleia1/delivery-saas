@@ -18,6 +18,11 @@ return [
                 'can' => 'roles.manage',
             ],
             [
+                'title' => 'Nova conta sem sair da lista',
+                'text' => 'Em Contas a pagar e Contas a receber, "Nova conta" agora abre uma janela na própria lista, com parcelas, fornecedor ou cliente.',
+                'can' => 'finance.manage',
+            ],
+            [
                 'title' => 'Busca nas permissões',
                 'text' => 'Na tela de permissões do perfil, digite parte do nome (ex.: caixa, desconto, entrega) para achar a permissão sem rolar a lista.',
                 'can' => 'roles.manage',

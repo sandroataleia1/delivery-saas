@@ -76,6 +76,19 @@ class BillTest extends TestCase
         $this->assertSame($this->admin->name, Bill::first()->user_name);
     }
 
+    public function test_lista_traz_fornecedores_ativos_para_o_modal_de_nova_conta_so_para_quem_cadastra(): void
+    {
+        Supplier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Atacado']);
+        Supplier::factory()->create(['company_id' => $this->admin->company_id, 'name' => 'Antigo', 'active' => false]);
+        Supplier::factory()->create(['company_id' => $this->adminOf()->company_id, 'name' => 'De outra loja']);
+
+        $this->actingAs($this->admin)->get(route('bills.index', 'pagar'))
+            ->assertInertia(fn (Assert $page) => $page->has('suppliers', 1)->where('suppliers.0.name', 'Atacado'));
+
+        $this->actingAs($this->userWith(['finance.view'], $this->admin->company))->get(route('bills.index', 'pagar'))
+            ->assertInertia(fn (Assert $page) => $page->where('suppliers', []));
+    }
+
     public function test_tipo_invalido_nao_existe(): void
     {
         $this->actingAs($this->admin)->get('/financeiro/outra')->assertNotFound();

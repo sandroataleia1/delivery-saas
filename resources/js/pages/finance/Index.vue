@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import { Check, Plus } from '@lucide/vue';
+import BillCreateDialog from '@/components/BillCreateDialog.vue';
 import BillStatus from '@/components/BillStatus.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageHeader from '@/components/PageHeader.vue';
@@ -17,6 +18,7 @@ const props = defineProps({
     filters: { type: Object, required: true },
     summary: { type: Object, required: true },
     categories: { type: Array, required: true },
+    suppliers: { type: Array, default: () => [] },
     methods: { type: Object, required: true },
     today: { type: String, required: true },
 });
@@ -45,15 +47,16 @@ watch(filters, () => {
 });
 
 const target = ref(null);
+const createDialog = ref(null);
 </script>
 
 <template>
     <AppLayout :title="title">
         <PageHeader :title="title" :subtitle="isPayable ? 'O que sua loja deve.' : 'O que sua loja tem para receber.'">
-            <Link v-if="can('finance.manage')" :href="route('bills.create', type)" class="btn btn-primary">
+            <button v-if="can('finance.manage')" type="button" class="btn btn-primary" @click="createDialog.open()">
                 <Plus :size="16" />
                 Nova conta
-            </Link>
+            </button>
         </PageHeader>
 
         <div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -140,5 +143,6 @@ const target = ref(null);
         <Pagination :meta="bills" />
 
         <SettleDialog :bill="target" :methods="methods" :today="today" @close="target = null" />
+        <BillCreateDialog v-if="can('finance.manage')" ref="createDialog" :type="type" :categories="categories" :suppliers="suppliers" />
     </AppLayout>
 </template>

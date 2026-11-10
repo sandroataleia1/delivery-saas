@@ -63,6 +63,9 @@ class BillController extends Controller
                 'paid_month' => BillLedger::entries(today()->startOfMonth()->format('Y-m-d'), today()->endOfMonth()->format('Y-m-d'))->where('type', $key)->sum('amount'),
             ],
             'categories' => config("finance.categories.$key"),
+            'suppliers' => $type === 'pagar' && $request->user()->can('finance.manage')
+                ? $this->formProps($type)['suppliers']
+                : [],
             'methods' => config('finance.payment_methods'),
             'today' => today()->format('Y-m-d'),
         ]);
