@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Decimal;
 use App\Support\ItemComposer;
+use App\Support\Printing\PrintQueue;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -117,6 +118,8 @@ class CreateDeliveryOrder
         foreach ($order->items()->createMany($rows) as $item) {
             (new DispatchProduction)->handle($item, $actorName);
         }
+
+        app(PrintQueue::class)->order($order);
 
         return $order;
     }

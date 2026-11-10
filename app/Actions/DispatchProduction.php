@@ -10,6 +10,7 @@ use App\Models\ProductionEvent;
 use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
+use App\Support\Printing\PrintQueue;
 use App\Support\ProductionDestination;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -44,6 +45,7 @@ class DispatchProduction
         $event->forceFill(['company_id' => $item->company_id, 'production_work_id' => $work->id,
             'to_state' => 'waiting', 'version' => 0, 'actor_id' => Auth::id(),
             'actor_name' => $actorName ?? Auth::user()?->name ?? 'Cliente (QR Code)'])->save();
+        app(PrintQueue::class)->kitchen($work);
 
         return $work;
     }

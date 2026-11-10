@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { Ban, Printer, Wallet } from '@lucide/vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DecimalInput from '@/components/DecimalInput.vue';
@@ -73,6 +73,14 @@ function settle() {
             onError: () => (settleUuid.value = newUuid()),
         });
 }
+
+const page = usePage();
+const sendingToPrinter = ref(false);
+
+function printThermal() {
+    sendingToPrinter.value = true;
+    router.post(route('deliveries.print', props.order.id), {}, { preserveScroll: true, onFinish: () => (sendingToPrinter.value = false) });
+}
 </script>
 
 <template>
@@ -82,6 +90,10 @@ function settle() {
                 <Printer :size="16" />
                 Imprimir
             </a>
+            <button type="button" class="btn btn-secondary" :disabled="sendingToPrinter" @click="printThermal">
+                <Printer :size="16" />
+                Na impressora
+            </button>
             <button v-if="canCancel" type="button" class="btn btn-secondary" @click="cancelling = true">
                 <Ban :size="16" />
                 Cancelar pedido
@@ -91,6 +103,8 @@ function settle() {
                 Acertar
             </button>
         </PageHeader>
+
+        <p v-if="page.props.errors.print" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm" role="alert">{{ page.props.errors.print }}</p>
 
         <div v-if="order.status === 'cancelled'" class="bg-danger-soft text-danger mb-4 max-w-3xl rounded-lg px-4 py-3 text-sm">
             <p class="font-semibold">Cancelado por {{ order.cancelled_by }}</p>

@@ -19,6 +19,9 @@ class Company extends Model
     /** @use HasFactory<CompanyFactory> */
     use Auditable, HasFactory;
 
+    /** @var list<string> */
+    protected $hidden = ['print_agent_token'];
+
     protected function casts(): array
     {
         return [
@@ -46,6 +49,12 @@ class Company extends Model
     public function auditLabel(): string
     {
         return $this->trade_name;
+    }
+
+    /** O sinal de vida do agente de impressão muda a cada poucos segundos e a chave nunca aparece. */
+    protected function auditExclude(): array
+    {
+        return ['print_agent_token', 'print_agent_seen_at'];
     }
 
     /** Regras de especialidade e endereço, iguais no cadastro e na edição. */

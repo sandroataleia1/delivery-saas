@@ -11,6 +11,7 @@ use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Models\User;
 use App\Support\BrazilPhone;
+use App\Support\Printing\PrintQueue;
 use App\Support\WhatsAppOutbox;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,8 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Uma fila por requisição: junta os itens da produção até a gravação terminar.
+        $this->app->scoped(PrintQueue::class);
     }
 
     public function boot(): void
@@ -56,6 +58,9 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(60)->by('menu-table|'.$tableKey),
                 Limit::perMinute(600)->by('menu-company|'.($table?->company_id ?? $tableKey))];
         });
+        // Agente de impressão: consulta a fila a cada poucos segundos; o limite barra tentativa de chave.
+        RateLimiter::for('print-agent', fn (Request $request) => Limit::perMinute(240)->by('print-agent|'.$request->ip()));
+
         RateLimiter::for('menu-tracking', fn (Request $request) => Limit::perMinute(120)
             ->by('menu-tracking|'.hash('sha256', (string) $request->route('token').'|'.(string) $request->route('uuid')).'|'.$request->ip()));
 

@@ -20,6 +20,8 @@ use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\OnlineStoreController;
 use App\Http\Controllers\OptionController;
 use App\Http\Controllers\PizzaController;
+use App\Http\Controllers\PrintAgentController;
+use App\Http\Controllers\PrinterController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProductionSectorController;
@@ -41,6 +43,13 @@ use Illuminate\Support\Facades\Route;
 Route::post('webhooks/whatsapp/{instance}/{secret}', WhatsAppWebhookController::class)
     ->middleware('throttle:whatsapp-webhook')
     ->name('whatsapp.webhook');
+
+// Agente de impressão da loja: público, protegido pela chave do agente.
+Route::middleware(['throttle:print-agent', 'print.agent'])->prefix('print-agent')->name('print-agent.')->group(function () {
+    Route::get('jobs', [PrintAgentController::class, 'jobs'])->name('jobs');
+    Route::post('jobs/{job}/printed', [PrintAgentController::class, 'printed'])->whereNumber('job')->name('printed');
+    Route::post('jobs/{job}/failed', [PrintAgentController::class, 'failed'])->whereNumber('job')->name('failed');
+});
 
 // Cardápio da mesa: público, acessado pelo QR Code.
 Route::middleware('public.page')->group(function () {
@@ -163,6 +172,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('entregas', [DeliveryController::class, 'store'])->name('deliveries.store');
             Route::get('entregas/{delivery}', [DeliveryController::class, 'show'])->whereNumber('delivery')->name('deliveries.show');
             Route::get('entregas/{delivery}/imprimir', [DeliveryController::class, 'ticket'])->name('deliveries.ticket');
+            Route::post('entregas/{delivery}/imprimir', [DeliveryController::class, 'printThermal'])->name('deliveries.print');
         });
         Route::post('entregas/{delivery}/avancar', [DeliveryController::class, 'advance'])->name('deliveries.advance');
         Route::middleware('can:deliveries.settle')->post('entregas/{delivery}/acertar', [DeliveryController::class, 'settle'])->name('deliveries.settle');
@@ -289,6 +299,14 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::delete('loja-online/whatsapp/conexao', [WhatsAppController::class, 'disconnect'])->name('online.whatsapp.disconnect');
             Route::put('loja-online/whatsapp', [WhatsAppController::class, 'update'])->name('online.whatsapp.update');
             Route::put('empresa/operacao', [RestaurantOperationSettingsController::class, 'update'])->name('company.operation');
+            Route::get('impressoras', [PrinterController::class, 'index'])->name('printers.index');
+            Route::post('impressoras', [PrinterController::class, 'store'])->name('printers.store');
+            Route::put('impressoras/destinos', [PrinterController::class, 'destinations'])->name('printers.destinations');
+            Route::get('impressoras/agente', [PrinterController::class, 'agent'])->name('printers.agent');
+            Route::post('impressoras/fila/{job}/reenviar', [PrinterController::class, 'retry'])->name('printers.retry');
+            Route::put('impressoras/{printer}', [PrinterController::class, 'update'])->whereNumber('printer')->name('printers.update');
+            Route::delete('impressoras/{printer}', [PrinterController::class, 'destroy'])->whereNumber('printer')->name('printers.destroy');
+            Route::post('impressoras/{printer}/teste', [PrinterController::class, 'test'])->whereNumber('printer')->name('printers.test');
         });
     });
 

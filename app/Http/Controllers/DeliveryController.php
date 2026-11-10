@@ -14,6 +14,7 @@ use App\Models\DeliveryOrderItem;
 use App\Models\DeliveryZone;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Printing\PrintQueue;
 use App\Support\ProductComposition;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -132,6 +133,16 @@ class DeliveryController extends Controller
                 'items' => $delivery->items->map(fn (DeliveryOrderItem $item) => $item->only('id', 'product_name', 'options_label', 'unit', 'quantity', 'total', 'notes')),
             ],
         ]);
+    }
+
+    /** Manda o pedido para a impressora térmica de pedidos, pelo agente da loja. */
+    public function printThermal(DeliveryOrder $delivery, PrintQueue $queue): RedirectResponse
+    {
+        if (! $queue->queueOrder($delivery)) {
+            return back()->withErrors(['print' => 'Nenhuma impressora de pedidos ativa. Configure em Gestão > Impressoras.']);
+        }
+
+        return back()->with('success', 'Pedido enviado para a impressora.');
     }
 
     public function advance(Request $request, DeliveryOrder $delivery, AdvanceDeliveryOrder $advance): RedirectResponse

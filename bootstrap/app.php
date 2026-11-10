@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticatePrintAgent;
 use App\Http\Middleware\EnsureAccountCanAccess;
 use App\Http\Middleware\EnsureCompanyUser;
 use App\Http\Middleware\EnsurePasswordIsChanged;
@@ -28,9 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'company' => EnsureCompanyUser::class,
             'super' => EnsureSuperAdmin::class,
             'public.page' => ForgetSessionUser::class,
+            'print.agent' => AuthenticatePrintAgent::class,
         ]);
 
-        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+        $middleware->validateCsrfTokens(except: ['webhooks/*', 'print-agent/*']);
 
         $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(fn () => route('dashboard'));
