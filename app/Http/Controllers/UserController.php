@@ -95,6 +95,7 @@ class UserController extends Controller
 
         if ($newPassword) {
             $user->terminateSessions(except: $user->is($request->user()) ? $request->session()->getId() : null);
+            $user->tokens()->delete();
         }
 
         return redirect()->route('users.index')->with('success', 'Usuário atualizado.');
@@ -110,6 +111,10 @@ class UserController extends Controller
 
         $user->active = ! $user->active;
         $user->save();
+
+        if (! $user->active) {
+            $user->tokens()->delete();
+        }
 
         return back()->with('success', $user->active ? 'Usuário ativado.' : 'Usuário inativado.');
     }

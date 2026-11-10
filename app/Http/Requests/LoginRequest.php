@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -44,6 +47,31 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+    }
+
+    /**
+     * Mesma checagem do login web (limite de tentativas, conta ativa, auditoria),
+     * sem abrir sessão: o app recebe um token em vez de cookie.
+     */
+    public function authenticateWithoutSession(): User
+    {
+        $this->ensureIsNotRateLimited();
+
+        $credentials = $this->only('email', 'password');
+        $provider = Auth::guard('web')->getProvider();
+        $user = $provider->retrieveByCredentials($credentials);
+
+        if (! $user instanceof User || ! $provider->validateCredentials($user, $credentials) || ! $user->canSignIn()) {
+            RateLimiter::hit($this->throttleKey());
+            event(new Failed('sanctum', $user, $credentials));
+
+            throw ValidationException::withMessages(['email' => __('auth.failed')]);
+        }
+
+        RateLimiter::clear($this->throttleKey());
+        event(new Login('sanctum', $user, false));
+
+        return $user;
     }
 
     private function ensureIsNotRateLimited(): void

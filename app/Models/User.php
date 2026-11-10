@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\HasApiTokens;
 
 // company_id, role_id e is_super_admin ficam fora de propósito: nunca vêm de atribuição em massa.
 #[Fillable(['name', 'email', 'phone', 'password'])]
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use Auditable, BelongsToCompany, HasFactory, Notifiable;
+    use Auditable, BelongsToCompany, HasApiTokens, HasFactory, Notifiable;
 
     protected function casts(): array
     {
