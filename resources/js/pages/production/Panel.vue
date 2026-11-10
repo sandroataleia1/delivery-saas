@@ -177,6 +177,7 @@ watch(() => props.orders.flatMap((order) => order.items.map((item) => item.id)),
                 <button v-if="operation.sound_alerts && !audioEnabled && !soundWanted" type="button" class="rounded-lg bg-amber-500 px-3 py-2 font-bold text-slate-950" @click="enableAudio">Ativar som</button>
                 <button type="button" class="rounded-lg bg-slate-800 px-3 py-2 font-semibold hover:bg-slate-700" @click="toggleFullscreen">{{ fullscreen ? 'Sair da tela cheia' : 'Tela cheia' }}</button>
                 <Link v-if="!fullscreen" :href="route('production.index')" class="rounded-lg px-3 py-2 text-slate-400 hover:text-white">Voltar</Link>
+                <Link v-if="!fullscreen" :href="route('logout')" method="post" as="button" class="cursor-pointer rounded-lg px-3 py-2 text-slate-400 hover:text-white">Sair</Link>
                 <span class="text-3xl font-black tabular-nums">{{ time }}</span>
             </div>
         </header>

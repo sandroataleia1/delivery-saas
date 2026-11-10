@@ -9,9 +9,14 @@
 
 return [
     [
-        'id' => '2026-11-10.6',
+        'id' => '2026-11-10.7',
         'date' => '10/11/2026',
         'items' => [
+            [
+                'title' => 'Sair pelo painel da cozinha',
+                'text' => 'O painel da cozinha ganhou o botão "Sair" (fora da tela cheia), para trocar de usuário sem passar pelo menu.',
+                'can' => 'production.view',
+            ],
             [
                 'title' => 'Som do painel da cozinha lembrado',
                 'text' => 'Depois de ativar o som uma vez, o painel lembra e não mostra mais o botão "Ativar som": ao recarregar a página, o som volta no primeiro toque em qualquer lugar da tela.',
