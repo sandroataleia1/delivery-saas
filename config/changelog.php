@@ -14,7 +14,7 @@ return [
         'items' => [
             [
                 'title' => 'Senha do usuário sem troca obrigatória',
-                'text' => 'Quem é cadastrado em Usuários já entra com a senha definida, sem ser obrigado a trocar no primeiro acesso. A troca continua disponível em Minha conta.',
+                'text' => 'Ninguém mais é obrigado a trocar a senha no acesso: quem é cadastrado em Usuários entra com a senha definida, e quem já estava com senha provisória foi liberado. A troca continua disponível em Minha conta.',
                 'can' => 'users.manage',
             ],
         ],
