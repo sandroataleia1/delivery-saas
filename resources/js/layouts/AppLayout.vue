@@ -223,20 +223,20 @@ watch(() => page.url, () => (menuOpen.value = false));
                     {{ item.label }}
                 </Link>
 
-                <section v-for="group in groups" :key="group.name" class="mt-2">
+                <section v-for="group in groups" :key="group.name" class="mt-3">
                     <button
                         v-if="isCollapsible"
                         type="button"
-                        class="flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-1.5 text-xs font-semibold tracking-wide text-white/50 uppercase hover:text-white"
+                        class="hover:bg-sidebar-hover flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-[13px] font-bold tracking-wide text-white/90 uppercase transition-colors hover:text-white"
                         :aria-expanded="isOpen(group)"
                         @click="toggle(group)"
                     >
                         {{ group.name }}
-                        <ChevronDown :size="14" class="transition-transform" :class="{ '-rotate-90': !isOpen(group) }" />
+                        <ChevronDown :size="16" class="transition-transform" :class="{ '-rotate-90': !isOpen(group) }" />
                     </button>
-                    <p v-else class="px-3 py-1.5 text-xs font-semibold tracking-wide text-white/50 uppercase">{{ group.name }}</p>
+                    <p v-else class="px-3 py-2 text-[13px] font-bold tracking-wide text-white/90 uppercase">{{ group.name }}</p>
 
-                    <div v-if="isOpen(group)" class="space-y-0.5">
+                    <div v-if="isOpen(group)" class="mt-0.5 ml-4 space-y-0.5 border-l border-white/10 pl-2">
                         <Link
                             v-for="item in group.items"
                             :key="item.href"
