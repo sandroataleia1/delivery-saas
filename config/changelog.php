@@ -9,6 +9,17 @@
 
 return [
     [
+        'id' => '2026-11-10.3',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Senha do usuário sem troca obrigatória',
+                'text' => 'Quem é cadastrado em Usuários já entra com a senha definida, sem ser obrigado a trocar no primeiro acesso. A troca continua disponível em Minha conta.',
+                'can' => 'users.manage',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.2',
         'date' => '10/11/2026',
         'items' => [

@@ -60,11 +60,11 @@ class UserController extends Controller
     {
         $user = new User($request->safe()->only('name', 'email', 'phone', 'password'));
         $user->role_id = $request->validated('role_id');
-        $user->must_change_password = true;
+        $user->must_change_password = false;
         $user->save();
 
         return redirect()->route('users.index')
-            ->with('success', "Usuário {$user->name} criado. No primeiro acesso será pedida uma nova senha.");
+            ->with('success', "Usuário {$user->name} criado. Ele já pode entrar com a senha cadastrada.");
     }
 
     public function edit(Request $request, User $user): Response
@@ -88,7 +88,7 @@ class UserController extends Controller
 
         if ($newPassword) {
             $user->password = $newPassword;
-            $user->must_change_password = true;
+            $user->must_change_password = false;
         }
 
         $user->save();
