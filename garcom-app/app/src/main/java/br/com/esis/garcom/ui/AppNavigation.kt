@@ -66,10 +66,10 @@ private sealed interface Screen {
     data class Floor(val waiter: Waiter) : Screen
 
     /** Comanda da mesa. Sem orderId, a mesa está livre e a tela pergunta quantas pessoas antes de abrir. */
-    data class Order(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long?) : Screen
+    data class Order(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long?, val visit: Int) : Screen
 
     /** Cardápio para lançar itens numa comanda já aberta. */
-    data class Menu(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long) : Screen
+    data class Menu(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long, val visit: Int) : Screen
 }
 
 @Composable
@@ -79,6 +79,11 @@ fun AppNavigation(graph: AppGraph) {
 
     /** Muda a cada saída: cada login ganha ViewModels novos, sem herdar o estado do garçom anterior. */
     var session by rememberSaveable { mutableIntStateOf(0) }
+    /**
+     * Cada entrada na comanda ou no cardápio ganha ViewModel novo. Sem isso, uma mesa que fechou e ficou livre
+     * reaproveitaria o estado da comanda antiga (fechada) e voltaria ao salão a cada toque.
+     */
+    var visit by rememberSaveable { mutableIntStateOf(0) }
     val backToLogin = {
         session++
         screen = Screen.Login
@@ -103,13 +108,13 @@ fun AppNavigation(graph: AppGraph) {
             viewModel = viewModel(key = "floor-$session") { FloorViewModel(graph.tables, graph.auth) },
             waiter = current.waiter,
             onLoggedOut = backToLogin,
-            onOpenTable = { table -> screen = Screen.Order(current.waiter, table.id, table.number, table.orderId) },
+            onOpenTable = { table -> screen = Screen.Order(current.waiter, table.id, table.number, table.orderId, ++visit) },
         )
         is Screen.Order -> {
             val toFloor = { screen = Screen.Floor(current.waiter) }
             BackHandler(onBack = toFloor)
             OrderScreen(
-                viewModel = viewModel(key = "order-$session-${current.tableId}-${current.orderId}") {
+                viewModel = viewModel(key = "order-$session-${current.visit}") {
                     OrderViewModel(graph.orders, current.tableId, current.orderId)
                 },
                 tableNumber = current.tableNumber,
@@ -118,13 +123,13 @@ fun AppNavigation(graph: AppGraph) {
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                     toFloor()
                 },
-                onAddItems = { orderId -> screen = Screen.Menu(current.waiter, current.tableId, current.tableNumber, orderId) },
+                onAddItems = { orderId -> screen = Screen.Menu(current.waiter, current.tableId, current.tableNumber, orderId, ++visit) },
             )
         }
         is Screen.Menu -> {
-            val toOrder = { screen = Screen.Order(current.waiter, current.tableId, current.tableNumber, current.orderId) }
+            val toOrder = { screen = Screen.Order(current.waiter, current.tableId, current.tableNumber, current.orderId, ++visit) }
             MenuScreen(
-                viewModel = viewModel(key = "menu-$session-${current.orderId}") {
+                viewModel = viewModel(key = "menu-$session-${current.visit}") {
                     MenuViewModel(graph.menu, graph.orders, current.orderId)
                 },
                 tableNumber = current.tableNumber,

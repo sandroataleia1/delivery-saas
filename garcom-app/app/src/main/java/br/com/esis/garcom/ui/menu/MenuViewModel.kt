@@ -83,6 +83,9 @@ class MenuViewModel(
 
     /** Botão + da lista: produto simples entra direto; produto montado abre a folha. */
     fun tapAdd(product: MenuProduct) {
+        if (!editable()) {
+            return
+        }
         if (product.composition == null) {
             mutableState.update { it.copy(cart = it.cart.add(CartLine.simple(product.id, product.name, product.price)), error = null) }
         } else {
@@ -92,6 +95,9 @@ class MenuViewModel(
 
     /** Botão − da lista: tira uma unidade da última montagem desse produto. */
     fun tapRemove(product: MenuProduct) {
+        if (!editable()) {
+            return
+        }
         val key = state.value.cart.lines.lastOrNull { it.productId == product.id }?.key ?: return
         mutableState.update { it.copy(cart = it.cart.decrement(key)) }
     }
@@ -161,8 +167,24 @@ class MenuViewModel(
 
     /** O garçom desistiu dos itens. Um envio pendente também é esquecido: o próximo carrinho é um pedido novo. */
     fun discardCart() {
+        if (state.value.sending) {
+            return
+        }
         pendingUuid = null
         mutableState.update { it.copy(cart = Cart(), error = null) }
+    }
+
+    /**
+     * Com um envio pendente (falha de rede), o servidor pode já ter lançado o carrinho. Mudar o carrinho e reenviar com o
+     * mesmo uuid faria o servidor devolver o pedido antigo sem lançar o que foi acrescentado; por isso o carrinho fica
+     * travado até reenviar ou descartar.
+     */
+    private fun editable(): Boolean {
+        if (pendingUuid == null) {
+            return true
+        }
+        mutableState.update { it.copy(error = PENDING_SEND) }
+        return false
     }
 
     private fun sheetFailed(message: String) = mutableState.update { state ->
@@ -170,6 +192,7 @@ class MenuViewModel(
     }
 
     private companion object {
+        const val PENDING_SEND = "Envie de novo ou descarte antes de mudar o pedido."
         const val ORDER_CLOSED = "Esta comanda já foi fechada."
         const val SERVER_ERROR = "O servidor está com problema. Tente de novo em instantes."
     }

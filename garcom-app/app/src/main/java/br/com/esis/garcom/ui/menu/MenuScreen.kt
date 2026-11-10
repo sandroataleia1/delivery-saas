@@ -65,7 +65,12 @@ fun MenuScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
-    val leave = { if (state.cart.lines.isEmpty()) onBack() else confirmDiscard = true }
+    val leave = {
+        // Durante o envio não dá para sair: os itens podem chegar à cozinha mesmo "descartados".
+        if (!state.sending) {
+            if (state.cart.lines.isEmpty()) onBack() else confirmDiscard = true
+        }
+    }
 
     BackHandler(onBack = leave)
     LaunchedEffect(state.sent) {

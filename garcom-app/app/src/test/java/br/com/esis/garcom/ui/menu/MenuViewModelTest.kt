@@ -174,4 +174,34 @@ class MenuViewModelTest {
 
         assertEquals(0, viewModel.state.value.cart.count)
     }
+
+    @Test
+    fun com_envio_pendente_o_carrinho_nao_muda_ate_reenviar() = runTest {
+        val orders = FakeOrders(sends = ArrayDeque(listOf(ApiResult.NoConnection)))
+        val viewModel = viewModel(orders)
+        viewModel.tapAdd(burger)
+        viewModel.send()
+
+        viewModel.tapAdd(pao)
+        viewModel.tapRemove(burger)
+
+        assertEquals(listOf(1L), viewModel.state.value.cart.lines.map { it.productId })
+        assertEquals("Envie de novo ou descarte antes de mudar o pedido.", viewModel.state.value.error)
+    }
+
+    @Test
+    fun nao_descarta_enquanto_envia() = runTest {
+        val orders = object : OrderRepository by FakeOrders() {
+            override suspend fun addItems(orderId: Long, clientUuid: String, items: List<CartLine>): ApiResult<TableOrder> =
+                kotlinx.coroutines.awaitCancellation()
+        }
+        val viewModel = MenuViewModel(FakeMenu(menu), orders, orderId = 10)
+        viewModel.tapAdd(burger)
+        viewModel.send()
+
+        viewModel.discardCart()
+
+        assertTrue(viewModel.state.value.sending)
+        assertEquals(1, viewModel.state.value.cart.count)
+    }
 }
