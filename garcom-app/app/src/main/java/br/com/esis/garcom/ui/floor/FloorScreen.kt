@@ -1,6 +1,5 @@
 package br.com.esis.garcom.ui.floor
 
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -41,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -69,10 +67,9 @@ import kotlinx.coroutines.delay
 private const val REFRESH_INTERVAL_MS = 10_000L
 
 @Composable
-fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Unit) {
+fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Unit, onOpenTable: (FloorTable) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val context = LocalContext.current
     var confirmSwitch by remember { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(TableFilter.ALL) }
 
@@ -113,7 +110,7 @@ fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Un
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(visible, key = { it.id }) { table ->
-                        TableCard(table, onClick = { Toast.makeText(context, "Em breve", Toast.LENGTH_SHORT).show() })
+                        TableCard(table, onClick = { onOpenTable(table) })
                     }
                 }
             }
@@ -239,7 +236,7 @@ private fun FilterChips(tables: List<FloorTable>, selected: TableFilter, onSelec
 }
 
 @Composable
-private fun ErrorBanner(message: String, onRetry: () -> Unit) {
+fun ErrorBanner(message: String, onRetry: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),

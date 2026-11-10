@@ -2,6 +2,8 @@ package br.com.esis.garcom.ui
 
 import android.content.Context
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -15,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.esis.garcom.data.ApiAuthRepository
 import br.com.esis.garcom.data.ApiClient
@@ -33,6 +36,8 @@ import br.com.esis.garcom.ui.floor.FloorScreen
 import br.com.esis.garcom.ui.floor.FloorViewModel
 import br.com.esis.garcom.ui.login.LoginScreen
 import br.com.esis.garcom.ui.login.LoginViewModel
+import br.com.esis.garcom.ui.order.OrderScreen
+import br.com.esis.garcom.ui.order.OrderViewModel
 
 /** Dependências do app, criadas uma vez por processo. */
 class AppGraph private constructor(context: Context) {
@@ -57,10 +62,14 @@ private sealed interface Screen {
     data object Starting : Screen
     data object Login : Screen
     data class Floor(val waiter: Waiter) : Screen
+
+    /** Comanda da mesa. Sem orderId, a mesa está livre e a tela pergunta quantas pessoas antes de abrir. */
+    data class Order(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long?) : Screen
 }
 
 @Composable
 fun AppNavigation(graph: AppGraph) {
+    val context = LocalContext.current
     var screen by remember { mutableStateOf<Screen>(Screen.Starting) }
 
     /** Muda a cada saída: cada login ganha ViewModels novos, sem herdar o estado do garçom anterior. */
@@ -89,6 +98,23 @@ fun AppNavigation(graph: AppGraph) {
             viewModel = viewModel(key = "floor-$session") { FloorViewModel(graph.tables, graph.auth) },
             waiter = current.waiter,
             onLoggedOut = backToLogin,
+            onOpenTable = { table -> screen = Screen.Order(current.waiter, table.id, table.number, table.orderId) },
         )
+        is Screen.Order -> {
+            val toFloor = { screen = Screen.Floor(current.waiter) }
+            BackHandler(onBack = toFloor)
+            OrderScreen(
+                viewModel = viewModel(key = "order-$session-${current.tableId}-${current.orderId}") {
+                    OrderViewModel(graph.orders, current.tableId, current.orderId)
+                },
+                tableNumber = current.tableNumber,
+                onBack = toFloor,
+                onClosed = { message ->
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    toFloor()
+                },
+                onAddItems = { Toast.makeText(context, "Em breve", Toast.LENGTH_SHORT).show() },
+            )
+        }
     }
 }
