@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Support\NavCounts;
+use App\Support\WhatsNew;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -28,6 +29,7 @@ class HandleInertiaRequests extends Middleware
             ] : null,
             'onlinePendingCount' => fn () => $request->routeIs('menu.*') ? null : NavCounts::online($request->user()),
             'tablePendingCount' => fn () => $request->routeIs('menu.*') ? null : NavCounts::tables($request->user()),
+            'whatsNew' => fn () => $request->routeIs('menu.*') ? null : WhatsNew::for($request->user()),
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

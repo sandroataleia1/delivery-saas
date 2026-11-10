@@ -42,6 +42,7 @@ import {
 import FlashMessages from '@/components/FlashMessages.vue';
 import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import UpdateBanner from '@/components/UpdateBanner.vue';
+import WhatsNewDialog from '@/components/WhatsNewDialog.vue';
 import { usePermissions } from '@/lib/can';
 import { useInstallApp } from '@/lib/installApp';
 import { useNavCounts } from '@/lib/navCounts';
@@ -197,6 +198,7 @@ watch(() => page.url, () => (menuOpen.value = false));
         <Head :title="title" />
         <FlashMessages />
         <UpdateBanner />
+        <WhatsNewDialog />
         <QrOrderAlert />
 
         <div v-if="menuOpen" class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="menuOpen = false" />
