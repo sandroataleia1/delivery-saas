@@ -79,15 +79,6 @@ const company = computed(() => page.props.auth.company);
 // Cada item fica onde quem trabalha procuraria: o dia a dia primeiro, a gestão por último.
 const groups = computed(() => (user.value.is_super_admin ? [] : [
     {
-        name: 'Vendas',
-        items: [
-            can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', exclude: '/producao/setores', icon: Store },
-            can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
-            can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
-            can('sales.view') && { label: 'Vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
-        ],
-    },
-    {
         name: 'Cadastros',
         items: [
             can('products.view') && { label: 'Produtos', href: route('products.index'), match: '/produtos', exclude: '/produtos/opcoes', icon: Package },
@@ -106,6 +97,7 @@ const groups = computed(() => (user.value.is_super_admin ? [] : [
         name: 'Financeiro',
         items: [
             can('cash.operate') && { label: 'Caixa', href: route('cash.index'), match: '/caixa', exclude: '/caixa/fluxo', icon: Landmark },
+            can('sales.view') && { label: 'Histórico de vendas', href: route('sales.index'), match: '/vendas', icon: Receipt },
             can('cash.manage') && { label: 'Fluxo de caixa', href: route('cash.flow'), match: '/caixa/fluxo', icon: CalendarDays },
             can('finance.view') && { label: 'Contas a pagar', href: route('bills.index', 'pagar'), match: '/financeiro/pagar', icon: CircleArrowUp },
             can('finance.view') && { label: 'Contas a receber', href: route('bills.index', 'receber'), match: '/financeiro/receber', icon: CircleArrowDown },
@@ -141,6 +133,9 @@ const topItems = computed(() => (user.value.is_super_admin
         can('tables.operate') && { label: 'Mesas', href: route('tables.index'), match: '/mesas', exclude: '/mesas/gerenciar', icon: Armchair },
         can('online_orders.accept') && { label: 'Pedidos online', href: route('online.orders'), match: '/loja-online/pedidos', icon: ShoppingBag, badge: page.props.onlinePendingCount },
         can('sales.create') && { label: 'PDV', href: route('pos'), match: '/pdv', icon: ShoppingCart },
+        can('production.view') && { label: 'Produção', href: route('production.index'), match: '/producao', exclude: '/producao/setores', icon: Store },
+        can('deliveries.operate') && { label: 'Entregas', href: route('deliveries.board'), match: '/entregas', exclude: ['/entregas/bairros', '/entregas/minhas'], icon: Motorcycle },
+        can('deliveries.courier') && !can('deliveries.operate') && { label: 'Minhas entregas', href: route('deliveries.mine'), match: '/entregas/minhas', icon: Motorcycle },
     ].filter(Boolean)));
 
 // Quem tem poucos itens, como garçom e entregador, vê tudo aberto (o acesso rápido conta, menos o Início).
