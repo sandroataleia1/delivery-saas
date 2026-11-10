@@ -43,7 +43,7 @@ class KeystoreSessionStore(context: Context) : TokenStore, WaiterCache {
 
     override suspend fun read(): String? {
         if (!loaded) {
-            cachedToken = dataStore.data.first()[TOKEN]?.let(::decrypt)
+            cachedToken = runCatching { dataStore.data.first()[TOKEN]?.let(::decrypt) }.getOrNull()
             loaded = true
         }
         return cachedToken
@@ -85,7 +85,15 @@ class KeystoreSessionStore(context: Context) : TokenStore, WaiterCache {
         }.generateKey()
     }
 
-    private fun encrypt(plain: String): String {
+    /** Chave inválida (comum após atualização do Android em alguns aparelhos): apaga e cria outra, uma vez. */
+    private fun encrypt(plain: String): String = try {
+        seal(plain)
+    } catch (error: Exception) {
+        KeyStore.getInstance(KEYSTORE).apply { load(null) }.deleteEntry(ALIAS)
+        seal(plain)
+    }
+
+    private fun seal(plain: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, key()) }
         val sealed = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         return encode(cipher.iv) + ":" + encode(sealed)

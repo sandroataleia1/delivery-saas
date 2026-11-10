@@ -1,8 +1,8 @@
 package br.com.esis.garcom.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import retrofit2.HttpException
-import java.io.IOException
 
 enum class TableStatus {
     FREE,
@@ -70,9 +70,12 @@ data class TableOrderDto(val waiter: String? = null, val total: String? = null, 
 class ApiTableRepository(private val api: ApiService) : TableRepository {
     override suspend fun tables(): TablesResult = try {
         TablesResult.Loaded(api.tables().data.map { it.toFloorTable() })
+    } catch (error: CancellationException) {
+        throw error
     } catch (error: HttpException) {
         TablesResult.ServerError
-    } catch (error: IOException) {
+    } catch (error: Exception) {
+        // Sem rede, ou uma resposta que não é da API (Wi-Fi com página de login, proxy).
         TablesResult.NoConnection
     }
 }

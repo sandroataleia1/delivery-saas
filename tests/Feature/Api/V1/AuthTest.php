@@ -4,6 +4,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use Tests\TestCase;
@@ -101,6 +102,35 @@ class AuthTest extends TestCase
             'password' => 'novaSenha123',
             'password_confirmation' => 'novaSenha123',
         ])->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $waiter->tokens()->count());
+    }
+
+    public function test_garcom_trocar_a_propria_senha_revoga_os_tokens(): void
+    {
+        $waiter = $this->waiter();
+        $waiter->createToken('Moto G');
+
+        $this->actingAs($waiter)->put('/minha-conta/senha', [
+            'current_password' => 'password',
+            'password' => 'novaSenha123',
+            'password_confirmation' => 'novaSenha123',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $waiter->tokens()->count());
+    }
+
+    public function test_redefinir_a_senha_por_email_revoga_os_tokens(): void
+    {
+        $waiter = $this->waiter();
+        $waiter->createToken('Moto G');
+
+        $this->post('/redefinir-senha', [
+            'token' => Password::createToken($waiter),
+            'email' => $waiter->email,
+            'password' => 'novaSenha123',
+            'password_confirmation' => 'novaSenha123',
+        ])->assertRedirect(route('login'));
 
         $this->assertSame(0, $waiter->tokens()->count());
     }

@@ -29,7 +29,7 @@ object ApiClient {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                val token = runBlocking { tokenStore.read() }
+                val token = runCatching { runBlocking { tokenStore.read() } }.getOrNull()
                 val request = chain.request().newBuilder()
                     .header("Accept", "application/json")
                     .apply { if (token != null) header("Authorization", "Bearer $token") }
