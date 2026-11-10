@@ -71,6 +71,15 @@ class User extends Authenticatable
         return in_array($permission, $this->permissions(), true);
     }
 
+    /** Perfil só da produção (ex.: cozinha): o início dele é o painel em tela cheia. */
+    public function isProductionOnly(): bool
+    {
+        $permissions = $this->permissions();
+
+        return in_array('production.view', $permissions, true)
+            && array_filter($permissions, fn (string $permission) => ! str_starts_with($permission, 'production.')) === [];
+    }
+
     public function isCompanyAdmin(): bool
     {
         return $this->role?->is_admin === true;

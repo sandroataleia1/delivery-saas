@@ -119,4 +119,19 @@ class ProductionPanelTest extends TestCase
         $this->post(route('production.panel.ready'), ['works' => [['id' => $work->id, 'version' => 0]]])->assertSessionHasErrors('works.0.id');
         $this->assertSame('waiting', ProductionWork::withoutGlobalScopes()->find($work->id)->status);
     }
+
+    public function test_quem_so_acessa_a_cozinha_entra_direto_no_painel(): void
+    {
+        $cook = $this->userWith(['production.view', 'production.operate'], $this->admin->company);
+
+        $this->actingAs($cook)->get(route('dashboard'))->assertRedirect(route('production.panel'));
+    }
+
+    public function test_quem_tem_outras_areas_continua_no_inicio(): void
+    {
+        $waiter = $this->userWith(['production.view', 'tables.operate'], $this->admin->company);
+
+        $this->actingAs($waiter)->get(route('dashboard'))->assertOk();
+        $this->actingAs($this->admin)->get(route('dashboard'))->assertOk();
+    }
 }

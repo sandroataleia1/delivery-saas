@@ -28,7 +28,7 @@ class WhatsNewTest extends TestCase
 
     public function test_logged_user_receives_only_the_latest_release_with_the_items_they_can_use(): void
     {
-        $cook = $this->userWith(['production.view'], $this->adminOf()->company);
+        $cook = $this->userWith(['production.view', 'tables.operate'], $this->adminOf()->company);
 
         $this->actingAs($cook)->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
@@ -44,7 +44,7 @@ class WhatsNewTest extends TestCase
     {
         config(['changelog.0.items' => [['title' => 'Relatório', 'text' => 'Só gestão.', 'can' => 'reports.view']]]);
 
-        $this->actingAs($this->userWith(['production.view'], $this->adminOf()->company))->get(route('dashboard'))
+        $this->actingAs($this->userWith(['production.view', 'tables.operate'], $this->adminOf()->company))->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page->where('whatsNew', null));
     }
 

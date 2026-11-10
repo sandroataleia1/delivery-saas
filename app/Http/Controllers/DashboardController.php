@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Reports\DashboardReport;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -12,9 +13,13 @@ use Inertia\Response;
 class DashboardController extends Controller
 {
     /** Cada bloco aparece só para quem tem a permissão da área correspondente. */
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
+
+        if ($user->isProductionOnly()) {
+            return redirect()->route('production.panel');
+        }
         $report = new DashboardReport(CarbonImmutable::now());
 
         $liveAllowed = [

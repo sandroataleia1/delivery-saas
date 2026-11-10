@@ -9,6 +9,17 @@
 
 return [
     [
+        'id' => '2026-11-10.4',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Cozinha entra direto no painel',
+                'text' => 'Quem tem acesso só à produção (ex.: perfil Cozinha) cai direto no painel do setor ao entrar no sistema. Toque em "Tela cheia" para ocupar a tela toda.',
+                'can' => 'production.view',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.3',
         'date' => '10/11/2026',
         'items' => [
