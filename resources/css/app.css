@@ -26,6 +26,26 @@
     --color-danger-soft: #fbe6e4;
 }
 
+/* Mesa com pedido do QR aguardando: o cartão pisca até alguém conferir. */
+@keyframes qr-blink {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgb(200 50 31 / 0);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgb(200 50 31 / 0.55);
+    }
+}
+
+@utility qr-blink {
+    animation: qr-blink 1.2s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        box-shadow: 0 0 0 4px rgb(200 50 31 / 0.55);
+    }
+}
+
 /* Barra de rolagem discreta para fundos escuros, como a sidebar. */
 @utility scrollbar-dark {
     scrollbar-width: thin;

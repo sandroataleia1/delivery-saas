@@ -122,6 +122,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('mesas/comandas/{order}/imprimir', [TableOrderController::class, 'print'])->name('orders.print');
         });
         Route::middleware('can:tables.confirm')->group(function () {
+            Route::get('mesas/recebimentos/pendentes', [MenuOrderReceiptController::class, 'pending'])->middleware('throttle:30,1')->name('receipts.pending');
             Route::post('mesas/recebimentos/{receipt}/confirmar', [MenuOrderReceiptController::class, 'confirm'])->name('receipts.confirm');
             Route::post('mesas/recebimentos/{receipt}/rejeitar', [MenuOrderReceiptController::class, 'reject'])->name('receipts.reject');
         });

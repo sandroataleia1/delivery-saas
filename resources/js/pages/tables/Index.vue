@@ -123,7 +123,7 @@ function open() {
                 <button
                     type="button"
                     class="relative flex min-h-40 w-full cursor-pointer flex-col overflow-hidden rounded-xl border-2 p-3 pl-4 text-left shadow-sm transition hover:shadow-md"
-                    :class="[STATUSES[statusOf(table)].card, { 'ring-danger ring-2 ring-offset-2': late(table) }]"
+                    :class="[STATUSES[statusOf(table)].card, { 'ring-danger ring-2 ring-offset-2': late(table), 'qr-blink': table.order?.pending_count }]"
                     :aria-label="`Mesa ${table.number}, ${STATUSES[statusOf(table)].label.toLowerCase()}`"
                     @click="select(table)"
                 >

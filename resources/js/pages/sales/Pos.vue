@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, ChevronDown, List, Lock, Minus, Plus, Trash2 } from '@lucide/vue';
 import CashControls from '@/components/CashControls.vue';
+import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import UpdateBanner from '@/components/UpdateBanner.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import CustomerPicker from '@/components/CustomerPicker.vue';
@@ -229,6 +230,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeCashMenuOutside
     <div class="flex h-dvh flex-col overflow-hidden">
         <Head title="PDV" />
         <FlashMessages top />
+        <QrOrderAlert />
 
         <header class="bg-sidebar flex h-14 shrink-0 items-center gap-3 px-4 text-white">
             <Link :href="route('dashboard')" class="flex items-center gap-2 text-sm font-semibold" aria-label="Sair do PDV">

@@ -40,6 +40,7 @@ import {
     X,
 } from '@lucide/vue';
 import FlashMessages from '@/components/FlashMessages.vue';
+import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import UpdateBanner from '@/components/UpdateBanner.vue';
 import { usePermissions } from '@/lib/can';
 import { useInstallApp } from '@/lib/installApp';
@@ -192,6 +193,7 @@ watch(() => page.url, () => (menuOpen.value = false));
         <Head :title="title" />
         <FlashMessages />
         <UpdateBanner />
+        <QrOrderAlert />
 
         <div v-if="menuOpen" class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="menuOpen = false" />
 

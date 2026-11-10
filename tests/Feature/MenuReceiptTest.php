@@ -131,6 +131,25 @@ class MenuReceiptTest extends TestCase
         $this->get('/empresa')->assertInertia(fn (AssertableInertia $page) => $page->where('operation.effective_mode', 'manual')->has('operationCeilings.max_lines'));
     }
 
+    public function test_pending_alert_lists_only_pending_receipts_of_own_company_with_current_table(): void
+    {
+        [$company, $table, $product, $data] = $this->menu();
+        $this->postJson('/m/'.$table->qr_token, $data)->assertCreated();
+        $this->postJson('/m/'.$table->qr_token, [...$data, 'client_uuid' => (string) Str::uuid()])->assertCreated();
+        $admin = $this->productionAdminOf($company);
+        $this->actingAs($admin)->postJson(route('receipts.reject', MenuOrderReceipt::orderByDesc('id')->first()), ['reason' => 'Tarde'])->assertOk();
+        $target = DiningTable::factory()->create(['company_id' => $company->id, 'number' => 42]);
+        app(TransferTable::class)->handle(TableOrder::sole(), $target);
+        $this->getJson(route('receipts.pending'))->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonCount(1, 'receipts')
+            ->assertJsonPath('receipts.0.id', MenuOrderReceipt::orderBy('id')->first()->id)
+            ->assertJsonPath('receipts.0.table', '42')
+            ->assertJsonPath('receipts.0.order_id', TableOrder::sole()->id)
+            ->assertJsonPath('receipts.0.units', 2);
+        $this->actingAs($this->productionAdminOf())->getJson(route('receipts.pending'))->assertOk()->assertJsonCount(0, 'receipts');
+        $this->actingAs($this->userWith(['tables.operate'], $company))->getJson(route('receipts.pending'))->assertForbidden();
+    }
+
     private function menu(): array
     {
         $company = Company::factory()->create(['qr_menu_enabled' => true]);

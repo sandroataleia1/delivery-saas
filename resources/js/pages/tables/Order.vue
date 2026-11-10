@@ -11,6 +11,7 @@ import DecimalInput from '@/components/DecimalInput.vue';
 import Field from '@/components/Field.vue';
 import FlashMessages from '@/components/FlashMessages.vue';
 import PaymentPanel from '@/components/PaymentPanel.vue';
+import QrOrderAlert from '@/components/QrOrderAlert.vue';
 import ProductGrid from '@/components/ProductGrid.vue';
 import { usePermissions } from '@/lib/can';
 import { lineError, payloadFields, selectionKey } from '@/lib/composition';
@@ -230,6 +231,7 @@ function close() {
     <div class="flex h-dvh flex-col overflow-hidden">
         <Head :title="`Mesa ${order.table}`" />
         <FlashMessages top />
+        <QrOrderAlert :except-order-id="order.id" />
 
         <header class="bg-sidebar flex h-14 shrink-0 items-center gap-3 px-4 text-white">
             <Link :href="route('tables.index')" class="flex items-center gap-2 text-sm font-semibold" aria-label="Voltar às mesas">
