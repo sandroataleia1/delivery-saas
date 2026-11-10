@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, Minus, Plus, Receipt, Trash2, X } from '@lucide/vue';
+import { ArrowLeft, ArrowRightLeft, Ban, ChefHat, HandCoins, Minus, Plus, Receipt, Trash2, Undo2, X } from '@lucide/vue';
 import MenuReceiptAlerts from '@/components/MenuReceiptAlerts.vue';
 import MenuReceiptDecisions from '@/components/MenuReceiptDecisions.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -136,6 +136,14 @@ function sendToKitchen() {
     kitchenForm.post(route('orders.kitchen', props.order.id), { preserveScroll: true });
 }
 
+/** A mesa pediu a conta: no mapa ela fica "em fechamento" até fechar ou voltar a consumir. */
+const billForm = useForm({ requested: false });
+
+function toggleBill() {
+    billForm.requested = !props.order.closing;
+    billForm.post(route('orders.bill', props.order.id), { preserveScroll: true });
+}
+
 const cancelling = ref(null);
 const reasonForm = useForm({ reason: '' });
 
@@ -222,7 +230,10 @@ function close() {
                 <ArrowLeft :size="18" />
                 <span class="max-sm:hidden">Mesas</span>
             </Link>
-            <span class="min-w-0 flex-1 truncate text-center font-bold">Mesa {{ order.table }}</span>
+            <span class="flex min-w-0 flex-1 items-center justify-center gap-2 font-bold">
+                <span class="truncate">Mesa {{ order.table }}</span>
+                <span v-if="order.closing" class="badge bg-warn shrink-0 text-white">Em fechamento</span>
+            </span>
             <span class="text-sidebar-text text-sm tabular-nums">Comanda #{{ order.number }}</span>
         </header>
 
@@ -321,6 +332,17 @@ function close() {
                             <ArrowRightLeft :size="16" />
                             Transferir
                         </button>
+                        <button
+                            type="button"
+                            class="btn col-span-2"
+                            :class="order.closing ? 'btn-secondary' : 'border-warn/50 bg-warn-soft text-warn hover:border-warn border'"
+                            :disabled="billForm.processing"
+                            @click="toggleBill"
+                        >
+                            <component :is="order.closing ? Undo2 : HandCoins" :size="16" />
+                            {{ order.closing ? 'Voltar a consumir' : 'Pedir a conta' }}
+                        </button>
+                        <p v-if="billForm.errors.order" class="text-danger col-span-2 text-sm" role="alert">{{ billForm.errors.order }}</p>
                         <button v-if="can('tables.cancel')" type="button" class="btn btn-secondary col-span-2" @click="startCancel('order')">
                             <Ban :size="16" />
                             Cancelar comanda

@@ -116,6 +116,7 @@ Route::middleware(['auth', 'account', 'password.changed'])->group(function () {
             Route::post('mesas/comandas/{order}/cozinha', [TableOrderController::class, 'kitchen'])->name('orders.kitchen');
             Route::get('mesas/comandas/{order}/cozinha/{batch}', [TableOrderController::class, 'ticket'])->whereNumber('batch')->name('orders.ticket');
             Route::post('mesas/comandas/{order}/transferir', [TableOrderController::class, 'transfer'])->name('orders.transfer');
+            Route::post('mesas/comandas/{order}/conta', [TableOrderController::class, 'requestBill'])->name('orders.bill');
         });
         Route::middleware('can:tables.confirm')->group(function () {
             Route::post('mesas/recebimentos/{receipt}/confirmar', [MenuOrderReceiptController::class, 'confirm'])->name('receipts.confirm');

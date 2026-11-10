@@ -38,6 +38,8 @@ class DiningTableController extends Controller
                         'waiter' => $table->openOrder->user_name,
                         'total' => (string) ($table->openOrder->total ?? 0),
                         'minutes' => (int) $table->openOrder->opened_at->diffInMinutes(now()),
+                        'closing' => $table->openOrder->bill_requested_at !== null,
+                        'closing_minutes' => $table->openOrder->bill_requested_at ? (int) $table->openOrder->bill_requested_at->diffInMinutes(now()) : null,
                     ] : null,
                 ]),
             'completed' => session('completed_sale'),

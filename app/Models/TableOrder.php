@@ -23,6 +23,7 @@ class TableOrder extends Model
         return [
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
+            'bill_requested_at' => 'datetime',
         ];
     }
 

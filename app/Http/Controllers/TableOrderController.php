@@ -18,9 +18,12 @@ use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
+use App\Support\TableOperationLock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -64,6 +67,7 @@ class TableOrderController extends Controller
                 'waiter' => $order->user_name,
                 'minutes' => (int) $order->opened_at->diffInMinutes(now()),
                 'subtotal' => $order->subtotal(),
+                'closing' => $order->bill_requested_at !== null,
                 'pending_kitchen' => $order->items->whereNull('cancelled_at')->whereNull('kitchen_batch')->count(),
                 'items' => $order->items->map(fn (TableOrderItem $item) => [
                     'id' => $item->id,
@@ -171,6 +175,30 @@ class TableOrderController extends Controller
         $transferTable->handle($order, DiningTable::findOrFail($data['dining_table_id']));
 
         return back()->with('success', 'Comanda transferida.');
+    }
+
+    /**
+     * Marca (ou desmarca) que a mesa pediu a conta. A comanda continua aberta para lançar e fechar.
+     */
+    public function requestBill(Request $request, TableOrder $order): RedirectResponse
+    {
+        $requested = $request->validate(['requested' => ['required', 'boolean']], [], ['requested' => 'conta pedida'])['requested'];
+
+        DB::transaction(function () use ($order, $requested) {
+            $locked = TableOperationLock::order($order);
+
+            if (! $locked->isOpen()) {
+                throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);
+            }
+
+            if ($requested && $locked->bill_requested_at === null) {
+                $locked->forceFill(['bill_requested_at' => now()])->save();
+            } elseif (! $requested && $locked->bill_requested_at !== null) {
+                $locked->forceFill(['bill_requested_at' => null])->save();
+            }
+        });
+
+        return back()->with('success', $requested ? 'Mesa em fechamento.' : 'Mesa voltou a ficar ocupada.');
     }
 
     public function close(CloseTableOrderRequest $request, TableOrder $order, CloseTableOrder $closeOrder): RedirectResponse
