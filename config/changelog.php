@@ -9,6 +9,16 @@
 
 return [
     [
+        'id' => '2026-11-10.8',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Trocar a senha desconecta os celulares',
+                'text' => 'Ao trocar ou redefinir a senha, ou ao inativar um usuário, os acessos dele pelo app do garçom são encerrados na hora. O app do garçom está em preparação e chega em breve.',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.7',
         'date' => '10/11/2026',
         'items' => [
