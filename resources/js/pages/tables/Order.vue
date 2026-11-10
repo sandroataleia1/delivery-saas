@@ -181,7 +181,7 @@ function transfer() {
 }
 
 const closing = ref(false);
-const chargeService = ref(true);
+const chargeService = ref(false);
 const customer = ref(null);
 const discount = ref('');
 const payments = ref([]);
