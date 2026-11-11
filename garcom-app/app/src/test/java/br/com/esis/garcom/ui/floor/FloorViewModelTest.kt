@@ -1,6 +1,9 @@
 package br.com.esis.garcom.ui.floor
 
+import br.com.esis.garcom.data.ApiResult
 import br.com.esis.garcom.data.AuthRepository
+import br.com.esis.garcom.data.NoticeRepository
+import br.com.esis.garcom.data.Notices
 import br.com.esis.garcom.data.FloorTable
 import br.com.esis.garcom.data.LoginResult
 import br.com.esis.garcom.data.TableRepository
@@ -69,6 +72,22 @@ class FloorViewModelTest {
         val state = viewModel.state.value as FloorState.Showing
         assertEquals(listOf(table), state.tables)
         assertEquals("Sem conexão com o servidor", state.error)
+    }
+
+    @Test
+    fun salao_mostra_contagem_de_nao_lidos() = runTest {
+        val notices = object : NoticeRepository {
+            private val queue = ArrayDeque(listOf<ApiResult<Notices>>(ApiResult.Ok(Notices(3, emptyList())), ApiResult.NoConnection))
+            override suspend fun notices(): ApiResult<Notices> = queue.removeFirst()
+            override suspend fun markRead(upToId: Long): ApiResult<Int> = error("não usado")
+        }
+        val viewModel = FloorViewModel(FakeTables(TablesResult.Loaded(listOf(table)), TablesResult.Loaded(listOf(table))), FakeAuth(), notices)
+
+        viewModel.refresh()
+        assertEquals(3, (viewModel.state.value as FloorState.Showing).unread)
+
+        viewModel.refresh()
+        assertEquals(3, (viewModel.state.value as FloorState.Showing).unread)
     }
 
     @Test

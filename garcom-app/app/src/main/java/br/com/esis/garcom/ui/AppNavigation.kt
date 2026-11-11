@@ -19,15 +19,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import br.com.esis.garcom.BuildConfig
 import br.com.esis.garcom.data.ApiAuthRepository
 import br.com.esis.garcom.data.ApiClient
 import br.com.esis.garcom.data.ApiMenuRepository
+import br.com.esis.garcom.data.ApiNoticeRepository
 import br.com.esis.garcom.data.ApiOrderRepository
 import br.com.esis.garcom.data.ApiService
 import br.com.esis.garcom.data.ApiTableRepository
 import br.com.esis.garcom.data.AuthRepository
 import br.com.esis.garcom.data.KeystoreSessionStore
-import br.com.esis.garcom.data.ApiNoticeRepository
 import br.com.esis.garcom.data.MenuRepository
 import br.com.esis.garcom.data.NoticeRepository
 import br.com.esis.garcom.data.OrderRepository
@@ -40,8 +41,11 @@ import br.com.esis.garcom.ui.login.LoginScreen
 import br.com.esis.garcom.ui.login.LoginViewModel
 import br.com.esis.garcom.ui.menu.MenuScreen
 import br.com.esis.garcom.ui.menu.MenuViewModel
+import br.com.esis.garcom.ui.notices.NoticesScreen
+import br.com.esis.garcom.ui.notices.NoticesViewModel
 import br.com.esis.garcom.ui.order.OrderScreen
 import br.com.esis.garcom.ui.order.OrderViewModel
+import br.com.esis.garcom.ui.update.UpdateRequiredScreen
 
 /** Dependências do app, criadas uma vez por processo. */
 class AppGraph private constructor(context: Context) {
@@ -68,6 +72,11 @@ private sealed interface Screen {
     data object Login : Screen
     data class Floor(val waiter: Waiter) : Screen
 
+    /** O servidor exige uma versão mais nova do app. */
+    data object UpdateRequired : Screen
+
+    data class Notices(val waiter: Waiter, val visit: Int) : Screen
+
     /** Comanda da mesa. Sem orderId, a mesa está livre e a tela pergunta quantas pessoas antes de abrir. */
     data class Order(val waiter: Waiter, val tableId: Long, val tableNumber: Int, val orderId: Long?, val visit: Int) : Screen
 
@@ -93,7 +102,13 @@ fun AppNavigation(graph: AppGraph) {
     }
 
     LaunchedEffect(Unit) {
-        screen = graph.auth.me()?.let { Screen.Floor(it) } ?: Screen.Login
+        // Sem resposta do servidor sobre a versão, o app segue normal.
+        val minVersion = graph.auth.minVersionCode()
+        screen = if (minVersion != null && BuildConfig.VERSION_CODE < minVersion) {
+            Screen.UpdateRequired
+        } else {
+            graph.auth.me()?.let { Screen.Floor(it) } ?: Screen.Login
+        }
     }
     LaunchedEffect(Unit) {
         SessionEvents.expired.collect { backToLogin() }
@@ -108,11 +123,22 @@ fun AppNavigation(graph: AppGraph) {
             onLoggedIn = { screen = Screen.Floor(it) },
         )
         is Screen.Floor -> FloorScreen(
-            viewModel = viewModel(key = "floor-$session") { FloorViewModel(graph.tables, graph.auth) },
+            viewModel = viewModel(key = "floor-$session") { FloorViewModel(graph.tables, graph.auth, graph.notices) },
             waiter = current.waiter,
             onLoggedOut = backToLogin,
             onOpenTable = { table -> screen = Screen.Order(current.waiter, table.id, table.number, table.orderId, ++visit) },
+            onOpenNotices = { screen = Screen.Notices(current.waiter, ++visit) },
         )
+        Screen.UpdateRequired -> UpdateRequiredScreen()
+        is Screen.Notices -> {
+            val toFloor = { screen = Screen.Floor(current.waiter) }
+            BackHandler(onBack = toFloor)
+            NoticesScreen(
+                viewModel = viewModel(key = "notices-$session-${current.visit}") { NoticesViewModel(graph.notices) },
+                onBack = toFloor,
+                onOpenOrder = { tableId, orderId -> screen = Screen.Order(current.waiter, tableId, 0, orderId, ++visit) },
+            )
+        }
         is Screen.Order -> {
             val toFloor = { screen = Screen.Floor(current.waiter) }
             BackHandler(onBack = toFloor)

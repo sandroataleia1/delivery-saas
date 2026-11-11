@@ -20,10 +20,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -67,7 +70,13 @@ import kotlinx.coroutines.delay
 private const val REFRESH_INTERVAL_MS = 10_000L
 
 @Composable
-fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Unit, onOpenTable: (FloorTable) -> Unit) {
+fun FloorScreen(
+    viewModel: FloorViewModel,
+    waiter: Waiter,
+    onLoggedOut: () -> Unit,
+    onOpenTable: (FloorTable) -> Unit,
+    onOpenNotices: () -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     var confirmSwitch by remember { mutableStateOf(false) }
@@ -88,7 +97,12 @@ fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Un
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Header(waiter, onSwitch = { confirmSwitch = true })
+        Header(
+            waiter,
+            unread = (state as? FloorState.Showing)?.unread ?: 0,
+            onNotices = onOpenNotices,
+            onSwitch = { confirmSwitch = true },
+        )
 
         val showing = state as? FloorState.Showing ?: return@Column
         showing.error?.let { ErrorBanner(it, onRetry = viewModel::retry) }
@@ -134,7 +148,7 @@ fun FloorScreen(viewModel: FloorViewModel, waiter: Waiter, onLoggedOut: () -> Un
 }
 
 @Composable
-private fun Header(waiter: Waiter, onSwitch: () -> Unit) {
+private fun Header(waiter: Waiter, unread: Int, onNotices: () -> Unit, onSwitch: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column {
             Row(
@@ -159,6 +173,7 @@ private fun Header(waiter: Waiter, onSwitch: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                NoticesBell(unread, onClick = onNotices)
                 OutlinedButton(
                     onClick = onSwitch,
                     modifier = Modifier.height(44.dp),
@@ -172,6 +187,27 @@ private fun Header(waiter: Waiter, onSwitch: () -> Unit) {
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
+}
+
+/** Sino dos avisos com o número de não lidos ("9+" acima de 9; sem selo quando não há nenhum). */
+@Composable
+private fun NoticesBell(unread: Int, onClick: () -> Unit) {
+    val description = when (unread) {
+        0 -> "Avisos"
+        1 -> "1 aviso não lido"
+        else -> "$unread avisos não lidos"
+    }
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
+        BadgedBox(
+            badge = {
+                if (unread > 0) {
+                    Badge(containerColor = Brand, contentColor = Color.White) { Text(if (unread > 9) "9+" else unread.toString()) }
+                }
+            },
+        ) {
+            Icon(painterResource(R.drawable.ic_bell), contentDescription = null, modifier = Modifier.size(24.dp))
         }
     }
 }

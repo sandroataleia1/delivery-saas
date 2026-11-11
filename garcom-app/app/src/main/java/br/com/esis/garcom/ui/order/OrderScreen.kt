@@ -119,7 +119,7 @@ fun OrderScreen(
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         BackHeader(
-            title = "Mesa ${order?.table ?: tableNumber}",
+            title = (order?.table ?: tableNumber.takeIf { it > 0 })?.let { "Mesa $it" } ?: "Mesa",
             subtitle = order?.let(::orderSubtitle),
             onBack = onBack,
             actions = {
