@@ -27,7 +27,9 @@ import br.com.esis.garcom.data.ApiService
 import br.com.esis.garcom.data.ApiTableRepository
 import br.com.esis.garcom.data.AuthRepository
 import br.com.esis.garcom.data.KeystoreSessionStore
+import br.com.esis.garcom.data.ApiNoticeRepository
 import br.com.esis.garcom.data.MenuRepository
+import br.com.esis.garcom.data.NoticeRepository
 import br.com.esis.garcom.data.OrderRepository
 import br.com.esis.garcom.data.SessionEvents
 import br.com.esis.garcom.data.TableRepository
@@ -49,6 +51,7 @@ class AppGraph private constructor(context: Context) {
     val tables: TableRepository = ApiTableRepository(api)
     val orders: OrderRepository = ApiOrderRepository(api)
     val menu: MenuRepository = ApiMenuRepository(api)
+    val notices: NoticeRepository = ApiNoticeRepository(api)
 
     companion object {
         @Volatile

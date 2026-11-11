@@ -2,6 +2,7 @@ package br.com.esis.garcom.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import retrofit2.HttpException
 
 /** Situação do item na produção, como o garçom precisa saber. */
 enum class ItemStatus {
@@ -34,7 +35,14 @@ data class OrderItem(
     val total: String,
     val notes: String?,
     val status: ItemStatus,
+    /** Pronto na produção e ainda não levado à mesa. */
+    val deliverable: Boolean = false,
 )
+
+/** Linha de um pedido feito pelo cliente no QR, esperando o garçom confirmar. */
+data class ReceiptLine(val name: String, val quantity: Int, val optionsLabel: String?, val notes: String?)
+
+data class PendingReceipt(val id: Long, val total: String, val items: List<ReceiptLine>)
 
 data class TableOrder(
     val id: Long,
@@ -44,6 +52,9 @@ data class TableOrder(
     val minutes: Int,
     val total: String,
     val items: List<OrderItem>,
+    /** A mesa pediu a conta e o caixa já foi avisado. */
+    val closing: Boolean = false,
+    val pendingReceipts: List<PendingReceipt> = emptyList(),
 )
 
 data class Quote(val unitPrice: String, val optionsLabel: String?)
@@ -83,6 +94,14 @@ interface OrderRepository {
     suspend fun open(tableId: Long, people: Int): ApiResult<TableOrder>
     suspend fun addItems(orderId: Long, clientUuid: String, items: List<CartLine>): ApiResult<TableOrder>
     suspend fun quote(orderId: Long, line: CartLine): ApiResult<Quote>
+    suspend fun requestBill(orderId: Long, requested: Boolean): ApiResult<TableOrder>
+    suspend fun transfer(orderId: Long, tableId: Long): ApiResult<TableOrder>
+    suspend fun deliver(orderId: Long, itemIds: List<Long>): ApiResult<TableOrder>
+    suspend fun confirmReceipt(receiptId: Long): ApiResult<TableOrder>
+    suspend fun rejectReceipt(receiptId: Long, reason: String): ApiResult<TableOrder>
+
+    /** Pede a impressão da pré-conta. A mesa continua aberta. */
+    suspend fun printBill(orderId: Long): ApiResult<Unit>
 }
 
 class ApiOrderRepository(private val api: ApiService) : OrderRepository {
@@ -98,7 +117,41 @@ class ApiOrderRepository(private val api: ApiService) : OrderRepository {
     override suspend fun quote(orderId: Long, line: CartLine): ApiResult<Quote> = apiCall {
         api.quote(orderId, line.toRequest()).let { Quote(it.unitPrice, it.optionsLabel) }
     }
+
+    override suspend fun requestBill(orderId: Long, requested: Boolean): ApiResult<TableOrder> =
+        apiCall { api.requestBill(orderId, RequestBillRequest(requested)).data.toOrder() }
+
+    override suspend fun transfer(orderId: Long, tableId: Long): ApiResult<TableOrder> =
+        apiCall { api.transfer(orderId, TransferRequest(tableId)).data.toOrder() }
+
+    override suspend fun deliver(orderId: Long, itemIds: List<Long>): ApiResult<TableOrder> =
+        apiCall { api.deliver(orderId, DeliverRequest(itemIds)).data.toOrder() }
+
+    override suspend fun confirmReceipt(receiptId: Long): ApiResult<TableOrder> =
+        apiCall { api.confirmReceipt(receiptId).data.toOrder() }
+
+    override suspend fun rejectReceipt(receiptId: Long, reason: String): ApiResult<TableOrder> =
+        apiCall { api.rejectReceipt(receiptId, RejectReceiptRequest(reason)).data.toOrder() }
+
+    override suspend fun printBill(orderId: Long): ApiResult<Unit> = apiCall {
+        val response = api.preBill(orderId)
+        if (!response.isSuccessful) {
+            throw HttpException(response)
+        }
+    }
 }
+
+@Serializable
+data class RequestBillRequest(val requested: Boolean)
+
+@Serializable
+data class TransferRequest(@SerialName("dining_table_id") val diningTableId: Long)
+
+@Serializable
+data class DeliverRequest(@SerialName("item_ids") val itemIds: List<Long>)
+
+@Serializable
+data class RejectReceiptRequest(val reason: String)
 
 @Serializable
 data class OpenTableRequest(val people: Int)
@@ -134,9 +187,29 @@ data class OrderDto(
     val minutes: Int = 0,
     val total: String,
     val items: List<OrderItemDto> = emptyList(),
+    val closing: Boolean = false,
+    @SerialName("pending_receipts") val pendingReceipts: List<PendingReceiptDto> = emptyList(),
 ) {
-    fun toOrder(): TableOrder = TableOrder(id, table, people, waiter, minutes, total, items.map { it.toItem() })
+    fun toOrder(): TableOrder = TableOrder(
+        id, table, people, waiter, minutes, total, items.map { it.toItem() },
+        closing = closing,
+        pendingReceipts = pendingReceipts.map { it.toReceipt() },
+    )
 }
+
+@Serializable
+data class PendingReceiptDto(val id: Long, val total: String, val items: List<ReceiptLineDto> = emptyList()) {
+    fun toReceipt(): PendingReceipt =
+        PendingReceipt(id, total, items.map { ReceiptLine(it.productName, it.quantity, it.optionsLabel, it.notes) })
+}
+
+@Serializable
+data class ReceiptLineDto(
+    @SerialName("product_name") val productName: String,
+    val quantity: Int,
+    @SerialName("options_label") val optionsLabel: String? = null,
+    val notes: String? = null,
+)
 
 @Serializable
 data class OrderItemDto(
@@ -147,6 +220,7 @@ data class OrderItemDto(
     val total: String,
     val notes: String? = null,
     val status: String,
+    val deliverable: Boolean = false,
 ) {
-    fun toItem(): OrderItem = OrderItem(id, productName, optionsLabel, quantity, total, notes, ItemStatus.fromApi(status))
+    fun toItem(): OrderItem = OrderItem(id, productName, optionsLabel, quantity, total, notes, ItemStatus.fromApi(status), deliverable)
 }

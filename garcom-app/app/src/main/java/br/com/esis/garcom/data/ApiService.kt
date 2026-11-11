@@ -33,4 +33,31 @@ interface ApiService {
 
     @POST("orders/{id}/quote")
     suspend fun quote(@Path("id") orderId: Long, @Body body: ItemRequest): QuoteDto
+
+    @POST("orders/{id}/bill")
+    suspend fun requestBill(@Path("id") orderId: Long, @Body body: RequestBillRequest): OrderEnvelope
+
+    @POST("orders/{id}/transfer")
+    suspend fun transfer(@Path("id") orderId: Long, @Body body: TransferRequest): OrderEnvelope
+
+    @POST("orders/{id}/deliver")
+    suspend fun deliver(@Path("id") orderId: Long, @Body body: DeliverRequest): OrderEnvelope
+
+    @POST("orders/{id}/prebill")
+    suspend fun preBill(@Path("id") orderId: Long): Response<Unit>
+
+    @POST("receipts/{id}/confirm")
+    suspend fun confirmReceipt(@Path("id") receiptId: Long): OrderEnvelope
+
+    @POST("receipts/{id}/reject")
+    suspend fun rejectReceipt(@Path("id") receiptId: Long, @Body body: RejectReceiptRequest): OrderEnvelope
+
+    @GET("notices")
+    suspend fun notices(): NoticesEnvelope
+
+    @POST("notices/read")
+    suspend fun readNotices(@Body body: ReadNoticesRequest): UnreadDto
+
+    @GET("app")
+    suspend fun app(): AppInfoDto
 }

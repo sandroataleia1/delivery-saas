@@ -39,6 +39,8 @@ class FloorViewModelTest {
         override suspend fun logout() {
             loggedOut = true
         }
+
+        override suspend fun minVersionCode(): Int? = null
     }
 
     @Before

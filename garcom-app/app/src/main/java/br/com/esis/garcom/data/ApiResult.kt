@@ -19,6 +19,7 @@ internal suspend fun <T> apiCall(block: suspend () -> T): ApiResult<T> = try {
 } catch (error: HttpException) {
     when (error.code()) {
         422 -> ApiResult.Rejected(serverMessage(error) ?: "Não foi possível concluir. Confira e tente de novo.")
+        403 -> ApiResult.Rejected("Seu acesso não permite esta ação. Fale com o gerente.")
         404 -> ApiResult.NotFound
         else -> ApiResult.ServerError
     }

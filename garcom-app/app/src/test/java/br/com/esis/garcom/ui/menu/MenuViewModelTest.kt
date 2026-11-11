@@ -52,6 +52,12 @@ class MenuViewModelTest {
             return sends.removeFirst()
         }
         override suspend fun quote(orderId: Long, line: CartLine): ApiResult<Quote> = quotes.removeFirst()
+        override suspend fun requestBill(orderId: Long, requested: Boolean): ApiResult<TableOrder> = error("não usado")
+        override suspend fun transfer(orderId: Long, tableId: Long): ApiResult<TableOrder> = error("não usado")
+        override suspend fun deliver(orderId: Long, itemIds: List<Long>): ApiResult<TableOrder> = error("não usado")
+        override suspend fun confirmReceipt(receiptId: Long): ApiResult<TableOrder> = error("não usado")
+        override suspend fun rejectReceipt(receiptId: Long, reason: String): ApiResult<TableOrder> = error("não usado")
+        override suspend fun printBill(orderId: Long): ApiResult<Unit> = error("não usado")
     }
 
     private fun viewModel(orders: FakeOrders): MenuViewModel {

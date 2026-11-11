@@ -20,6 +20,7 @@ class RepositoryFailureTest {
         val onMe: () -> WaiterEnvelope = { error("não usado") },
         val onTables: () -> TablesEnvelope = { error("não usado") },
         val onOrder: () -> OrderEnvelope = { error("não usado") },
+        val onNotices: () -> NoticesEnvelope = { error("não usado") },
     ) : ApiService {
         override suspend fun login(body: LoginRequest): LoginResponse = onLogin()
         override suspend fun me(): WaiterEnvelope = onMe()
@@ -30,6 +31,15 @@ class RepositoryFailureTest {
         override suspend fun openTable(tableId: Long, body: OpenTableRequest): OrderEnvelope = error("não usado")
         override suspend fun addItems(orderId: Long, body: AddItemsRequest): OrderEnvelope = error("não usado")
         override suspend fun quote(orderId: Long, body: ItemRequest): QuoteDto = error("não usado")
+        override suspend fun requestBill(orderId: Long, body: RequestBillRequest): OrderEnvelope = onOrder()
+        override suspend fun transfer(orderId: Long, body: TransferRequest): OrderEnvelope = onOrder()
+        override suspend fun deliver(orderId: Long, body: DeliverRequest): OrderEnvelope = onOrder()
+        override suspend fun preBill(orderId: Long): Response<Unit> = Response.success(Unit)
+        override suspend fun confirmReceipt(receiptId: Long): OrderEnvelope = onOrder()
+        override suspend fun rejectReceipt(receiptId: Long, body: RejectReceiptRequest): OrderEnvelope = onOrder()
+        override suspend fun notices(): NoticesEnvelope = onNotices()
+        override suspend fun readNotices(body: ReadNoticesRequest): UnreadDto = error("não usado")
+        override suspend fun app(): AppInfoDto = error("não usado")
     }
 
     private class FakeSession(
@@ -116,5 +126,42 @@ class RepositoryFailureTest {
         val waiter = auth(FakeApi(onMe = { WaiterEnvelope(waiterDto) }), FakeSession(failOnRead = true)).me()
 
         assertNull(waiter)
+    }
+
+    @Test
+    fun avisos_desconhecidos_viram_other() = runTest {
+        val json = """{"unread":1,"data":[
+            {"id":9,"kind":"menu_order","title":"Mesa 4: pedido pelo QR","body":"2 itens","table_id":3,"order_id":12,"read":false,"created_at":"2026-11-11T12:00:00-03:00"},
+            {"id":8,"kind":"algo_novo","title":"Outro","body":null,"table_id":null,"order_id":null,"read":true,"created_at":"2026-11-11T11:00:00-03:00"}
+        ]}"""
+        val repository = ApiNoticeRepository(FakeApi(onNotices = { ApiClient.json.decodeFromString(NoticesEnvelope.serializer(), json) }))
+
+        val notices = (repository.notices() as ApiResult.Ok).value
+
+        assertEquals(1, notices.unread)
+        assertEquals(listOf(NoticeKind.MENU_ORDER, NoticeKind.OTHER), notices.items.map { it.kind })
+        assertEquals(12L, notices.items[0].orderId)
+        assertNull(notices.items[1].tableId)
+    }
+
+    @Test
+    fun comanda_le_pedido_do_qr_e_itens_entregaveis() = runTest {
+        val json = """{"data":{"id":12,"table":4,"people":2,"waiter":"Ana","minutes":5,"closing":true,"total":"20.00",
+            "items":[{"id":1,"product_name":"X-Burger","options_label":null,"quantity":"1.000","unit":"UN","total":"20.00","notes":null,"status":"ready","deliverable":true}],
+            "pending_receipts":[{"id":5,"total":"30.00","created_at":"2026-11-11T12:00:00-03:00","items":[{"product_name":"Fritas","quantity":2,"options_label":"Grande","notes":"sem sal"}]}]}}"""
+        val repository = ApiOrderRepository(FakeApi(onOrder = { ApiClient.json.decodeFromString(OrderEnvelope.serializer(), json) }))
+
+        val order = (repository.order(12) as ApiResult.Ok).value
+
+        assertTrue(order.closing)
+        assertTrue(order.items.single().deliverable)
+        assertEquals(PendingReceipt(5, "30.00", listOf(ReceiptLine("Fritas", 2, "Grande", "sem sal"))), order.pendingReceipts.single())
+    }
+
+    @Test
+    fun acao_sem_permissao_mostra_aviso_em_portugues() = runTest {
+        val repository = ApiOrderRepository(FakeApi(onOrder = { throw httpError(403, """{"message":"This action is unauthorized."}""") }))
+
+        assertEquals(ApiResult.Rejected("Seu acesso não permite esta ação. Fale com o gerente."), repository.deliver(12, listOf(1)))
     }
 }

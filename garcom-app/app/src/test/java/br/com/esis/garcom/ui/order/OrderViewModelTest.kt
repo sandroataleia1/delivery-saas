@@ -38,6 +38,12 @@ class OrderViewModelTest {
         }
         override suspend fun addItems(orderId: Long, clientUuid: String, items: List<CartLine>): ApiResult<TableOrder> = error("não usado")
         override suspend fun quote(orderId: Long, line: CartLine): ApiResult<Quote> = error("não usado")
+        override suspend fun requestBill(orderId: Long, requested: Boolean): ApiResult<TableOrder> = error("não usado")
+        override suspend fun transfer(orderId: Long, tableId: Long): ApiResult<TableOrder> = error("não usado")
+        override suspend fun deliver(orderId: Long, itemIds: List<Long>): ApiResult<TableOrder> = error("não usado")
+        override suspend fun confirmReceipt(receiptId: Long): ApiResult<TableOrder> = error("não usado")
+        override suspend fun rejectReceipt(receiptId: Long, reason: String): ApiResult<TableOrder> = error("não usado")
+        override suspend fun printBill(orderId: Long): ApiResult<Unit> = error("não usado")
     }
 
     @Before

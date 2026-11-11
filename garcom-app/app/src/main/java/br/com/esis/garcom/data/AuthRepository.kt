@@ -7,6 +7,9 @@ interface AuthRepository {
     suspend fun login(email: String, password: String): LoginResult
     suspend fun me(): Waiter?
     suspend fun logout()
+
+    /** Versão mínima do app exigida pelo servidor. Nulo se não der para saber: nesse caso o app segue normal. */
+    suspend fun minVersionCode(): Int?
 }
 
 class ApiAuthRepository(
@@ -80,6 +83,14 @@ class ApiAuthRepository(
             // Sem internet o token fica no servidor, mas sai do aparelho; o admin pode revogá-lo depois.
         }
         runCatching { tokenStore.clear() }
+    }
+
+    override suspend fun minVersionCode(): Int? = try {
+        api.app().minVersionCode
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
     }
 
     private suspend fun cachedWaiter(): Waiter? = runCatching { waiterCache.readWaiter() }.getOrNull()

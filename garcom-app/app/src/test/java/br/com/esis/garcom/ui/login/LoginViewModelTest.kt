@@ -28,6 +28,8 @@ class LoginViewModelTest {
         override suspend fun me(): Waiter? = null
 
         override suspend fun logout() {}
+
+        override suspend fun minVersionCode(): Int? = null
     }
 
     @Before
