@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Models\MenuOrderReceipt;
+use App\Models\MenuOrderReceiptItem;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use Illuminate\Http\Request;
@@ -15,11 +17,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class TableOrderResource extends JsonResource
 {
     /**
-     * @return array{id: int, table: int, people: int, waiter: ?string, minutes: int, closing: bool, total: string, items: array<int, array{id: int, product_name: string, options_label: ?string, quantity: string, unit: string, total: string, notes: ?string, status: string}>}
+     * @return array{id: int, table: int, people: int, waiter: ?string, minutes: int, closing: bool, total: string, items: array<int, array{id: int, product_name: string, options_label: ?string, quantity: string, unit: string, total: string, notes: ?string, status: string, deliverable: bool}>, pending_receipts: array<int, array{id: int, total: string, created_at: string, items: array<int, array{product_name: string, quantity: int, options_label: ?string, notes: ?string}>}>}
      */
     public function toArray(Request $request): array
     {
-        $this->resource->loadMissing(['diningTable', 'items.production']);
+        $this->resource->loadMissing(['diningTable', 'items.production', 'pendingReceipts.items']);
 
         return [
             'id' => $this->id,
@@ -40,8 +42,26 @@ class TableOrderResource extends JsonResource
                     'total' => $item->total,
                     'notes' => $item->notes,
                     'status' => $this->status($item),
+                    'deliverable' => $this->deliverable($item),
                 ])->values()->all(),
+            'pending_receipts' => $this->pendingReceipts->sortBy('id')->map(fn (MenuOrderReceipt $receipt) => [
+                'id' => $receipt->id,
+                'total' => $receipt->total,
+                'created_at' => $receipt->created_at->toIso8601String(),
+                'items' => $receipt->items->map(fn (MenuOrderReceiptItem $line) => [
+                    'product_name' => $line->product_name,
+                    'quantity' => (int) $line->quantity,
+                    'options_label' => $line->options_label,
+                    'notes' => $line->notes,
+                ])->values()->all(),
+            ])->values()->all(),
         ];
+    }
+
+    /** Pronto na produção e ainda não levado à mesa. */
+    private function deliverable(TableOrderItem $item): bool
+    {
+        return $this->status($item) === 'ready';
     }
 
     /** waiting | preparing | ready | delivered | cancelled | none (item sem produção). */

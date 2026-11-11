@@ -4,15 +4,21 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\AddOrderItems;
 use App\Actions\OpenTable;
+use App\Actions\RequestBill;
+use App\Actions\TransferTable;
+use App\Actions\TransitionProduction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AddOrderItemsRequest;
 use App\Http\Requests\QuoteItemRequest;
 use App\Http\Resources\V1\TableOrderResource;
 use App\Models\DiningTable;
 use App\Models\TableOrder;
+use App\Models\TableOrderItem;
 use App\Support\ItemComposer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /** Comanda da mesa no app do garçom. Usa as mesmas Actions da tela de mesas da web. */
@@ -60,6 +66,62 @@ class TableOrderController extends Controller
         $composed = $composer->composeMany($order->company_id, [$request->validated()])[0];
 
         return ['unit_price' => $composed['unit_price'], 'options_label' => $composed['options_label']];
+    }
+
+    /** O garçom avisa o caixa que a mesa pediu a conta (ou desfaz o aviso). */
+    public function requestBill(Request $request, TableOrder $order, RequestBill $requestBill): TableOrderResource
+    {
+        $requested = $request->validate(['requested' => ['required', 'boolean']], [], ['requested' => 'conta pedida'])['requested'];
+
+        $requestBill->handle($order, (bool) $requested);
+
+        return TableOrderResource::make($order->fresh());
+    }
+
+    /** Troca a comanda de mesa; quem troca passa a ser o responsável. */
+    public function transfer(Request $request, TableOrder $order, TransferTable $transferTable): TableOrderResource
+    {
+        $data = $request->validate([
+            'dining_table_id' => [
+                'required',
+                Rule::exists('dining_tables', 'id')->where('company_id', $request->user()->company_id)->where('active', true),
+            ],
+        ], [], ['dining_table_id' => 'mesa']);
+
+        $transferTable->handle($order, DiningTable::findOrFail($data['dining_table_id']));
+
+        return TableOrderResource::make($order->fresh());
+    }
+
+    /**
+     * Registra que os itens prontos foram levados à mesa. Item já entregue é ignorado (toque repetido ou
+     * outro garçom chegou antes); item que ainda não ficou pronto recusa tudo.
+     */
+    public function deliver(Request $request, TableOrder $order, TransitionProduction $transition): TableOrderResource
+    {
+        $ids = $request->validate([
+            'item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'item_ids.*' => ['required', 'integer', 'distinct'],
+        ])['item_ids'];
+        $this->ensureOpen($order);
+
+        $items = TableOrderItem::where('table_order_id', $order->id)->whereIn('id', $ids)->with('production')->orderBy('id')->get();
+        abort_if($items->count() !== count($ids), 404);
+
+        DB::transaction(function () use ($items, $transition) {
+            foreach ($items as $item) {
+                $work = $item->production;
+                if ($work?->delivered_at !== null) {
+                    continue;
+                }
+                if ($work === null || $item->isCancelled() || $work->cancelled_at !== null || $work->status !== 'ready') {
+                    throw ValidationException::withMessages(['item_ids' => "{$item->product_name} ainda não está pronto."]);
+                }
+                $transition->handle($work, $work->version, 'delivered');
+            }
+        });
+
+        return TableOrderResource::make($order->fresh());
     }
 
     private function ensureOpen(TableOrder $order): void

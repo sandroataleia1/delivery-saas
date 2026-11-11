@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\MenuController;
+use App\Http\Controllers\Api\V1\MenuReceiptController;
 use App\Http\Controllers\Api\V1\NoticeController;
 use App\Http\Controllers\Api\V1\TableController;
 use App\Http\Controllers\Api\V1\TableOrderController;
@@ -26,6 +27,15 @@ Route::prefix('v1')->group(function () {
             Route::get('orders/{order}', [TableOrderController::class, 'show'])->name('api.v1.orders.show');
             Route::post('orders/{order}/items', [TableOrderController::class, 'addItems'])->name('api.v1.orders.items');
             Route::post('orders/{order}/quote', [TableOrderController::class, 'quote'])->name('api.v1.orders.quote');
+            Route::post('orders/{order}/bill', [TableOrderController::class, 'requestBill'])->name('api.v1.orders.bill');
+            Route::post('orders/{order}/transfer', [TableOrderController::class, 'transfer'])->name('api.v1.orders.transfer');
+        });
+
+        Route::post('orders/{order}/deliver', [TableOrderController::class, 'deliver'])->middleware('can:production.deliver')->name('api.v1.orders.deliver');
+
+        Route::middleware('can:tables.confirm')->group(function () {
+            Route::post('receipts/{receipt}/confirm', [MenuReceiptController::class, 'confirm'])->name('api.v1.receipts.confirm');
+            Route::post('receipts/{receipt}/reject', [MenuReceiptController::class, 'reject'])->name('api.v1.receipts.reject');
         });
     });
 });

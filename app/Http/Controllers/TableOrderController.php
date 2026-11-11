@@ -7,6 +7,7 @@ use App\Actions\CancelOrderItem;
 use App\Actions\CancelTableOrder;
 use App\Actions\CloseTableOrder;
 use App\Actions\OpenTable;
+use App\Actions\RequestBill;
 use App\Actions\SendToKitchen;
 use App\Actions\TransferTable;
 use App\Http\Requests\AddOrderItemsRequest;
@@ -20,10 +21,8 @@ use App\Support\Printing\PrintQueue;
 use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
 use App\Support\TableMenu;
-use App\Support\TableOperationLock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -184,23 +183,11 @@ class TableOrderController extends Controller
     /**
      * Marca (ou desmarca) que a mesa pediu a conta. A comanda continua aberta para lançar e fechar.
      */
-    public function requestBill(Request $request, TableOrder $order): RedirectResponse
+    public function requestBill(Request $request, TableOrder $order, RequestBill $requestBill): RedirectResponse
     {
         $requested = $request->validate(['requested' => ['required', 'boolean']], [], ['requested' => 'conta pedida'])['requested'];
 
-        DB::transaction(function () use ($order, $requested) {
-            $locked = TableOperationLock::order($order);
-
-            if (! $locked->isOpen()) {
-                throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);
-            }
-
-            if ($requested && $locked->bill_requested_at === null) {
-                $locked->forceFill(['bill_requested_at' => now()])->save();
-            } elseif (! $requested && $locked->bill_requested_at !== null) {
-                $locked->forceFill(['bill_requested_at' => null])->save();
-            }
-        });
+        $requestBill->handle($order, (bool) $requested);
 
         return back()->with('success', $requested ? 'Mesa em fechamento.' : 'Mesa voltou a ficar ocupada.');
     }
