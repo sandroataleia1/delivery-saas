@@ -121,12 +121,15 @@ fun AppNavigation(graph: AppGraph) {
                     OrderViewModel(graph.orders, current.tableId, current.orderId)
                 },
                 tableNumber = current.tableNumber,
+                canDeliver = current.waiter.can("production.deliver"),
+                canConfirm = current.waiter.can("tables.confirm"),
+                freeTables = graph.tables::tables,
                 onBack = toFloor,
                 onClosed = { message ->
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                     toFloor()
                 },
-                onAddItems = { orderId -> screen = Screen.Menu(current.waiter, current.tableId, current.tableNumber, orderId, ++visit) },
+                onAddItems = { orderId, tableNumber -> screen = Screen.Menu(current.waiter, current.tableId, tableNumber, orderId, ++visit) },
             )
         }
         is Screen.Menu -> {
