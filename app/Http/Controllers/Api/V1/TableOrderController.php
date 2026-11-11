@@ -16,6 +16,7 @@ use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\ItemComposer;
 use App\Support\Printing\PrintQueue;
+use App\Support\ProductionLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -111,7 +112,8 @@ class TableOrderController extends Controller
 
         DB::transaction(function () use ($items, $transition) {
             foreach ($items as $item) {
-                $work = $item->production;
+                // Relido com trava: outro garçom pode ter entregado o item depois da leitura acima.
+                $work = $item->production ? ProductionLock::work($item->production) : null;
                 if ($work?->delivered_at !== null) {
                     continue;
                 }

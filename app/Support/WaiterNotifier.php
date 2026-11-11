@@ -22,6 +22,9 @@ use Throwable;
  */
 class WaiterNotifier
 {
+    /** Acesso do app sem uso há mais tempo que isso não conta como garçom com o app. */
+    private const APP_IN_USE_HOURS = 12;
+
     /** @var array<int, ProductionWork> Itens prontos já gravados esperando o aviso sair. */
     private array $committedReady = [];
 
@@ -96,7 +99,11 @@ class WaiterNotifier
      */
     private function recipients(int $companyId, string $permission, ?int $responsibleId): Collection
     {
-        $ids = User::withoutGlobalScopes()->where('company_id', $companyId)->where('active', true)->whereHas('tokens')->with('role')->get()
+        // Só conta acesso em uso: o app consulta o servidor a cada 10 s; acesso parado (saiu sem internet, desinstalou) não recebe aviso.
+        $since = now()->subHours(self::APP_IN_USE_HOURS);
+        $ids = User::withoutGlobalScopes()->where('company_id', $companyId)->where('active', true)
+            ->whereHas('tokens', fn ($tokens) => $tokens->where(fn ($recent) => $recent->where('last_used_at', '>=', $since)->orWhere('created_at', '>=', $since)))
+            ->with('role')->get()
             ->filter(fn (User $user) => $user->hasPermission($permission))->pluck('id');
         $mode = RestaurantOperationSettings::withoutGlobalScopes()->where('company_id', $companyId)->value('waiter_notices') ?? 'all';
 

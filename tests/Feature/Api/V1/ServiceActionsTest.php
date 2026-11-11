@@ -137,6 +137,25 @@ class ServiceActionsTest extends TestCase
         $this->postJson(route('api.v1.orders.deliver', $this->order), $payload)->assertOk()->assertJsonPath('data.items.0.status', 'delivered');
     }
 
+    public function test_outro_garcom_entregando_ao_mesmo_tempo_nao_da_erro(): void
+    {
+        $this->makeReady('X-Burger');
+        Sanctum::actingAs($this->waiter);
+        $payload = ['item_ids' => [$this->itemId('X-Burger')]];
+        $raced = false;
+        // Logo depois que a requisição lê o item, outro garçom o entrega.
+        ProductionWork::retrieved(function (ProductionWork $work) use (&$raced) {
+            if (! $raced && $work->status === 'ready' && $work->delivered_at === null) {
+                $raced = true;
+                ProductionWork::whereKey($work->id)->update(['delivered_at' => now(), 'version' => $work->version + 1]);
+            }
+        });
+
+        $this->postJson(route('api.v1.orders.deliver', $this->order), $payload)
+            ->assertOk()->assertJsonPath('data.items.0.status', 'delivered');
+        $this->assertTrue($raced);
+    }
+
     public function test_entregar_item_que_nao_esta_pronto_recusa(): void
     {
         $this->makeReady('X-Burger');

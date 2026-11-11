@@ -180,6 +180,21 @@ class WaiterNoticeTest extends TestCase
         $this->assertEqualsCanonicalizing([$other->id, $another->id], WaiterNotice::withoutGlobalScopes()->distinct()->pluck('user_id')->all());
     }
 
+    public function test_acesso_esquecido_no_servidor_nao_conta_como_app_em_uso(): void
+    {
+        $admin = $this->adminOf();
+        $responsible = $this->waiterWithApp(['production.deliver', 'tables.operate'], $admin->company);
+        // Saiu do celular sem internet há dois dias: o acesso ficou no servidor, sem uso.
+        $responsible->tokens()->update(['created_at' => now()->subDays(2), 'last_used_at' => now()->subDays(2)]);
+        $other = $this->waiterWithApp(['production.deliver'], $admin->company);
+        $this->useTableWaiterMode($admin);
+        $this->tableWithKitchenAndBar($admin, $responsible);
+
+        $this->markAllReady($admin);
+
+        $this->assertSame([$other->id], WaiterNotice::withoutGlobalScopes()->distinct()->pluck('user_id')->all());
+    }
+
     public function test_configuracao_aceita_so_valores_conhecidos(): void
     {
         $admin = $this->adminOf();
