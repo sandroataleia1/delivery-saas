@@ -3,8 +3,16 @@ package br.com.esis.garcom.data
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Garçom logado, com a empresa a que ele pertence. */
-data class Waiter(val id: Long, val name: String, val companyName: String, val logoUrl: String?)
+/** Garçom logado, com a empresa a que ele pertence e o que o acesso dele permite (ex.: "production.deliver"). */
+data class Waiter(
+    val id: Long,
+    val name: String,
+    val companyName: String,
+    val logoUrl: String?,
+    val permissions: Set<String> = emptySet(),
+) {
+    fun can(permission: String): Boolean = permission in permissions
+}
 
 sealed interface LoginResult {
     data class Success(val waiter: Waiter) : LoginResult
@@ -27,9 +35,13 @@ data class LoginResponse(val token: String, val user: WaiterDto)
 data class WaiterEnvelope(val data: WaiterDto)
 
 @Serializable
-data class WaiterDto(val id: Long, val name: String, val company: CompanyDto) {
-    fun toWaiter(): Waiter = Waiter(id = id, name = name, companyName = company.name, logoUrl = company.logoUrl)
+data class WaiterDto(val id: Long, val name: String, val company: CompanyDto, val permissions: List<String> = emptyList()) {
+    fun toWaiter(): Waiter =
+        Waiter(id = id, name = name, companyName = company.name, logoUrl = company.logoUrl, permissions = permissions.toSet())
 }
+
+@Serializable
+data class AppInfoDto(@SerialName("min_version_code") val minVersionCode: Int = 0)
 
 @Serializable
 data class CompanyDto(val id: Long, val name: String, @SerialName("logo_url") val logoUrl: String? = null)

@@ -7,23 +7,22 @@ use App\Actions\CancelOrderItem;
 use App\Actions\CancelTableOrder;
 use App\Actions\CloseTableOrder;
 use App\Actions\OpenTable;
+use App\Actions\RequestBill;
 use App\Actions\SendToKitchen;
 use App\Actions\TransferTable;
+use App\Http\Requests\AddOrderItemsRequest;
 use App\Http\Requests\CloseTableOrderRequest;
-use App\Http\Requests\Concerns\ValidatesComposition;
 use App\Models\Category;
 use App\Models\DiningTable;
-use App\Models\Product;
 use App\Models\ProductionWork;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\Printing\PrintQueue;
 use App\Support\ProductComposition;
 use App\Support\RestaurantOperationPolicy;
-use App\Support\TableOperationLock;
+use App\Support\TableMenu;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -31,8 +30,6 @@ use Inertia\Response;
 
 class TableOrderController extends Controller
 {
-    use ValidatesComposition;
-
     public function open(Request $request, DiningTable $table, OpenTable $openTable): RedirectResponse
     {
         $data = $request->validate(
@@ -54,11 +51,7 @@ class TableOrderController extends Controller
 
         $order->load(['diningTable', 'items.production']);
 
-        $products = Product::query()
-            ->where('active', true)
-            ->where('sellable', true)->where('sold_out', false)
-            ->orderBy('name')
-            ->get(['id', 'name', 'sale_price', 'unit', 'sold_out', 'category_id', 'barcode', 'sku']);
+        $products = TableMenu::products();
 
         return Inertia::render('tables/Order', [
             'order' => [
@@ -106,21 +99,9 @@ class TableOrderController extends Controller
         ]);
     }
 
-    public function addItems(Request $request, TableOrder $order, AddOrderItems $addItems): RedirectResponse
+    public function addItems(AddOrderItemsRequest $request, TableOrder $order, AddOrderItems $addItems): RedirectResponse
     {
-        $data = $request->validate([
-            'client_uuid' => ['required', 'uuid'],
-            'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.product_id' => [
-                'bail',
-                'required',
-                'integer',
-                Rule::exists('products', 'id')->where('company_id', $request->user()->company_id)->where('active', true)->where('sellable', true),
-            ],
-            'items.*.quantity' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:9999'],
-            'items.*.notes' => ['nullable', 'string', 'max:120'],
-            ...$this->compositionRules('items.*'),
-        ], [], ['items' => 'itens', 'items.*.product_id' => 'produto', 'items.*.quantity' => 'quantidade', 'items.*.notes' => 'observação']);
+        $data = $request->validated();
 
         $addItems->handle($order, $data['items'], $data['client_uuid']);
 
@@ -202,23 +183,11 @@ class TableOrderController extends Controller
     /**
      * Marca (ou desmarca) que a mesa pediu a conta. A comanda continua aberta para lançar e fechar.
      */
-    public function requestBill(Request $request, TableOrder $order): RedirectResponse
+    public function requestBill(Request $request, TableOrder $order, RequestBill $requestBill): RedirectResponse
     {
         $requested = $request->validate(['requested' => ['required', 'boolean']], [], ['requested' => 'conta pedida'])['requested'];
 
-        DB::transaction(function () use ($order, $requested) {
-            $locked = TableOperationLock::order($order);
-
-            if (! $locked->isOpen()) {
-                throw ValidationException::withMessages(['order' => 'Esta comanda já foi fechada.']);
-            }
-
-            if ($requested && $locked->bill_requested_at === null) {
-                $locked->forceFill(['bill_requested_at' => now()])->save();
-            } elseif (! $requested && $locked->bill_requested_at !== null) {
-                $locked->forceFill(['bill_requested_at' => null])->save();
-            }
-        });
+        $requestBill->handle($order, (bool) $requested);
 
         return back()->with('success', $requested ? 'Mesa em fechamento.' : 'Mesa voltou a ficar ocupada.');
     }

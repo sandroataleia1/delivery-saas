@@ -8,6 +8,7 @@ use App\Models\TableOrder;
 use App\Support\Audit;
 use App\Support\ProductionGuard;
 use App\Support\TableOperationLock;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -34,7 +35,9 @@ class TransferTable
             TableOperationLock::rotate($locked);
             $target->forceFill(['service_context' => Str::random(64)])->saveQuietly();
 
-            $locked->forceFill(['dining_table_id' => $target->id, 'open_table_id' => $target->id])->saveQuietly();
+            // Quem transfere passa a ser o responsável pela mesa (recebe os avisos no modo "só o garçom da mesa").
+            $locked->forceFill(['dining_table_id' => $target->id, 'open_table_id' => $target->id,
+                'user_id' => Auth::id(), 'user_name' => Auth::user()->name])->saveQuietly();
 
             foreach (ProductionWork::where('company_id', $locked->company_id)->whereIn('table_order_item_id', $locked->items()->pluck('id'))->orderBy('id')->lockForUpdate()->get() as $work) {
                 $work->forceFill(['origin_label' => 'Mesa '.$target->number.' / comanda '.$locked->number, 'version' => $work->version + 1])->save();

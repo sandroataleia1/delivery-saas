@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\WaiterNotice;
 use App\Models\WhatsAppInboundMessage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -12,4 +13,4 @@ Schedule::command('online-orders:expire')->everyMinute()->withoutOverlapping();
 
 Schedule::command('whatsapp:sweep')->everyFiveMinutes()->withoutOverlapping();
 
-Schedule::command('model:prune', ['--model' => [WhatsAppInboundMessage::class]])->daily();
+Schedule::command('model:prune', ['--model' => [WhatsAppInboundMessage::class, WaiterNotice::class]])->daily();

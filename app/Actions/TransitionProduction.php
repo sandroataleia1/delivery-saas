@@ -7,6 +7,7 @@ use App\Models\DeliveryOrderItem;
 use App\Models\ProductionWork;
 use App\Support\ProductionGuard;
 use App\Support\ProductionLock;
+use App\Support\WaiterNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,9 @@ class TransitionProduction
             $locked->forceFill(['status' => $target === 'delivered' ? 'ready' : $target,
                 'delivered_at' => $target === 'delivered' ? now() : null, 'version' => $locked->version + 1])->save();
             ProductionGuard::event($locked, $from, $target);
+            if ($target === 'ready') {
+                app(WaiterNotifier::class)->ready($locked);
+            }
             if ($locked->delivery_order_item_id) {
                 $item = DeliveryOrderItem::findOrFail($locked->delivery_order_item_id);
                 $order = DeliveryOrder::findOrFail($item->delivery_order_id);

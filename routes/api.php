@@ -1,7 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\MenuController;
+use App\Http\Controllers\Api\V1\MenuReceiptController;
+use App\Http\Controllers\Api\V1\NoticeController;
 use App\Http\Controllers\Api\V1\TableController;
+use App\Http\Controllers\Api\V1\TableOrderController;
 use App\Http\Middleware\EnsureApiAccountCanAccess;
 use Illuminate\Support\Facades\Route;
 
@@ -13,6 +17,26 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', EnsureApiAccountCanAccess::class])->group(function () {
         Route::get('me', [AuthController::class, 'me'])->name('api.v1.me');
         Route::post('logout', [AuthController::class, 'logout'])->name('api.v1.logout');
+        Route::get('notices', [NoticeController::class, 'index'])->name('api.v1.notices');
+        Route::post('notices/read', [NoticeController::class, 'read'])->name('api.v1.notices.read');
         Route::get('tables', [TableController::class, 'index'])->middleware('can:tables.operate')->name('api.v1.tables');
+        Route::get('menu', [MenuController::class, 'index'])->middleware('can:tables.operate')->name('api.v1.menu');
+
+        Route::middleware('can:tables.operate')->group(function () {
+            Route::post('tables/{table}/open', [TableOrderController::class, 'open'])->name('api.v1.tables.open');
+            Route::get('orders/{order}', [TableOrderController::class, 'show'])->name('api.v1.orders.show');
+            Route::post('orders/{order}/items', [TableOrderController::class, 'addItems'])->name('api.v1.orders.items');
+            Route::post('orders/{order}/quote', [TableOrderController::class, 'quote'])->name('api.v1.orders.quote');
+            Route::post('orders/{order}/bill', [TableOrderController::class, 'requestBill'])->name('api.v1.orders.bill');
+            Route::post('orders/{order}/transfer', [TableOrderController::class, 'transfer'])->name('api.v1.orders.transfer');
+            Route::post('orders/{order}/prebill', [TableOrderController::class, 'preBill'])->name('api.v1.orders.prebill');
+        });
+
+        Route::post('orders/{order}/deliver', [TableOrderController::class, 'deliver'])->middleware('can:production.deliver')->name('api.v1.orders.deliver');
+
+        Route::middleware('can:tables.confirm')->group(function () {
+            Route::post('receipts/{receipt}/confirm', [MenuReceiptController::class, 'confirm'])->name('api.v1.receipts.confirm');
+            Route::post('receipts/{receipt}/reject', [MenuReceiptController::class, 'reject'])->name('api.v1.receipts.reject');
+        });
     });
 });

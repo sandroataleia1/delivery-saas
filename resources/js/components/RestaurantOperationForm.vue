@@ -3,7 +3,7 @@ import { useForm } from '@inertiajs/vue3';
 import Field from '@/components/Field.vue';
 const props = defineProps({ operation: { type: Object, required: true }, ceilings: { type: Object, required: true } });
 const labels = { max_lines: 'Linhas por pedido', max_line_units: 'Unidades por linha', max_order_units: 'Unidades por pedido', max_order_value: 'Valor por pedido (R$)', max_pending_orders: 'Pedidos pendentes por mesa', max_pending_units: 'Unidades pendentes por mesa', max_pending_value: 'Valor pendente por mesa (R$)', late_after_minutes: 'Alerta de atraso (minutos)' };
-const form = useForm({ automatic_enabled: props.operation.automatic_enabled ?? false, remote_risk_accepted: false, ...Object.fromEntries(['confirmation_mode', 'visual_alerts', 'sound_alerts', ...Object.keys(labels)].map(key => [key, props.operation[key]])) });
+const form = useForm({ automatic_enabled: props.operation.automatic_enabled ?? false, remote_risk_accepted: false, ...Object.fromEntries(['confirmation_mode', 'visual_alerts', 'sound_alerts', 'waiter_notices', ...Object.keys(labels)].map(key => [key, props.operation[key]])) });
 </script>
 <template>
     <form class="card mt-6 space-y-4 p-5" @submit.prevent="form.put(route('company.operation'), { preserveScroll: true })">
@@ -24,6 +24,10 @@ const form = useForm({ automatic_enabled: props.operation.automatic_enabled ?? f
         </div>
         <label class="flex gap-2 text-sm"><input v-model="form.visual_alerts" type="checkbox" />Alertas visuais de novos pedidos</label>
         <label class="flex gap-2 text-sm"><input v-model="form.sound_alerts" type="checkbox" />Permitir alertas sonoros (ativação em cada tela)</label>
+        <Field v-slot="{ id }" label="Avisos no app do garçom" :error="form.errors.waiter_notices">
+            <select :id="id" v-model="form.waiter_notices" class="input"><option value="all">Todos os garçons</option><option value="table_waiter">Só o garçom da mesa</option></select>
+        </Field>
+        <p class="text-muted text-sm">Pedido pelo QR avisa quem pode confirmar pedidos; item pronto avisa quem pode entregar. Mesa sem garçom com o app recebe aviso de todos.</p>
         <button class="btn btn-primary" :disabled="form.processing">Salvar operação</button>
     </form>
 </template>

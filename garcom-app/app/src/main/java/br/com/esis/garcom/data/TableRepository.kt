@@ -1,6 +1,7 @@
 package br.com.esis.garcom.data
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import retrofit2.HttpException
 
@@ -26,10 +27,14 @@ data class FloorTable(
     val id: Long,
     val number: Int,
     val area: String?,
+    val seats: Int = 0,
     val status: TableStatus,
     val waiter: String?,
     val total: String?,
     val minutes: Int?,
+    val pendingCount: Int = 0,
+    /** Comanda aberta na mesa; nula quando a mesa está livre. */
+    val orderId: Long? = null,
 )
 
 sealed interface TablesResult {
@@ -50,6 +55,7 @@ data class TableDto(
     val id: Long,
     val number: Int,
     val area: String? = null,
+    val seats: Int = 0,
     val status: String,
     val order: TableOrderDto? = null,
 ) {
@@ -57,15 +63,24 @@ data class TableDto(
         id = id,
         number = number,
         area = area,
+        seats = seats,
         status = TableStatus.fromApi(status),
         waiter = order?.waiter,
         total = order?.total,
         minutes = order?.minutes,
+        pendingCount = order?.pendingCount ?: 0,
+        orderId = order?.id,
     )
 }
 
 @Serializable
-data class TableOrderDto(val waiter: String? = null, val total: String? = null, val minutes: Int? = null)
+data class TableOrderDto(
+    val id: Long? = null,
+    val waiter: String? = null,
+    val total: String? = null,
+    val minutes: Int? = null,
+    @SerialName("pending_count") val pendingCount: Int = 0,
+)
 
 class ApiTableRepository(private val api: ApiService) : TableRepository {
     override suspend fun tables(): TablesResult = try {

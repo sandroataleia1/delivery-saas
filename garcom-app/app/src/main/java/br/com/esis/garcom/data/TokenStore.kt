@@ -67,7 +67,7 @@ class KeystoreSessionStore(context: Context) : TokenStore, WaiterCache {
     }
 
     override suspend fun saveWaiter(waiter: Waiter) {
-        val dto = WaiterDto(waiter.id, waiter.name, CompanyDto(0, waiter.companyName, waiter.logoUrl))
+        val dto = WaiterDto(waiter.id, waiter.name, CompanyDto(0, waiter.companyName, waiter.logoUrl), waiter.permissions.toList())
         dataStore.edit { it[WAITER] = ApiClient.json.encodeToString(WaiterDto.serializer(), dto) }
     }
 

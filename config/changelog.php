@@ -9,6 +9,43 @@
 
 return [
     [
+        'id' => '2026-11-11.1',
+        'date' => '11/11/2026',
+        'items' => [
+            [
+                'title' => 'App do garçom: avisos, entrega e conta',
+                'text' => 'O garçom recebe no app um aviso quando chega pedido pelo QR da mesa e quando os itens ficam prontos. Pelo app ele marca os itens como entregues, confirma ou recusa o pedido do QR, avisa o caixa que a mesa pediu a conta e troca a comanda de mesa.',
+                'can' => 'tables.operate',
+            ],
+            [
+                'title' => 'Pré-conta impressa pelo garçom',
+                'text' => 'O garçom pode imprimir a conta para o cliente conferir antes de pagar, com a taxa de serviço. A mesa continua aberta; o pagamento segue no caixa.',
+                'can' => 'tables.operate',
+            ],
+            [
+                'title' => 'Quem recebe os avisos e onde sai a conta',
+                'text' => 'Em Empresa, na parte Operação do Restaurante, "Avisos no app do garçom" escolhe se todos os garçons recebem os avisos ou só o garçom da mesa. Em Impressoras, "Conta da mesa (pré-conta)" escolhe a impressora da conta; vazio usa a do pedido completo.',
+                'can' => 'company.manage',
+            ],
+        ],
+    ],
+    [
+        'id' => '2026-11-10.9',
+        'date' => '10/11/2026',
+        'items' => [
+            [
+                'title' => 'Produto esgotado não entra mais na mesa',
+                'text' => 'Ao lançar itens numa mesa, o sistema recusa produto marcado como esgotado e avisa qual é ("X-Bacon está esgotado."), em vez de mandar para a cozinha.',
+                'can' => 'tables.operate',
+            ],
+            [
+                'title' => 'App do garçom: cardápio e pedidos',
+                'text' => 'No app do garçom já dá para abrir uma mesa livre, ver a comanda com a situação de cada item e lançar pedidos pelo cardápio, inclusive pizzas e adicionais. O preço sempre vem do sistema.',
+                'can' => 'tables.operate',
+            ],
+        ],
+    ],
+    [
         'id' => '2026-11-10.8',
         'date' => '10/11/2026',
         'items' => [
