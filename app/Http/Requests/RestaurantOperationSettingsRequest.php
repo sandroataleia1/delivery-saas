@@ -15,7 +15,8 @@ class RestaurantOperationSettingsRequest extends FormRequest
     public function rules(): array
     {
         $rules = ['automatic_enabled' => ['sometimes', 'boolean'], 'remote_risk_accepted' => ['exclude_unless:automatic_enabled,true', 'required', 'accepted'], 'confirmation_mode' => ['sometimes', Rule::in(['manual', 'automatic'])],
-            'visual_alerts' => ['sometimes', 'boolean'], 'sound_alerts' => ['sometimes', 'boolean']];
+            'visual_alerts' => ['sometimes', 'boolean'], 'sound_alerts' => ['sometimes', 'boolean'],
+            'waiter_notices' => ['sometimes', Rule::in(['all', 'table_waiter'])]];
         foreach (config('restaurant.ceilings') as $key => $max) {
             $rules[$key] = ['sometimes', str_contains($key, 'value') ? 'numeric' : 'integer', 'min:1', 'max:'.$max];
             if (str_contains($key, 'value')) {

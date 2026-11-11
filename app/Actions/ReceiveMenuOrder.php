@@ -13,13 +13,14 @@ use App\Support\ItemComposer;
 use App\Support\ItemSelection;
 use App\Support\RestaurantOperationPolicy;
 use App\Support\TableOperationLock;
+use App\Support\WaiterNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class ReceiveMenuOrder
 {
-    public function __construct(private OpenTable $openTable, private RestaurantOperationPolicy $policy, private ItemComposer $composer) {}
+    public function __construct(private OpenTable $openTable, private RestaurantOperationPolicy $policy, private ItemComposer $composer, private WaiterNotifier $notifier) {}
 
     public function handle(DiningTable $table, array $data): MenuOrderReceipt
     {
@@ -94,9 +95,11 @@ class ReceiveMenuOrder
             if ($policy['effective_mode'] === 'automatic') {
                 $confirmed = (new ConfirmMenuOrder)->handleAutomatic($receipt);
                 $confirmed->wasRecentlyCreated = true;
+                $this->notifier->menuOrder($confirmed);
 
                 return $confirmed;
             }
+            $this->notifier->menuOrder($receipt);
 
             return $receipt;
         });

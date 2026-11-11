@@ -12,6 +12,7 @@ use App\Models\TableOrderItem;
 use App\Models\User;
 use App\Support\BrazilPhone;
 use App\Support\Printing\PrintQueue;
+use App\Support\WaiterNotifier;
 use App\Support\WhatsAppOutbox;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Uma fila por requisição: junta os itens da produção até a gravação terminar.
         $this->app->scoped(PrintQueue::class);
+        $this->app->scoped(WaiterNotifier::class);
     }
 
     public function boot(): void
