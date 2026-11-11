@@ -29,6 +29,7 @@ Route::prefix('v1')->group(function () {
             Route::post('orders/{order}/quote', [TableOrderController::class, 'quote'])->name('api.v1.orders.quote');
             Route::post('orders/{order}/bill', [TableOrderController::class, 'requestBill'])->name('api.v1.orders.bill');
             Route::post('orders/{order}/transfer', [TableOrderController::class, 'transfer'])->name('api.v1.orders.transfer');
+            Route::post('orders/{order}/prebill', [TableOrderController::class, 'preBill'])->name('api.v1.orders.prebill');
         });
 
         Route::post('orders/{order}/deliver', [TableOrderController::class, 'deliver'])->middleware('can:production.deliver')->name('api.v1.orders.deliver');

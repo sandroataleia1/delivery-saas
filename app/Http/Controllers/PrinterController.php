@@ -30,6 +30,7 @@ class PrinterController extends Controller
             'printers' => Printer::orderBy('name')->get(['id', 'name', 'connection', 'address', 'port', 'columns', 'active']),
             'sectors' => ProductionSector::orderBy('name')->get(['id', 'name', 'active', 'printer_id']),
             'orderPrinterId' => $company->order_printer_id,
+            'billPrinterId' => $company->bill_printer_id,
             'autoPrint' => ['orders' => $company->auto_print_orders, 'kitchen' => $company->auto_print_kitchen],
             'agent' => [
                 'installed' => $company->print_agent_token !== null,
@@ -87,6 +88,7 @@ class PrinterController extends Controller
         $printerRule = ['nullable', 'integer', Rule::exists('printers', 'id')->where('company_id', $request->user()->company_id)];
         $data = $request->validate([
             'order_printer_id' => $printerRule,
+            'bill_printer_id' => $printerRule,
             'sectors' => ['array'],
             'sectors.*' => $printerRule,
             'auto_print_orders' => ['sometimes', 'boolean'],
@@ -95,6 +97,7 @@ class PrinterController extends Controller
 
         Company::findOrFail($request->user()->company_id)->forceFill([
             'order_printer_id' => $data['order_printer_id'] ?? null,
+            'bill_printer_id' => $data['bill_printer_id'] ?? null,
             ...array_intersect_key($data, array_flip(['auto_print_orders', 'auto_print_kitchen'])),
         ])->save();
 

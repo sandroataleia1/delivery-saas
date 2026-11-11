@@ -8,6 +8,7 @@ use App\Models\Printer;
 use App\Models\PrintJob;
 use App\Models\ProductionSector;
 use App\Models\ProductionWork;
+use App\Models\TableOrder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -88,6 +89,22 @@ class PrintQueue
         }
 
         $this->push($printer, 'Pedido #'.$order->number, Tickets::order($order, $company->trade_name, $printer->columns));
+
+        return true;
+    }
+
+    /** Pré-conta pedida pelo garçom. Sai na impressora da conta ou, sem ela, na de pedidos. Falso sem impressora ativa. */
+    public function queueBill(TableOrder $order): bool
+    {
+        $company = Company::findOrFail($order->company_id);
+        $printer = $this->activePrinter($order->company_id, $company->bill_printer_id ?? $company->order_printer_id);
+
+        if (! $printer) {
+            return false;
+        }
+
+        $this->push($printer, 'Conta · Mesa '.$order->diningTable->number,
+            Tickets::preBill($order, $company->trade_name, $company->service_fee_percent, $printer->columns));
 
         return true;
     }

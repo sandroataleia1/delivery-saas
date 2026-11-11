@@ -10,6 +10,7 @@ const props = defineProps({
     printers: { type: Array, required: true },
     sectors: { type: Array, required: true },
     orderPrinterId: { type: Number, default: null },
+    billPrinterId: { type: Number, default: null },
     autoPrint: { type: Object, required: true },
     agent: { type: Object, required: true },
     discovered: { type: Object, required: true },
@@ -82,6 +83,7 @@ function test(printer) {
 
 const destinations = useForm({
     order_printer_id: props.orderPrinterId,
+    bill_printer_id: props.billPrinterId,
     auto_print_orders: props.autoPrint.orders,
     auto_print_kitchen: props.autoPrint.kitchen,
     sectors: Object.fromEntries(props.sectors.map((sector) => [sector.id, sector.printer_id])),
@@ -133,6 +135,12 @@ function retry(job) {
                     <Field v-slot="{ id }" label="Pedido completo (entregas e loja online)" :error="destinations.errors.order_printer_id">
                         <select :id="id" v-model="destinations.order_printer_id" class="input">
                             <option :value="null">Não imprimir</option>
+                            <option v-for="printer in printers" :key="printer.id" :value="printer.id">{{ printer.name }}</option>
+                        </select>
+                    </Field>
+                    <Field v-slot="{ id }" label="Conta da mesa (pré-conta)" hint="Vazio usa a impressora de pedido completo." :error="destinations.errors.bill_printer_id">
+                        <select :id="id" v-model="destinations.bill_printer_id" class="input">
+                            <option :value="null">Mesma do pedido completo</option>
                             <option v-for="printer in printers" :key="printer.id" :value="printer.id">{{ printer.name }}</option>
                         </select>
                     </Field>

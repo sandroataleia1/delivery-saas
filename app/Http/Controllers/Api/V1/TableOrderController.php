@@ -15,6 +15,7 @@ use App\Models\DiningTable;
 use App\Models\TableOrder;
 use App\Models\TableOrderItem;
 use App\Support\ItemComposer;
+use App\Support\Printing\PrintQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,22 @@ class TableOrderController extends Controller
         });
 
         return TableOrderResource::make($order->fresh());
+    }
+
+    /** Imprime a pré-conta para o cliente conferir. A mesa continua aberta; o pagamento é no caixa. */
+    public function preBill(TableOrder $order, PrintQueue $printQueue): JsonResponse
+    {
+        $this->ensureOpen($order);
+
+        if (! $order->activeItems()->exists()) {
+            throw ValidationException::withMessages(['order' => 'Não há itens na conta.']);
+        }
+
+        if (! $printQueue->queueBill($order)) {
+            throw ValidationException::withMessages(['order' => 'Não há impressora ativa para a conta. Configure em Impressoras.']);
+        }
+
+        return response()->json(['queued' => true], 202);
     }
 
     private function ensureOpen(TableOrder $order): void
